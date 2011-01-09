@@ -8,7 +8,12 @@ public class Protocol {
 	// These should be Packet protocols
 	public static final int DATA = 0;
 	public static final int ACK = 1;
-
+	public static final int CREATE = 2;
+	public static final int DELETE = 3;
+	public static final int GET = 4;
+	public static final int PUT = 5;
+	public static final int APPEND = 6;
+	
 	// Protocols for Testing Reliable in-order message delivery
 	// These should be RIOPacket protocols
 	public static final int RIOTEST_PKT = 10;
