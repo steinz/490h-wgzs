@@ -1,6 +1,12 @@
 package proj;
 
+import java.io.File;
+import java.util.StringTokenizer;
+
 import edu.washington.cs.cse490h.lib.Node;
+import edu.washington.cs.cse490h.lib.PersistentStorageReader;
+import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
+import edu.washington.cs.cse490h.lib.Utility;
 
 /**
  * Extension to the Node class that adds support for a reliable, in-order
@@ -12,7 +18,9 @@ import edu.washington.cs.cse490h.lib.Node;
  * overriding the onReceive() method to include a call to super.onReceive()
  */
 public class Server extends RIONode {
+	
 	private ReliableInOrderMsgLayer RIOLayer;
+	private static final String dataDirectory = "Data";
 	
 	public static int NUM_NODES = 10;
 	
@@ -47,6 +55,14 @@ public class Server extends RIONode {
 	}
 
 	/**
+	 * Prints an error message
+	 * @param error The error code, as defined in the specifications
+	 */
+	public void printError(int error){
+		
+	}
+	
+	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
 	 * 
 	 * @param from
@@ -58,16 +74,74 @@ public class Server extends RIONode {
 	 */
 	public void onRIOReceive(Integer from, int protocol, byte[] msg)
 	{
+		msgString = Utility.byteArrayToString(msg);
+		
 		if (protocol == Protocol.CREATE) {
-			// Create file
+			File filePath = new File("./Data/") + msgString; 
+			// check if the file exists
+			if (filePath.Exists()){
+				printError(11);
+			}
+			// create the file
+			else{
+				PersistentStorageWriter writer = super.super.getWriter(filePath, false);
+				writer.close();
+			}
+		
 		}else if (protocol == Protocol.DELETE){
-			// Delete file
+			// check if the file even exists
+			File filePath = new File("./Data/") + msgString;
+			if (!filePath.Exists())
+				printError(10);
+			else{
+				// delete file
+				PersistentStorageWriter writer = super.super.getWriter(filePath, false);
+				writer.delete();
+				writer.close();
+			}
+			
 		}else if (protocol == Protocol.GET){
-			// Get file
-		}else if (protocol == Protocol.PUT){
-			// Put file
-		}else if (protocol == Protocol.APPEND){
-			// Append file
+			// check if the file exists
+			File filePath = new File("./Data/") + msgString;
+			if (!filePath.Exists())
+				printError(10);
+			// send the file if it does
+			else{
+				// load the file into a reader
+				String sendMsg = "";
+				PersistentStorageReader reader = super.super.getReader(filePath);
+				while (!(inLine = reader.readLine() == null)
+						sendMsg += inLine;
+				reader.close();
+				
+				// send the payload
+				byte[] payload = Utility.stringToByteArray(sendMsg);
+				RIOLayer.RIOSend(from, Protocol.DATA, payload);
+			}
+			
+		}else if (protocol == Protocol.PUT || protocol == Protocol.APPEND){
+
+			// tokenize the string and parse out the contents and filename
+			StringTokenizer tokenizer = new StringTokenizer(msgString);
+			fileName = tokenizer.nextToken();
+			int length = fileName.length();
+			contents = msgString.substring(length+1, msgString.length());
+			
+			// check if the file exists
+			File filePath = new File("./Data/") + fileName;
+			if (!filePath.Exists())
+				printError(10);
+			else{
+				// create a new file writer, setting the append option appropriately
+				if (protocol == Protocol.APPEND){
+					PersistentStorageWriter writer = new PersistentStorageWriter(filePath, true);
+				} else {
+					PersistentStorageWriter writer = new PersistentStorageWriter(filePath, false);
+				}
+				byte[] buf = Utility.stringToByteArray(contents);
+				writer.write(buf);
+				writer.close();
+			}
 		}
 		
 		
