@@ -1,4 +1,5 @@
 import edu.washington.cs.cse490h.lib.Node;
+import java.util.UUID;
 
 /**
  * Extension to the Node class that adds support for a reliable, in-order
@@ -11,10 +12,13 @@ import edu.washington.cs.cse490h.lib.Node;
  */
 public abstract class RIONode extends Node {
 	private ReliableInOrderMsgLayer RIOLayer;
+	private UUID ID;
 	
 	public static int NUM_NODES = 10;
 	
+	
 	public RIONode() {
+		ID = UUID.randomUUID();
 		RIOLayer = new ReliableInOrderMsgLayer(this);
 	}
 	
