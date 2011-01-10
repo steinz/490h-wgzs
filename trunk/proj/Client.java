@@ -82,6 +82,6 @@ public class Client extends RIONode {
 
 	@Override
 	public String toString() {
-		
+		return "";
 	}
 }

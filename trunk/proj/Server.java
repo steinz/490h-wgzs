@@ -1,5 +1,3 @@
-package proj;
-
 import java.io.File;
 import java.util.StringTokenizer;
 
@@ -7,7 +5,6 @@ import edu.washington.cs.cse490h.lib.Node;
 import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
 import edu.washington.cs.cse490h.lib.Utility;
-
 /**
  * Extension to the Node class that adds support for a reliable, in-order
  * messaging layer.
@@ -17,9 +14,8 @@ import edu.washington.cs.cse490h.lib.Utility;
  * layer can also be used by sending using the regular send() method and
  * overriding the onReceive() method to include a call to super.onReceive()
  */
-public abstract class Server extends RIONode {
+public class Server extends RIONode {
 	
-	private ReliableInOrderMsgLayer RIOLayer;
 	private static final String dataDirectory = "Data";
 	
 	public static int NUM_NODES = 10;
@@ -31,9 +27,8 @@ public abstract class Server extends RIONode {
 	
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
-		if(protocol == Protocol.DATA  || protocol == Protocol.CREATE ||
-			protocol == Protocol.DELETE || protocol == Protocol.GET ||
-			protocol = Protocol.PUT || protocol == Protocol.APPEND) {
+		if((protocol == Protocol.DATA)  || (protocol == Protocol.CREATE) || (protocol == Protocol.DELETE) 
+				|| (protocol == Protocol.GET) || (protocol == Protocol.PUT) || (protocol == Protocol.APPEND)) {
 			RIOLayer.RIODataReceive(from, msg);
 		}else if(protocol == Protocol.ACK) {
 			RIOLayer.RIOAckReceive(from, msg);
@@ -62,6 +57,22 @@ public abstract class Server extends RIONode {
 		
 	}
 	
+	@Override
+	public void onCommand(String command) {
+		// method stub
+		//TODO: Implement
+	
+	}
+	
+	@Override
+	public void start(){
+	
+	}
+	
+	public void createFile(){
+		
+	}
+	
 	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
 	 * 
@@ -74,43 +85,44 @@ public abstract class Server extends RIONode {
 	 */
 	public void onRIOReceive(Integer from, int protocol, byte[] msg)
 	{
-		msgString = Utility.byteArrayToString(msg);
-		
+		String msgString = Utility.byteArrayToString(msg);
+		//TODO: Break out into different methods
 		if (protocol == Protocol.CREATE) {
-			File filePath = new File("./Data/") + msgString; 
+			File filePath = new File("./Data/" + msgString);
 			// check if the file exists
-			if (filePath.Exists()){
+			if (filePath.exists()){
 				printError(11);
 			}
 			// create the file
 			else{
-				PersistentStorageWriter writer = getWriter(filePath, false);
+				PersistentStorageWriter writer = getWriter("./Data/" + msgString, false);
 				writer.close();
 			}
 		
 		}else if (protocol == Protocol.DELETE){
 			// check if the file even exists
-			File filePath = new File("./Data/") + msgString;
-			if (!filePath.Exists())
+			File filePath = new File("./Data/" + msgString);
+			if (!filePath.exists())
 				printError(10);
 			else{
 				// delete file
-				PersistentStorageWriter writer = getWriter(filePath, false);
+				PersistentStorageWriter writer = getWriter("./Data/" + msgString, false);
 				writer.delete();
 				writer.close();
 			}
 			
 		}else if (protocol == Protocol.GET){
 			// check if the file exists
-			File filePath = new File("./Data/") + msgString;
-			if (!filePath.Exists())
+			File filePath = new File("./Data/" + msgString);
+			if (!filePath.exists())
 				printError(10);
 			// send the file if it does
 			else{
 				// load the file into a reader
 				String sendMsg = "";
-				PersistentStorageReader reader = getReader(filePath);
-				while (!(inLine = reader.readLine() == null))
+				String inLine = "";
+				PersistentStorageReader reader = getReader("./Data/" + msgString);
+				while (!((inLine = reader.readLine()) == null))
 						sendMsg += inLine;
 				reader.close();
 				
@@ -123,23 +135,23 @@ public abstract class Server extends RIONode {
 
 			// tokenize the string and parse out the contents and filename
 			StringTokenizer tokenizer = new StringTokenizer(msgString);
-			fileName = tokenizer.nextToken();
+			String fileName = tokenizer.nextToken();
 			int length = fileName.length();
-			contents = msgString.substring(length+1, msgString.length());
+			String contents = msgString.substring(length+1, msgString.length());
 			
 			// check if the file exists
-			File filePath = new File("./Data/") + fileName;
-			if (!filePath.Exists())
+			File filePath = new File("./Data/" + fileName);
+			if (!filePath.exists())
 				printError(10);
 			else{
+				PersistentStorageWriter writer = null;
 				// create a new file writer, setting the append option appropriately
 				if (protocol == Protocol.APPEND){
-					PersistentStorageWriter writer = new PersistentStorageWriter(filePath, true);
+					writer = getWriter("./Data/" + msgString, true);
 				} else {
-					PersistentStorageWriter writer = new PersistentStorageWriter(filePath, false);
+					writer = getWriter("./Data/" + msgString, false);
 				}
-				byte[] buf = Utility.stringToByteArray(contents);
-				writer.write(buf);
+				writer.write(contents);
 				writer.close();
 			}
 		}
@@ -147,8 +159,4 @@ public abstract class Server extends RIONode {
 		
 	}
 	
-	@Override
-	public String toString() {
-		return RIOLayer.toString();
-	}
 }
