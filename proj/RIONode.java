@@ -11,7 +11,7 @@ import java.util.UUID;
  * overriding the onReceive() method to include a call to super.onReceive()
  */
 public abstract class RIONode extends Node {
-	private ReliableInOrderMsgLayer RIOLayer;
+	protected ReliableInOrderMsgLayer RIOLayer;
 	private UUID ID;
 	
 	public static int NUM_NODES = 10;
