@@ -17,7 +17,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  * layer can also be used by sending using the regular send() method and
  * overriding the onReceive() method to include a call to super.onReceive()
  */
-public class Server extends RIONode {
+public abstract class Server extends RIONode {
 	
 	private ReliableInOrderMsgLayer RIOLayer;
 	private static final String dataDirectory = "Data";
@@ -84,7 +84,7 @@ public class Server extends RIONode {
 			}
 			// create the file
 			else{
-				PersistentStorageWriter writer = super.super.getWriter(filePath, false);
+				PersistentStorageWriter writer = getWriter(filePath, false);
 				writer.close();
 			}
 		
@@ -95,7 +95,7 @@ public class Server extends RIONode {
 				printError(10);
 			else{
 				// delete file
-				PersistentStorageWriter writer = super.super.getWriter(filePath, false);
+				PersistentStorageWriter writer = getWriter(filePath, false);
 				writer.delete();
 				writer.close();
 			}
@@ -109,8 +109,8 @@ public class Server extends RIONode {
 			else{
 				// load the file into a reader
 				String sendMsg = "";
-				PersistentStorageReader reader = super.super.getReader(filePath);
-				while (!(inLine = reader.readLine() == null)
+				PersistentStorageReader reader = getReader(filePath);
+				while (!(inLine = reader.readLine() == null))
 						sendMsg += inLine;
 				reader.close();
 				
