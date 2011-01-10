@@ -47,6 +47,7 @@ public class Protocol {
 	}
 
 	public static int stringToProtocol(String protocol) {
+            protocol = protocol.toUpperCase();
 		if (protocol.equals("DATA")) { return 0;
 		} else if (protocol.equals("ACK")) { return 1;
 		} else if (protocol.equals("CREATE")) { return 2;
