@@ -30,7 +30,7 @@ public abstract class Client extends RIONode {
 
 		// parse contents for put and append
 		String contents;
-		if (command.equals("put") || command.equals("append") {
+		if (command.equals("put") || command.equals("append")) {
 			int parsedLength = command.length()	+ server.length() + filename.length() + 3;
 			if (parsedLength >= command.length) {
 				//no contents - error?
@@ -49,7 +49,7 @@ public abstract class Client extends RIONode {
 		if (protocol == -1) {
 			//invalid command
 		} else {
-			RIOSend(server, protocol, payload)
+			RIOSend(server, protocol, payload);
 		}
 	}
 
