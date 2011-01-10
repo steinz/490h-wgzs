@@ -45,6 +45,17 @@ public class Protocol {
 		return protocol == RIOTEST_PKT;
 	}
 
+	public static int stringToProtocol(String protocol) {
+		if (protocol.equals("DATA")) { return 0;
+		} else if (protocol.equals("ACK")) { return 1;
+		} else if (protocol.equals("CREATE")) { return 2;
+		} else if (protocol.equals("DELETE")) { return 3;
+		} else if (protocol.equals("GET")) { return 4;
+		} else if (protocol.equals("PUT")) { return 5;
+		} else if (protocol.equals("APPEND")) { return 6;
+		} else { return -1; }
+	}
+	
 	/**
 	 * Returns a string representation of the given protocol. Can be used for
 	 * debugging
