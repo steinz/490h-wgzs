@@ -68,6 +68,10 @@ public class Client extends RIONode {
 		}
 	}
 
+	
+	public void printError(int error){
+		//TODO: Implement
+	}
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
 		
@@ -82,7 +86,7 @@ public class Client extends RIONode {
 		// feedback for the console
 		String msgString = Utility.byteArrayToString(msg);
 		String fromNode = from + "";
-		printOutput("received " + msgString + " from node: " +  fromNode);
+		System.out.println("received " + msgString + " from node: " +  fromNode);
 	}
 
 	/**
