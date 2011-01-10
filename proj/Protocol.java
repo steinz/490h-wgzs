@@ -42,7 +42,8 @@ public class Protocol {
 	 * @return True if protocol is valid, else false
 	 */
 	public static boolean isRIOProtocolValid(int protocol) {
-		return protocol == RIOTEST_PKT;
+		return isPktProtocolValid(protocol);
+		//return protocol == RIOTEST_PKT;
 	}
 
 	public static int stringToProtocol(String protocol) {

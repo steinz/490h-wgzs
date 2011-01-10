@@ -19,7 +19,9 @@ import edu.washington.cs.cse490h.lib.Utility;
  * overriding the onReceive() method to include a call to super.onReceive()
  */
 public class Client extends RIONode {
-
+	
+	private static final boolean debug = true;
+	
 	private static final String dataDirectory = "Data";
 	
 	public Client() {
@@ -28,7 +30,7 @@ public class Client extends RIONode {
 
 	public void start() {
 	}
-	
+
 	public void onCommand(String command) {
 		// parse command, server, filename
 		StringTokenizer tokens = new StringTokenizer(command, " ");
@@ -38,9 +40,11 @@ public class Client extends RIONode {
 			server = tokens.nextToken();
 			filename = tokens.nextToken();
 		} catch (NumberFormatException e) {
-			// bad server address
+			System.err.println("invalid server address");
+			return;
 		} catch (NoSuchElementException e) {
-			// bad command
+			System.err.println("invalid command");
+			return;
 		}
 
 		// parse contents for put and append
@@ -48,7 +52,8 @@ public class Client extends RIONode {
 		if (command.equals("put") || command.equals("append")) {
 			int parsedLength = command.length()	+ server.length() + filename.length() + 3;
 			if (parsedLength >= command.length()) {
-				//no contents - error?
+				System.err.println("no contents");
+				return;
 			}
 			else  {
 				contents = command.substring(parsedLength);
@@ -60,9 +65,10 @@ public class Client extends RIONode {
 		if (command.equals("put") || command.equals("append")) {
 			payload += "\t" + contents;
 		}
-		int protocol = Protocol.stringToProtocol(cmd);
+		int protocol = Protocol.stringToProtocol(cmd.toUpperCase());
 		if (protocol == -1) {
-			//invalid command
+			System.err.println("invalid command");
+			return;
 		} else {
 			RIOSend(Integer.parseInt(server), protocol, Utility.stringToByteArray(payload));
 		}
@@ -74,6 +80,10 @@ public class Client extends RIONode {
 	}
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
+		// feedback for the console
+		String msgString = Utility.byteArrayToString(msg);
+		String fromNode = from + "";
+		System.out.println("received " + msgString + " from node: " +  fromNode);
 		
 		// TODO: case structure
 		if((protocol == Protocol.DATA)  || (protocol == Protocol.CREATE) || (protocol == Protocol.DELETE) 
@@ -82,11 +92,6 @@ public class Client extends RIONode {
 		}else if(protocol == Protocol.ACK) {
 			RIOLayer.RIOAckReceive(from, msg);
 		}
-		
-		// feedback for the console
-		String msgString = Utility.byteArrayToString(msg);
-		String fromNode = from + "";
-		System.out.println("received " + msgString + " from node: " +  fromNode);
 	}
 
 	/**
