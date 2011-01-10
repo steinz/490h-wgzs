@@ -10,8 +10,7 @@ import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /**
- * Extension to the Node class that adds support for a reliable, in-order
- * messaging layer.
+ * Extension to the RIONode class that adds support basic file system operations
  * 
  * Nodes that extend this class for the support should use RIOSend and
  * onRIOReceive to send/receive the packets from the RIO layer. The underlying
@@ -19,10 +18,12 @@ import edu.washington.cs.cse490h.lib.Utility;
  * overriding the onReceive() method to include a call to super.onReceive()
  */
 public class Client extends RIONode {
-	
-	private static final boolean debug = true;
-	
-	private static final String dataDirectory = "Data";
+    //TODO: Ask if we're supposed to have client and server in same class
+
+    /**
+     * Verbose flag for debugging
+     */
+    private static final boolean verbose = true;
 	
 	public Client() {
 		super();
@@ -31,60 +32,115 @@ public class Client extends RIONode {
 	public void start() {
 	}
 
+    /**
+     * Process a command from user or file
+     *
+     * @param command
+     *           The command for this node
+     */
 	public void onCommand(String command) {
-		// parse command, server, filename
+		// parse cmd, server, filename
 		StringTokenizer tokens = new StringTokenizer(command, " ");
-		String cmd = "", server = "", filename = "";
+		String cmd = "", filename = "";
+                int server = -1;
 		try {
 			cmd = tokens.nextToken();
-			server = tokens.nextToken();
+			server = Integer.parseInt(tokens.nextToken());
 			filename = tokens.nextToken();
-		} catch (NumberFormatException e) {
-			System.err.println("invalid server address");
-			return;
+                } catch (NumberFormatException e) {
+                    //TODO: Refractor error codes to there own class for convenience
+                    // bad server address
+                    printError(910, cmd, server, filename);
+                    return;
 		} catch (NoSuchElementException e) {
-			System.err.println("invalid command");
-			return;
+                    // incomplete command
+                    printError(900, cmd, server, filename);
+                    return;
 		}
 
 		// parse contents for put and append
 		String contents = "";
-		if (command.equals("put") || command.equals("append")) {
-			int parsedLength = command.length()	+ server.length() + filename.length() + 3;
+		if (cmd.equals("put") || cmd.equals("append")) {
+                    int parsedLength = cmd.length() + Integer.toString(server).length() + filename.length() + 3;
 			if (parsedLength >= command.length()) {
-				System.err.println("no contents");
-				return;
+                            // no contents
+                            printError(900, cmd, server, filename);
+                            return;
 			}
 			else  {
 				contents = command.substring(parsedLength);
 			}
 		}
 		
-		// send message
+		// build and send message
 		String payload = filename;
-		if (command.equals("put") || command.equals("append")) {
+		if (cmd.equals("put") || cmd.equals("append")) {
+                    //TODO: Tabs look pretty bad in the simulator, switch to something else?
 			payload += "\t" + contents;
 		}
-		int protocol = Protocol.stringToProtocol(cmd.toUpperCase());
+		int protocol = Protocol.stringToProtocol(cmd);
 		if (protocol == -1) {
-			System.err.println("invalid command");
-			return;
+                    printError(901, cmd, server, filename);
+                    return;
 		} else {
-			RIOSend(Integer.parseInt(server), protocol, Utility.stringToByteArray(payload));
+                    RIOSend(server, protocol, Utility.stringToByteArray(payload));
 		}
 	}
 
+    /**
+     * Prints msg if verbose is true
+     * Also prints a frame if frame is true
+     */
+    public void printVerbose(String msg, boolean frame) {
+        if (verbose) {
+            if (frame) {
+                System.out.println("\n===VERBOSE===");
+            }
+            System.out.println(msg);
+            if (frame) {
+                System.out.println("===VERBOSE===\n");
+            }
+        }
+    }
+
+    /**
+     * Stub for printVerbose that doesn't print a frame
+     */
+    public void printVerbose(String msg) {
+        printVerbose(msg, false);
+    }
+
+    /**
+     * Stub for printError
+     * @deprecated provide more details
+     */
+    @Deprecated
+    public void printError(int error) {
+        // TODO: stub - fix calls and remove
+        printError(error, "(unknown command)", -1, "(unknown filename)");
+    }
 	
-	public void printError(int error){
-		//TODO: Implement
-	}
+    /**
+     * Prints an error message
+     */
+    public void printError(int error, String command, int server, String filename){
+        //TODO: pass through command, server, filename for existing calls to printError
+        System.out.println("Node " + addr + ": Error: <command> on server <server> and file <filename> returned error code " + error);
+    }
+
+    /**
+     * TODO: summarize
+     */
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
+            //TODO: Think about logging and debugging output...
+            if (verbose) {
 		// feedback for the console
 		String msgString = Utility.byteArrayToString(msg);
 		String fromNode = from + "";
-		System.out.println("received " + msgString + " from node: " +  fromNode);
-		
+		printVerbose("received " + msgString + " from node: " +  fromNode);
+            }		
+
 		// TODO: case structure
 		if((protocol == Protocol.DATA)  || (protocol == Protocol.CREATE) || (protocol == Protocol.DELETE) 
 				|| (protocol == Protocol.GET) || (protocol == Protocol.PUT) || (protocol == Protocol.APPEND)) {
@@ -99,10 +155,8 @@ public class Client extends RIONode {
 	 * @param fileName the file to create
 	 */
 	public void createFile(String fileName){
-		fileName = this.dataDirectory + fileName;
-		File filePath = new File(fileName);
 		// check if the file exists
-		if (filePath.exists()){
+            if (Utility.fileExists(this, fileName)){
 			printError(11);
 		}
 		
@@ -124,10 +178,8 @@ public class Client extends RIONode {
 	 * @param fileName the file name to delete
 	 */
 	public void deleteFile(String fileName){
-		fileName = this.dataDirectory + fileName;
 		// check if the file even exists
-		File filePath = new File(fileName);
-		if (!filePath.exists())
+            if (!Utility.fileExists(this, fileName))
 			printError(10);
 		else{
 			// delete file
@@ -148,11 +200,8 @@ public class Client extends RIONode {
 	 * @param fileName the filename to send
 	 */
 	public void getFile(String fileName, int from){
-		
-		fileName = this.dataDirectory + fileName;
 		// check if the file exists
-		File filePath = new File(fileName);
-		if (!filePath.exists())
+            if (!Utility.fileExists(this, fileName))
 			printError(10);
 		// send the file if it does
 		else{
@@ -183,10 +232,8 @@ public class Client extends RIONode {
 	 */
 	public void writeFile(String fileName, String contents, int protocol)
 	{
-		fileName = "./Data/" + fileName;
 		// check if the file exists
-		File filePath = new File(fileName);
-		if (!filePath.exists())
+            if (!Utility.fileExists(this, fileName))
 			printError(10);
 		else{
 			try{
@@ -198,13 +245,20 @@ public class Client extends RIONode {
 					writer = getWriter(fileName, false);
 				}
 				writer.write(contents);
+                                writer.flush();
 				writer.close();
 			} catch (IOException e){
 				// ioexception
 			}
 		}
 	}
-	
+    /**
+     * Prints the file received from the get command
+     */	
+    public void receiveFile(String msgString) {
+        System.out.println(msgString);
+    }
+
 	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
 	 * 
@@ -231,17 +285,18 @@ public class Client extends RIONode {
 			StringTokenizer tokenizer = new StringTokenizer(msgString);
 			String fileName = tokenizer.nextToken();
 			int length = fileName.length();
+
 			String contents = msgString.substring(length+1, msgString.length());
-			
+
 			writeFile(fileName, contents, protocol);
-		}
-		
-		
+		}else if (protocol == Protocol.DATA){
+                    // get response
+                    receiveFile(msgString);
+                }
 	}
-	
 
 	@Override
 	public String toString() {
-		return "";
+            return RIOLayer.toString();
 	}
 }
