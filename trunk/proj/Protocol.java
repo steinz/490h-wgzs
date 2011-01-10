@@ -75,6 +75,16 @@ public class Protocol {
 			return "RIO Acknowledgement Packet";
 		case RIOTEST_PKT:
 			return "RIO Testing Packet";
+		case CREATE:
+			return "RIO Create Packet";
+		case PUT:
+			return "RIO Put Packet";
+		case APPEND:
+			return "RIO Append Packet";
+		case DELETE:
+			return "RIO Delete Packet";
+		case GET:
+			return "RIO Get Packet";
 		default:
 			return "Unknown Protocol";
 		}

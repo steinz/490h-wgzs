@@ -39,6 +39,7 @@ public class Client extends RIONode {
      *           The command for this node
      */
 	public void onCommand(String command) {
+		// TODO: For some reason, the protocol is always being sent as either 0 or 1
 		// parse cmd, server, filename
 		StringTokenizer tokens = new StringTokenizer(command, " ");
 		String cmd = "", filename = "";
@@ -110,22 +111,17 @@ public class Client extends RIONode {
         printVerbose(msg, false);
     }
 
-    /**
-     * Stub for printError
-     * @deprecated provide more details
-     */
-    @Deprecated
-    public void printError(int error) {
-        // TODO: stub - fix calls and remove
-        printError(error, "(unknown command)", -1, "(unknown filename)");
-    }
 	
     /**
      * Prints an error message
      */
     public void printError(int error, String command, int server, String filename){
         //TODO: pass through command, server, filename for existing calls to printError
-        System.out.println("Node " + addr + ": Error: <command> on server <server> and file <filename> returned error code " + error);
+    	String stringOut = "";
+    	stringOut += "Node " + addr + ": Error: " + command + 
+    	" on server: " + server +  "and file " + filename + 
+    	"returned error code " + error;
+        System.out.println(stringOut);
     }
 
     /**
@@ -137,17 +133,26 @@ public class Client extends RIONode {
             if (verbose) {
 		// feedback for the console
 		String msgString = Utility.byteArrayToString(msg);
-		String fromNode = from + "";
-		printVerbose("received " + msgString + " from node: " +  fromNode);
+		printVerbose("RECEIVED protocol " + Protocol.protocolToString(protocol) + " with arguments: " 
+				+ msgString + " from node: " +  from);
             }		
 
-		// TODO: case structure
-		if((protocol == Protocol.DATA)  || (protocol == Protocol.CREATE) || (protocol == Protocol.DELETE) 
-				|| (protocol == Protocol.GET) || (protocol == Protocol.PUT) || (protocol == Protocol.APPEND)) {
-			RIOLayer.RIODataReceive(from, msg);
-		}else if(protocol == Protocol.ACK) {
-			RIOLayer.RIOAckReceive(from, msg);
-		}
+       switch(protocol) {
+       // taking advantage of case-structure fall-through behavior
+       case Protocol.DATA:
+       case Protocol.CREATE:
+       case Protocol.DELETE:
+       case Protocol.GET:
+       case Protocol.PUT:
+       case Protocol.APPEND:
+    	   RIOLayer.RIODataReceive(from, msg);
+    	   break;
+       case Protocol.ACK:
+    	   RIOLayer.RIOAckReceive(from, msg);
+    	   break;
+            
+       }
+
 	}
 
 	/**
@@ -157,7 +162,7 @@ public class Client extends RIONode {
 	public void createFile(String fileName){
 		// check if the file exists
             if (Utility.fileExists(this, fileName)){
-			printError(11);
+			printError(11, "create", addr, fileName);
 		}
 		
 		// create the file
@@ -180,7 +185,7 @@ public class Client extends RIONode {
 	public void deleteFile(String fileName){
 		// check if the file even exists
             if (!Utility.fileExists(this, fileName))
-			printError(10);
+			printError(10, "delete", addr, fileName);
 		else{
 			// delete file
 			try{
@@ -202,7 +207,7 @@ public class Client extends RIONode {
 	public void getFile(String fileName, int from){
 		// check if the file exists
             if (!Utility.fileExists(this, fileName))
-			printError(10);
+			printError(10, "get", addr, fileName);
 		// send the file if it does
 		else{
 			// load the file into a reader
@@ -233,8 +238,12 @@ public class Client extends RIONode {
 	public void writeFile(String fileName, String contents, int protocol)
 	{
 		// check if the file exists
-            if (!Utility.fileExists(this, fileName))
-			printError(10);
+            if (!Utility.fileExists(this, fileName)){
+            	if (protocol == Protocol.APPEND)
+            		printError(10, "put", addr, fileName);
+            	else
+            		printError(10, "append", addr, fileName);
+            }
 		else{
 			try{
 				PersistentStorageWriter writer = null;
@@ -273,14 +282,19 @@ public class Client extends RIONode {
 	{
 		String msgString = Utility.byteArrayToString(msg);
 		
-		if (protocol == Protocol.CREATE) {
+		switch(protocol){
+		
+		case Protocol.CREATE:
 			createFile(msgString);
-		}else if (protocol == Protocol.DELETE){
+			break;
+		case Protocol.DELETE:
 			deleteFile(msgString);
-		}else if (protocol == Protocol.GET){
+			break;
+		case Protocol.GET:
 			getFile(msgString, from);
-		}else if (protocol == Protocol.PUT || protocol == Protocol.APPEND){
-
+			break;
+		case Protocol.PUT:
+		case Protocol.APPEND:
 			// tokenize the string and parse out the contents and filename
 			StringTokenizer tokenizer = new StringTokenizer(msgString);
 			String fileName = tokenizer.nextToken();
@@ -289,10 +303,11 @@ public class Client extends RIONode {
 			String contents = msgString.substring(length+1, msgString.length());
 
 			writeFile(fileName, contents, protocol);
-		}else if (protocol == Protocol.DATA){
-                    // get response
-                    receiveFile(msgString);
-                }
+			break;
+		case Protocol.DATA:
+            // get response
+            receiveFile(msgString);
+		}
 	}
 
 	@Override
