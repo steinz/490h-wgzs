@@ -1,6 +1,8 @@
 import java.util.StringTokenizer;
+import java.util.NoSuchElementException;
 
 import edu.washington.cs.cse490h.lib.Node;
+import edu.washington.cs.cse490h.lib.Utility;
 
 /**
  * Extension to the Node class that adds support for a reliable, in-order
@@ -11,28 +13,34 @@ import edu.washington.cs.cse490h.lib.Node;
  * layer can also be used by sending using the regular send() method and
  * overriding the onReceive() method to include a call to super.onReceive()
  */
-public abstract class Client extends RIONode {
+public class Client extends RIONode {
 
 	public Client() {
 		super();
 	}
 
+	public void start() {
+	}
+	
 	public void onCommand(String command) {
 		// parse command, server, filename
 		StringTokenizer tokens = new StringTokenizer(command, " ");
+		String cmd = "", server = "", filename = "";
 		try {
-			String command = tokens.nextToken();
-			String server = tokens.nextToken();
-			String filename = tokens.nextToken();
+			cmd = tokens.nextToken();
+			server = tokens.nextToken();
+			filename = tokens.nextToken();
+		} catch (NumberFormatException e) {
+			// bad server address
 		} catch (NoSuchElementException e) {
 			// bad command
 		}
 
 		// parse contents for put and append
-		String contents;
+		String contents = "";
 		if (command.equals("put") || command.equals("append")) {
 			int parsedLength = command.length()	+ server.length() + filename.length() + 3;
-			if (parsedLength >= command.length) {
+			if (parsedLength >= command.length()) {
 				//no contents - error?
 			}
 			else  {
@@ -42,38 +50,20 @@ public abstract class Client extends RIONode {
 		
 		// send message
 		String payload = filename;
-		if (contents != null) {
+		if (command.equals("put") || command.equals("append")) {
 			payload += "\t" + contents;
 		}
-		int protocol = Protocol.stringToProtocol(command);
+		int protocol = Protocol.stringToProtocol(cmd);
 		if (protocol == -1) {
 			//invalid command
 		} else {
-			RIOSend(server, protocol, payload);
+			RIOSend(Integer.parseInt(server), protocol, Utility.stringToByteArray(payload));
 		}
 	}
 
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
-		if (protocol == Protocol.DATA) {
-			RIOLayer.RIODataReceive(from, msg);
-		} else if (protocol == Protocol.ACK) {
-			RIOLayer.RIOAckReceive(from, msg);
-		}
-	}
-
-	/**
-	 * Send a message using the reliable, in-order delivery layer
-	 * 
-	 * @param destAddr
-	 *            The address to send to
-	 * @param protocol
-	 *            The protocol identifier of the message
-	 * @param payload
-	 *            The payload of the message
-	 */
-	public void RIOSend(int destAddr, int protocol, byte[] payload) {
-		RIOLayer.RIOSend(destAddr, protocol, payload);
+		
 	}
 
 	/**
@@ -86,10 +76,12 @@ public abstract class Client extends RIONode {
 	 * @param msg
 	 *            The message that was received
 	 */
-	public abstract void onRIOReceive(Integer from, int protocol, byte[] msg);
+	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
+		
+	}
 
 	@Override
 	public String toString() {
-		return RIOLayer.toString();
+		
 	}
 }
