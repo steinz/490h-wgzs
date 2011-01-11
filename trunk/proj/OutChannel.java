@@ -36,7 +36,7 @@ class OutChannel {
 			RIOPacket newPkt = new RIOPacket(protocol, ++lastSeqNumSent, payload);
 			unACKedPackets.put(lastSeqNumSent, newPkt);
 			
-			n.send(destAddr, Protocol.DATA, newPkt.pack());
+			n.send(destAddr, protocol, newPkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[]{ destAddr, lastSeqNumSent }), ReliableInOrderMsgLayer.TIMEOUT);
 		}catch(Exception e) {
 			e.printStackTrace();
