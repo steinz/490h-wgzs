@@ -119,8 +119,8 @@ public class Client extends RIONode {
         //TODO: pass through command, server, filename for existing calls to printError
     	String stringOut = "";
     	stringOut += "Node " + addr + ": Error: " + command + 
-    	" on server: " + server +  "and file " + filename + 
-    	"returned error code " + error;
+    	" on server: " + server +  " and file: " + filename + 
+    	" returned error code: " + error;
         System.out.println(stringOut);
     }
 
@@ -133,8 +133,8 @@ public class Client extends RIONode {
             if (verbose) {
 		// feedback for the console
 		String msgString = Utility.byteArrayToString(msg);
-		printVerbose("RECEIVED protocol " + Protocol.protocolToString(protocol) + " with arguments: " 
-				+ msgString + " from node: " +  from);
+		printVerbose("Node: " + addr + " RECEIVED Protocol: " + Protocol.protocolToString(protocol) + " With Arguments: " 
+				+ msgString + " From Node: " +  from);
             }		
 
        switch(protocol) {
@@ -160,6 +160,9 @@ public class Client extends RIONode {
 	 * @param fileName the file to create
 	 */
 	public void createFile(String fileName){
+		if (verbose){
+			printVerbose("Node: " + addr + " attempting to CREATE file: " + fileName);
+		}
 		// check if the file exists
             if (Utility.fileExists(this, fileName)){
 			printError(11, "create", addr, fileName);
@@ -183,6 +186,9 @@ public class Client extends RIONode {
 	 * @param fileName the file name to delete
 	 */
 	public void deleteFile(String fileName){
+		if (verbose){
+			printVerbose("Node: " + addr + " attempting to DELETE file: " + fileName);
+		}
 		// check if the file even exists
             if (!Utility.fileExists(this, fileName))
 			printError(10, "delete", addr, fileName);
@@ -205,6 +211,9 @@ public class Client extends RIONode {
 	 * @param fileName the filename to send
 	 */
 	public void getFile(String fileName, int from){
+		if (verbose){
+			printVerbose("Node: " + addr + " attempting to READ/GET file: " + fileName + " for Node: " + from);
+		}
 		// check if the file exists
             if (!Utility.fileExists(this, fileName))
 			printError(10, "get", addr, fileName);
@@ -237,6 +246,9 @@ public class Client extends RIONode {
 	 */
 	public void writeFile(String fileName, String contents, int protocol)
 	{
+		if (verbose){
+			printVerbose("Node: " + addr + " attempting to PUT/APPEND File: " + fileName + " with Contents: " + contents);
+		}
 		// check if the file exists
             if (!Utility.fileExists(this, fileName)){
             	if (protocol == Protocol.APPEND)
