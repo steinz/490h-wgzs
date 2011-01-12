@@ -57,7 +57,8 @@ public class Protocol {
 		} else if (protocol.equals("GET")) { return 4;
 		} else if (protocol.equals("PUT")) { return 5;
 		} else if (protocol.equals("APPEND")) { return 6;
-		} else { return -1; }
+		} else if (protocol.equals("HANDSHAKE")) { return 7;
+		}  else { return -1; }
 	}
 	
 	/**
@@ -87,6 +88,8 @@ public class Protocol {
 			return "RIO Delete Packet";
 		case GET:
 			return "RIO Get Packet";
+		case HANDSHAKE:
+			return "RIO Handshake";
 		default:
 			return "Unknown Protocol";
 		}
