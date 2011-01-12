@@ -15,7 +15,7 @@ import edu.washington.cs.cse490h.lib.Packet;
 public class RIOPacket {
 
 	public static final int MAX_PACKET_SIZE = Packet.MAX_PAYLOAD_SIZE;
-	public static final int HEADER_SIZE = 5;
+	public static final int HEADER_SIZE = 21;
 	public static final int MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - HEADER_SIZE;
 
 	private int protocol;
@@ -119,7 +119,7 @@ public class RIOPacket {
 
 			
 			// unpack the UUID
-			byte[] UUIDBytes = new byte[128];
+			byte[] UUIDBytes = new byte[16];
 			in.read(UUIDBytes);
 			UUID name = UUID.nameUUIDFromBytes(UUIDBytes);
 			
