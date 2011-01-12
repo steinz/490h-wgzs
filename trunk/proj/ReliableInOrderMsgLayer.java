@@ -69,18 +69,14 @@ public class ReliableInOrderMsgLayer {
 			// if it's not, we should initiate a handshake immediately and make a new channel to clear our cache of bad packets from an old session
 			RIOSend(from, Protocol.HANDSHAKE, Utility.stringToByteArray(" "));
 			inConnections.put(from, new InChannel());
-			
+			riopkt.setProtocol(Protocol.NOOP);
 		}
-		else // only process packets that have valid UUIDs
-		{
-
-			
-			LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
-			for(RIOPacket p: toBeDelivered) {
-				// deliver in-order the next sequence of packets
-				n.onRIOReceive(from, p.getProtocol(), p.getPayload());
-			}
+		LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
+		for(RIOPacket p: toBeDelivered) {
+			// deliver in-order the next sequence of packets
+			n.onRIOReceive(from, p.getProtocol(), p.getPayload());
 		}
+		
 	}
 	
 	/**

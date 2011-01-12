@@ -319,6 +319,8 @@ public class Client extends RIONode {
 				writeFile(fileName, contents, protocol);
 			}
 			break;
+		case Protocol.NOOP:
+			break;
 		}
 	}
 
