@@ -1,6 +1,7 @@
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Callback;
 import edu.washington.cs.cse490h.lib.Utility;
@@ -47,20 +48,37 @@ public class ReliableInOrderMsgLayer {
 	public void RIODataReceive(int from, byte[] msg) {
 		RIOPacket riopkt = RIOPacket.unpack(msg);
 
-		// at-most-once semantics
-		byte[] seqNumByteArray = Utility.stringToByteArray("" + riopkt.getSeqNum());
-		n.send(from, Protocol.ACK, seqNumByteArray);
-		
-		InChannel in = inConnections.get(from);
-		if(in == null) {
-			in = new InChannel();
-			inConnections.put(from, in);
+		if (riopkt.getProtocol() == Protocol.HANDSHAKE){
+			// handshake, so store this UUID
+			n.addrToSessionIDMap.put(from, riopkt.getUUID());
 		}
 		
-		LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
-		for(RIOPacket p: toBeDelivered) {
-			// deliver in-order the next sequence of packets
-			n.onRIOReceive(from, p.getProtocol(), p.getPayload());
+		// check if UUID is what we think it is. 
+		if (!(n.addrToSessionIDMap.get(from) == n.getID()))
+		{
+			// if it's not, we should initiate a handshake immediately and make a new channel to clear our cache of bad packets from an old session
+			String handshake = n.getID().toString();
+			RIOSend(from, Protocol.HANDSHAKE, Utility.stringToByteArray(handshake));
+			inConnections.put(from, new InChannel());
+			
+		}
+		else // only process packets that have valid UUIDs
+		{
+			// at-most-once semantics
+			byte[] seqNumByteArray = Utility.stringToByteArray("" + riopkt.getSeqNum());
+			n.send(from, Protocol.ACK, seqNumByteArray);
+			
+			InChannel in = inConnections.get(from);
+			if(in == null) {
+				in = new InChannel();
+				inConnections.put(from, in);
+			}
+			
+			LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
+			for(RIOPacket p: toBeDelivered) {
+				// deliver in-order the next sequence of packets
+				n.onRIOReceive(from, p.getProtocol(), p.getPayload());
+			}
 		}
 	}
 	
@@ -95,7 +113,12 @@ public class ReliableInOrderMsgLayer {
 			outConnections.put(destAddr, out);
 		}
 		
-		out.sendRIOPacket(n, protocol, payload);
+		// Decide what the UUID of the destination address is
+		UUID ID = n.addrToSessionIDMap.get(destAddr);
+		if (ID == null)
+			ID = n.getID();
+		
+		out.sendRIOPacket(n, protocol, payload, ID);
 	}
 
 	/**

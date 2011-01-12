@@ -1,6 +1,7 @@
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Callback;
 import edu.washington.cs.cse490h.lib.Utility;
@@ -32,13 +33,15 @@ class OutChannel {
 	 *            The protocol identifier of this packet
 	 * @param payload
 	 *            The payload to be sent
+	 * @param ID
+	 * 			  What the node thinks the ID of the recipient node is currently           
 	 */
-	protected void sendRIOPacket(RIONode n, int protocol, byte[] payload) {
+	protected void sendRIOPacket(RIONode n, int protocol, byte[] payload, UUID ID) {
 		try {
 			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			RIOPacket newPkt = new RIOPacket(protocol, ++lastSeqNumSent,
-					payload);
+					payload, ID);
 			unACKedPackets.put(lastSeqNumSent, newPkt);
 
 			resendCounts.put(newPkt, 0);
@@ -99,9 +102,18 @@ class OutChannel {
 	 */
 	private void resendRIOPacket(RIONode n, int seqNum) {
 		try {
+			UUID newID = null;
 			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			RIOPacket riopkt = unACKedPackets.get(seqNum);
+			// figure out if we know the destination addresses session ID
+			if (n.addrToSessionIDMap.get(destAddr) != null) {
+				newID = n.addrToSessionIDMap.get(destAddr);
+			} else {
+				newID = n.getID();
+			}
+			// update the session ID if we know the address, otherwise set it to our current UUID
+			riopkt.setUUID(newID);
 
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {

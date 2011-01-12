@@ -3,6 +3,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.StringTokenizer;
 import java.util.NoSuchElementException;
+import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Node;
 import edu.washington.cs.cse490h.lib.PersistentStorageReader;
@@ -134,6 +135,7 @@ public class Client extends RIONode {
 					+ Protocol.protocolToString(protocol) + " With Arguments: "
 					+ msgString + " From Node: " + from);
 		}
+		
 
 		super.onReceive(from, protocol, msg);
 	}
