@@ -119,10 +119,9 @@ public class RIOPacket {
 
 			
 			// unpack the UUID
-			byte[] UUIDBytes = new byte[16];
-			in.read(UUIDBytes);
-			UUID name = UUID.nameUUIDFromBytes(UUIDBytes);
-			
+			long mostSigBits = in.readLong();
+			long leastSigBits = in.readLong();
+			UUID name = new UUID(mostSigBits, leastSigBits);
 			
 			int protocol = in.readByte();
 			int seqNum = in.readInt();
