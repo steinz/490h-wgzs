@@ -14,15 +14,15 @@ class OutChannel {
 	private int lastSeqNumSent;
 	private ReliableInOrderMsgLayer parent;
 	private int destAddr;
-	
-	OutChannel(ReliableInOrderMsgLayer parent, int destAddr){
+
+	OutChannel(ReliableInOrderMsgLayer parent, int destAddr) {
 		lastSeqNumSent = -1;
 		unACKedPackets = new HashMap<Integer, RIOPacket>();
 		resendCounts = new HashMap<RIOPacket, Integer>();
 		this.parent = parent;
 		this.destAddr = destAddr;
 	}
-	
+
 	/**
 	 * Send a new RIOPacket out on this channel.
 	 * 
@@ -34,20 +34,24 @@ class OutChannel {
 	 *            The payload to be sent
 	 */
 	protected void sendRIOPacket(RIONode n, int protocol, byte[] payload) {
-		try{
-			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent, new String[]{ "java.lang.Integer", "java.lang.Integer" });
-			RIOPacket newPkt = new RIOPacket(protocol, ++lastSeqNumSent, payload);
+		try {
+			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
+					new String[] { "java.lang.Integer", "java.lang.Integer" });
+			RIOPacket newPkt = new RIOPacket(protocol, ++lastSeqNumSent,
+					payload);
 			unACKedPackets.put(lastSeqNumSent, newPkt);
-			
+
 			resendCounts.put(newPkt, 0);
-			
+
 			n.send(destAddr, protocol, newPkt.pack());
-			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[]{ destAddr, lastSeqNumSent }), ReliableInOrderMsgLayer.TIMEOUT);
-		}catch(Exception e) {
+			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
+					destAddr, lastSeqNumSent }),
+					ReliableInOrderMsgLayer.TIMEOUT);
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
-	
+
 	/**
 	 * Called when a timeout for this channel triggers
 	 * 
@@ -57,18 +61,21 @@ class OutChannel {
 	 *            The sequence number of the unACKed packet
 	 */
 	public void onTimeout(RIONode n, Integer seqNum) {
+		if (!unACKedPackets.containsKey(seqNum)) {
+			return;
+		}
+
 		RIOPacket packet = unACKedPackets.get(seqNum);
-		assert(packet != null);
-		assert(resendCounts.containsKey(packet));
+
 		if (resendCounts.get(packet) >= ReliableInOrderMsgLayer.TIMEOUT) {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
-		} else if(unACKedPackets.containsKey(seqNum)) {
+		} else if (unACKedPackets.containsKey(seqNum)) {
 			resendRIOPacket(n, seqNum);
 			resendCounts.put(packet, resendCounts.get(packet) + 1);
 		}
 	}
-	
+
 	/**
 	 * Called when we get an ACK back. Removes the outstanding packet if it is
 	 * still in unACKedPackets.
@@ -81,7 +88,7 @@ class OutChannel {
 		resendCounts.remove(packet);
 		unACKedPackets.remove(seqNum);
 	}
-	
+
 	/**
 	 * Resend an unACKed packet.
 	 * 
@@ -91,13 +98,15 @@ class OutChannel {
 	 *            The sequence number of the unACKed packet
 	 */
 	private void resendRIOPacket(RIONode n, int seqNum) {
-		try{
-			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent, new String[]{ "java.lang.Integer", "java.lang.Integer" });
+		try {
+			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
+					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			RIOPacket riopkt = unACKedPackets.get(seqNum);
-			
-			n.send(destAddr, Protocol.DATA, riopkt.pack());
-			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[]{ destAddr, seqNum }), ReliableInOrderMsgLayer.TIMEOUT);
-		}catch(Exception e) {
+
+			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
+			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
+					destAddr, seqNum }), ReliableInOrderMsgLayer.TIMEOUT);
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}

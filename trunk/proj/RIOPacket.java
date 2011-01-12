@@ -20,6 +20,7 @@ public class RIOPacket {
 	private int protocol;
 	private int seqNum;
 	private byte[] payload;
+	private UUID ID:
 
 	/**
 	 * Constructing a new RIO packet.
@@ -27,7 +28,7 @@ public class RIOPacket {
 	 * @param seqNum The sequence number of the packet
 	 * @param payload The payload of the packet.
 	 */
-	public RIOPacket(int protocol, int seqNum, byte[] payload) throws IllegalArgumentException {
+	public RIOPacket(int protocol, int seqNum, byte[] payload, UUID ID) throws IllegalArgumentException {
 		if (!Protocol.isRIOProtocolValid(protocol) || payload.length > MAX_PAYLOAD_SIZE) {
 			throw new IllegalArgumentException("Illegal arguments given to RIOPacket");
 		}
@@ -35,6 +36,7 @@ public class RIOPacket {
 		this.protocol = protocol;
 		this.seqNum = seqNum;
 		this.payload = payload;
+		this.ID = ID;
 	}
 
 	/**

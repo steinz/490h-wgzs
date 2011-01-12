@@ -13,7 +13,6 @@ import java.util.UUID;
 public abstract class RIONode extends Node {
 	protected ReliableInOrderMsgLayer RIOLayer;
 	private UUID ID;
-    //TODO: implement failure recovery w/ uuids
 	
 	public static int NUM_NODES = 10;
 	
