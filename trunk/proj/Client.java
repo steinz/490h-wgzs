@@ -170,7 +170,7 @@ public class Client extends RIONode {
 		}
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
-			printError(11, "create", addr, fileName);
+			printError(ErrorCode.FileAlreadyExists, "create", addr, fileName);
 		}
 
 		// create the file
