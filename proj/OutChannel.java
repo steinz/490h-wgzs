@@ -112,7 +112,7 @@ class OutChannel {
 			}
 			// update the session ID if we know the address, otherwise set it to our current UUID
 			riopkt.setUUID(newID);
-
+			System.out.println("RESENDING PACKET: " + riopkt.getSeqNum());
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
 					destAddr, seqNum }), ReliableInOrderMsgLayer.TIMEOUT);

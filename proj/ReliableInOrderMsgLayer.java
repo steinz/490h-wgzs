@@ -64,7 +64,7 @@ public class ReliableInOrderMsgLayer {
 			return;
 		}
 		// check if UUID is what we think it is. 
-		if (!(riopkt.getUUID() == n.getID()))
+		if (!(riopkt.getUUID().equals(n.getID())))
 		{
 			// if it's not, we should initiate a handshake immediately and make a new channel to clear our cache of bad packets from an old session
 			RIOSend(from, Protocol.HANDSHAKE, Utility.stringToByteArray(" "));
