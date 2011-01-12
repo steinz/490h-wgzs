@@ -14,6 +14,7 @@ public class Protocol {
 	public static final int PUT = 5;
 	public static final int APPEND = 6;
 	public static final int HANDSHAKE = 7;
+	public static final int NOOP = 8;
 	
 	// Protocols for Testing Reliable in-order message delivery
 	// These should be RIOPacket protocols
@@ -31,7 +32,7 @@ public class Protocol {
 	public static boolean isPktProtocolValid(int protocol) {
 		
 		//	TODO: This is awful
-		return (8 > protocol && protocol > -1);
+		return (9 > protocol && protocol > -1);
 	}
 
 	/**
@@ -58,6 +59,7 @@ public class Protocol {
 		} else if (protocol.equals("PUT")) { return 5;
 		} else if (protocol.equals("APPEND")) { return 6;
 		} else if (protocol.equals("HANDSHAKE")) { return 7;
+		} else if (protocol.equals("NOOP")) { return 8;
 		}  else { return -1; }
 	}
 	
@@ -90,6 +92,8 @@ public class Protocol {
 			return "RIO Get Packet";
 		case HANDSHAKE:
 			return "RIO Handshake";
+		case NOOP:
+			return "RIO NOOP";
 		default:
 			return "Unknown Protocol";
 		}

@@ -70,6 +70,14 @@ public class RIOPacket {
 	
 	/**
 	 * 
+	 * @param newProtocol The new protocol
+	 */
+	public void setProtocol(int newProtocol){
+		this.protocol = newProtocol;
+	}
+	
+	/**
+	 * 
 	 * @return newID The ID
 	 */
 	public UUID getUUID(){
