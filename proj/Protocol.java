@@ -29,8 +29,9 @@ public class Protocol {
 	 * @return true if the protocol is valid, false otherwise
 	 */
 	public static boolean isPktProtocolValid(int protocol) {
-		return (protocol == DATA || protocol == ACK || protocol == CREATE || protocol == DELETE ||
-				protocol == GET || protocol == PUT || protocol == APPEND);
+		
+		//	TODO: This is awful
+		return (8 > protocol && protocol > -1);
 	}
 
 	/**
