@@ -51,13 +51,11 @@ public class Client extends RIONode {
 			server = Integer.parseInt(tokens.nextToken());
 			filename = tokens.nextToken();
 		} catch (NumberFormatException e) {
-			// TODO: Refractor error codes to there own class for convenience
-			// bad server address
-			printError(910, cmd, server, filename);
+			printError(ErrorCode.InvalidServerAddress, cmd, server, filename);
 			return;
 		} catch (NoSuchElementException e) {
 			// incomplete command
-			printError(900, cmd, server, filename);
+			printError(ErrorCode.IncompleteCommand, cmd, server, filename);
 			return;
 		}
 
@@ -68,7 +66,7 @@ public class Client extends RIONode {
 					+ filename.length() + 3;
 			if (parsedLength >= command.length()) {
 				// no contents
-				printError(900, cmd, server, filename);
+				printError(ErrorCode.IncompleteCommand, cmd, server, filename);
 				return;
 			} else {
 				contents = command.substring(parsedLength);
@@ -82,7 +80,7 @@ public class Client extends RIONode {
 		}
 		int protocol = Protocol.stringToProtocol(cmd);
 		if (protocol == -1) {
-			printError(901, cmd, server, filename);
+			printError(ErrorCode.InvalidCommand, cmd, server, filename);
 			return;
 		} else {
 			RIOSend(server, protocol, Utility.stringToByteArray(payload));
@@ -117,8 +115,6 @@ public class Client extends RIONode {
 	 */
 	public void printError(int error, String command, int server,
 			String filename) {
-		// TODO: pass through command, server, filename for existing calls to
-		// printError
 		String stringOut = "";
 		stringOut += "Node " + addr + ": Error: " + command + " on server: "
 				+ server + " and file: " + filename + " returned error code: "
@@ -127,7 +123,7 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * TODO: summarize
+	 * Extends onReceive for extra logging
 	 */
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
@@ -139,22 +135,7 @@ public class Client extends RIONode {
 					+ msgString + " From Node: " + from);
 		}
 
-		switch (protocol) {
-		// taking advantage of case-structure fall-through behavior
-		case Protocol.DATA:
-		case Protocol.CREATE:
-		case Protocol.DELETE:
-		case Protocol.GET:
-		case Protocol.PUT:
-		case Protocol.APPEND:
-			RIOLayer.RIODataReceive(from, msg);
-			break;
-		case Protocol.ACK:
-			RIOLayer.RIOAckReceive(from, msg);
-			break;
-
-		}
-
+		super.onReceive(from, protocol, msg);
 	}
 
 	/**
@@ -199,7 +180,7 @@ public class Client extends RIONode {
 		}
 		// check if the file even exists
 		if (!Utility.fileExists(this, fileName))
-			printError(10, "delete", addr, fileName);
+			printError(ErrorCode.FileDoesNotExist, "delete", addr, fileName);
 		else {
 			// delete file
 			try {
@@ -226,7 +207,7 @@ public class Client extends RIONode {
 		}
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName))
-			printError(10, "get", addr, fileName);
+			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
 		// send the file if it does
 		else {
 			// load the file into a reader
@@ -268,9 +249,9 @@ public class Client extends RIONode {
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
 			if (protocol == Protocol.APPEND)
-				printError(10, "put", addr, fileName);
+				printError(ErrorCode.FileDoesNotExist, "put", addr, fileName);
 			else
-				printError(10, "append", addr, fileName);
+				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
 		} else {
 			try {
 				PersistentStorageWriter writer = null;

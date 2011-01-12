@@ -24,10 +24,10 @@ public abstract class RIONode extends Node {
 	
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
-		if(protocol == Protocol.DATA) {
-			RIOLayer.RIODataReceive(from, msg);
-		}else if(protocol == Protocol.ACK) {
+		if (protocol == Protocol.ACK) {
 			RIOLayer.RIOAckReceive(from, msg);
+		} else {
+			RIOLayer.RIODataReceive(from, msg);
 		}
 	}
 
