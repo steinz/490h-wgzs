@@ -13,6 +13,8 @@ class OutChannel {
 	private int lastSeqNumSent;
 	private ReliableInOrderMsgLayer parent;
 	private int destAddr;
+	
+	private int MAX_RESENDS = 5;
 
 	OutChannel(ReliableInOrderMsgLayer parent, int destAddr) {
 		lastSeqNumSent = -1;
@@ -68,7 +70,7 @@ class OutChannel {
 
 		RIOPacket packet = unACKedPackets.get(seqNum);
 
-		if (resendCounts.get(packet) >= ReliableInOrderMsgLayer.TIMEOUT) {
+		if (resendCounts.get(packet) >= MAX_RESENDS) {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
 		} else if (unACKedPackets.containsKey(seqNum)) {

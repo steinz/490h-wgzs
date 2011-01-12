@@ -289,6 +289,8 @@ public class Client extends RIONode {
 	 *            The message that was received
 	 */
 	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
+		printVerbose("reading a message...");
+		
 		String msgString = Utility.byteArrayToString(msg);
 
 		switch (protocol) {
