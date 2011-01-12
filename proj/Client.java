@@ -77,7 +77,7 @@ public class Client extends RIONode {
 		String payload = filename;
 		if (cmd.equals("put") || cmd.equals("append")) {
                     //TODO: Tabs look pretty bad in the simulator, switch to something else?
-			payload += "\t" + contents;
+			payload += " " + contents;
 		}
 		int protocol = Protocol.stringToProtocol(cmd);
 		if (protocol == -1) {
