@@ -62,6 +62,20 @@ public class RIOPacket {
 	}
 
 	/**
+	 * @param newID The new ID to be set
+	 */
+	public void setUUID(UUID newID){
+		ID = newID;
+	}
+	
+	/**
+	 * 
+	 * @return newID The ID
+	 */
+	public UUID getUUID(){
+		return this.ID;
+	}
+	/**
 	 * Convert the RIOPacket packet object into a byte array for sending over the wire.
 	 * Format:
 	 *        protocol = 1 byte
@@ -74,6 +88,12 @@ public class RIOPacket {
 			ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
 			DataOutputStream out = new DataOutputStream(byteStream);
 
+			// write the UUID to the packet
+			long IDMostSignificantBits = ID.getMostSignificantBits();
+			long IDLeastSignificantBits = ID.getLeastSignificantBits();
+			out.writeLong(IDMostSignificantBits);
+			out.writeLong(IDLeastSignificantBits);
+			
 			out.writeByte(protocol);
 			out.writeInt(seqNum);
 
@@ -97,6 +117,13 @@ public class RIOPacket {
 		try {
 			DataInputStream in = new DataInputStream(new ByteArrayInputStream(packet));
 
+			
+			// unpack the UUID
+			byte[] UUIDBytes = new byte[128];
+			in.read(UUIDBytes);
+			UUID name = UUID.nameUUIDFromBytes(UUIDBytes);
+			
+			
 			int protocol = in.readByte();
 			int seqNum = in.readInt();
 
@@ -107,7 +134,7 @@ public class RIOPacket {
 				return null;
 			}
 
-			return new RIOPacket(protocol, seqNum, payload);
+			return new RIOPacket(protocol, seqNum, payload, name);
 		} catch (IllegalArgumentException e) {
 			// will return null
 		} catch(IOException e) {

@@ -13,6 +13,7 @@ public class Protocol {
 	public static final int GET = 4;
 	public static final int PUT = 5;
 	public static final int APPEND = 6;
+	public static final int HANDSHAKE = 7;
 	
 	// Protocols for Testing Reliable in-order message delivery
 	// These should be RIOPacket protocols

@@ -1,4 +1,6 @@
 import edu.washington.cs.cse490h.lib.Node;
+
+import java.util.HashMap;
 import java.util.UUID;
 
 /**
@@ -13,12 +15,14 @@ import java.util.UUID;
 public abstract class RIONode extends Node {
 	protected ReliableInOrderMsgLayer RIOLayer;
 	private UUID ID;
+	public HashMap<Integer, UUID> addrToSessionIDMap;
 	
 	public static int NUM_NODES = 10;
 	
 	
 	public RIONode() {
-		ID = UUID.randomUUID();
+		setID(UUID.randomUUID());
+		addrToSessionIDMap = new HashMap<Integer, UUID>();
 		RIOLayer = new ReliableInOrderMsgLayer(this);
 	}
 	
@@ -42,6 +46,11 @@ public abstract class RIONode extends Node {
 	 *            The payload of the message
 	 */
 	public void RIOSend(int destAddr, int protocol, byte[] payload) {
+		if (!addrToSessionIDMap.containsKey(destAddr))
+		{
+			// session ID for this address not found - ask for one!
+			
+		}
 		RIOLayer.RIOSend(destAddr, protocol, payload);
 	}
 
@@ -60,5 +69,13 @@ public abstract class RIONode extends Node {
 	@Override
 	public String toString() {
 		return RIOLayer.toString();
+	}
+
+	public void setID(UUID iD) {
+		ID = iD;
+	}
+
+	public UUID getID() {
+		return ID;
 	}
 }
