@@ -3,12 +3,14 @@ import java.util.HashMap;
 import java.util.LinkedList;
 
 import edu.washington.cs.cse490h.lib.Callback;
+import edu.washington.cs.cse490h.lib.Utility;
 
 /**
  * Representation of an outgoing channel to this node
  */
 class OutChannel {
 	private HashMap<Integer, RIOPacket> unACKedPackets;
+	private HashMap<RIOPacket, Integer> resendCounts;
 	private int lastSeqNumSent;
 	private ReliableInOrderMsgLayer parent;
 	private int destAddr;
@@ -16,6 +18,7 @@ class OutChannel {
 	OutChannel(ReliableInOrderMsgLayer parent, int destAddr){
 		lastSeqNumSent = -1;
 		unACKedPackets = new HashMap<Integer, RIOPacket>();
+		resendCounts = new HashMap<RIOPacket, Integer>();
 		this.parent = parent;
 		this.destAddr = destAddr;
 	}
@@ -36,6 +39,8 @@ class OutChannel {
 			RIOPacket newPkt = new RIOPacket(protocol, ++lastSeqNumSent, payload);
 			unACKedPackets.put(lastSeqNumSent, newPkt);
 			
+			resendCounts.put(newPkt, 0);
+			
 			n.send(destAddr, protocol, newPkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[]{ destAddr, lastSeqNumSent }), ReliableInOrderMsgLayer.TIMEOUT);
 		}catch(Exception e) {
@@ -52,8 +57,15 @@ class OutChannel {
 	 *            The sequence number of the unACKed packet
 	 */
 	public void onTimeout(RIONode n, Integer seqNum) {
-		if(unACKedPackets.containsKey(seqNum)) {
+		RIOPacket packet = unACKedPackets.get(seqNum);
+		assert(packet != null);
+		assert(resendCounts.containsKey(packet));
+		if (resendCounts.get(packet) >= ReliableInOrderMsgLayer.TIMEOUT) {
+			resendCounts.remove(packet);
+			unACKedPackets.remove(seqNum);
+		} else if(unACKedPackets.containsKey(seqNum)) {
 			resendRIOPacket(n, seqNum);
+			resendCounts.put(packet, resendCounts.get(packet) + 1);
 		}
 	}
 	
@@ -65,6 +77,8 @@ class OutChannel {
 	 *            The sequence number that was just ACKed
 	 */
 	protected void gotACK(int seqNum) {
+		RIOPacket packet = unACKedPackets.get(seqNum);
+		resendCounts.remove(packet);
 		unACKedPackets.remove(seqNum);
 	}
 	
