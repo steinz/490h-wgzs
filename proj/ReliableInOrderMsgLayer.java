@@ -60,18 +60,22 @@ public class ReliableInOrderMsgLayer {
 		
 		if (riopkt.getProtocol() == Protocol.HANDSHAKE){
 			// handshake, so store this UUID
-			n.addrToSessionIDMap.put(from, riopkt.getUUID());
-			return;
+			UUID receivedID = UUID.fromString(Utility.byteArrayToString(riopkt.getPayload()));
+			n.addrToSessionIDMap.put(from, receivedID);
+			riopkt.setProtocol(Protocol.NOOP);
+			
+			System.out.println("Node " + n.addr + " received HANDSHAKE, mapping " + from + " to " + receivedID);
 		}
 		// check if UUID is what we think it is. 
 		if (!(riopkt.getUUID().equals(n.getID())))
 		{
 			// if it's not, we should initiate a handshake immediately and make a new channel to clear our cache of bad packets from an old session
-			RIOSend(from, Protocol.HANDSHAKE, Utility.stringToByteArray(" "));
-			inConnections.put(from, new InChannel());
+			RIOSend(from, Protocol.HANDSHAKE, Utility.stringToByteArray(n.getID().toString()));
 			riopkt.setProtocol(Protocol.NOOP);
 		}
+		
 		LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
+		
 		for(RIOPacket p: toBeDelivered) {
 			// deliver in-order the next sequence of packets
 			n.onRIOReceive(from, p.getProtocol(), p.getPayload());
