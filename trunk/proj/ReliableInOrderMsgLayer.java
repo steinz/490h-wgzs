@@ -14,7 +14,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  */
 public class ReliableInOrderMsgLayer {
 	public static int TIMEOUT = 3;
-	
+
 	private HashMap<Integer, InChannel> inConnections;
 	private HashMap<Integer, OutChannel> outConnections;
 	private RIONode n;
@@ -34,7 +34,7 @@ public class ReliableInOrderMsgLayer {
 		outConnections = new HashMap<Integer, OutChannel>();
 		this.n = n;
 	}
-	
+
 	/**
 	 * Receive a data packet.
 	 * 
@@ -45,44 +45,52 @@ public class ReliableInOrderMsgLayer {
 	 */
 	public void RIODataReceive(int from, byte[] msg) {
 		RIOPacket riopkt = RIOPacket.unpack(msg);
-		
-		// ack the packet immediately, then deal with handshakes, if not a handshake or a packet from an old session, pass it along
-		
-		// at-most-once semantics
-		byte[] seqNumByteArray = Utility.stringToByteArray("" + riopkt.getSeqNum());
-		n.send(from, Protocol.ACK, seqNumByteArray);
-		
+
+		// ack the packet immediately, then deal with handshakes, if not a
+		// handshake or a packet from an old session, pass it along
+
+		// check if UUID is what we think it is.
+		if (!(riopkt.getUUID().equals(n.getID())) && riopkt.getProtocol() != Protocol.HANDSHAKE) {
+			// if it's not, we should initiate a handshake immediately and make
+			// a new channel to clear our cache of bad packets from an old
+			// session
+			RIOSend(from, Protocol.HANDSHAKE,
+					Utility.stringToByteArray(n.getID().toString()));
+			riopkt.setProtocol(Protocol.NOOP);
+		} else {
+			// at-most-once semantics
+			byte[] seqNumByteArray = Utility.stringToByteArray(""
+					+ riopkt.getSeqNum());
+			n.send(from, Protocol.ACK, seqNumByteArray);
+		}
+
 		InChannel in = inConnections.get(from);
-		if(in == null) {
+		if (in == null) {
 			in = new InChannel();
 			inConnections.put(from, in);
 		}
-		
-		if (riopkt.getProtocol() == Protocol.HANDSHAKE){
+
+		if (riopkt.getProtocol() == Protocol.HANDSHAKE) {
 			// handshake, so store this UUID
-			UUID receivedID = UUID.fromString(Utility.byteArrayToString(riopkt.getPayload()));
+			UUID receivedID = UUID.fromString(Utility.byteArrayToString(riopkt
+					.getPayload()));
 			n.addrToSessionIDMap.put(from, receivedID);
 			riopkt.setProtocol(Protocol.NOOP);
-			
-			System.out.println("Node " + n.addr + " received HANDSHAKE, mapping " + from + " to " + receivedID);
+
+			System.out.println("Node " + n.addr
+					+ " received HANDSHAKE, mapping " + from + " to "
+					+ receivedID);
 		}
-		// check if UUID is what we think it is. 
-		if (!(riopkt.getUUID().equals(n.getID())))
-		{
-			// if it's not, we should initiate a handshake immediately and make a new channel to clear our cache of bad packets from an old session
-			RIOSend(from, Protocol.HANDSHAKE, Utility.stringToByteArray(n.getID().toString()));
-			riopkt.setProtocol(Protocol.NOOP);
-		}
-		
+
 		LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
-		
-		for(RIOPacket p: toBeDelivered) {
+
+		for (RIOPacket p : toBeDelivered) {
 			// deliver in-order the next sequence of packets
 			n.onRIOReceive(from, p.getProtocol(), p.getPayload());
 		}
-		
+
 	}
-	
+
 	/**
 	 * Receive an acknowledgment packet.
 	 * 
@@ -92,7 +100,7 @@ public class ReliableInOrderMsgLayer {
 	 *            The Packet of data
 	 */
 	public void RIOAckReceive(int from, byte[] msg) {
-		int seqNum = Integer.parseInt( Utility.byteArrayToString(msg) );
+		int seqNum = Integer.parseInt(Utility.byteArrayToString(msg));
 		outConnections.get(from).gotACK(seqNum);
 	}
 
@@ -109,16 +117,16 @@ public class ReliableInOrderMsgLayer {
 	 */
 	public void RIOSend(int destAddr, int protocol, byte[] payload) {
 		OutChannel out = outConnections.get(destAddr);
-		if(out == null) {
+		if (out == null) {
 			out = new OutChannel(this, destAddr);
 			outConnections.put(destAddr, out);
 		}
-		
+
 		// Decide what the UUID of the destination address is
 		UUID ID = n.addrToSessionIDMap.get(destAddr);
 		if (ID == null)
 			ID = n.getID();
-		
+
 		out.sendRIOPacket(n, protocol, payload, ID);
 	}
 
@@ -136,14 +144,14 @@ public class ReliableInOrderMsgLayer {
 	public void onTimeout(Integer destAddr, Integer seqNum) {
 		outConnections.get(destAddr).onTimeout(n, seqNum);
 	}
-	
+
 	@Override
 	public String toString() {
 		StringBuffer sb = new StringBuffer();
-		for(Integer i: inConnections.keySet()) {
+		for (Integer i : inConnections.keySet()) {
 			sb.append(inConnections.get(i).toString() + "\n");
 		}
-		
+
 		return sb.toString();
 	}
 }
