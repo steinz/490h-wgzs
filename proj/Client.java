@@ -92,12 +92,11 @@ public class Client extends RIONode {
 	 * Prints msg if verbose is true Also prints a frame if frame is true
 	 */
 	public void printVerbose(String msg, boolean frame) {
-		// TODO: Prepend node addr to all calls
 		if (verbose) {
 			if (frame) {
 				System.out.println("\n===VERBOSE===");
 			}
-			System.out.println(msg);
+			System.out.println("Node " + addr + ": " + msg);
 			if (frame) {
 				System.out.println("===VERBOSE===\n");
 			}
@@ -131,7 +130,7 @@ public class Client extends RIONode {
 		if (verbose) {
 			// feedback for the console
 			String msgString = Utility.byteArrayToString(msg);
-			printVerbose("Node: " + addr + " RECEIVED Protocol: "
+			printVerbose("RECEIVED Protocol: "
 					+ Protocol.protocolToString(protocol) + " With Arguments: "
 					+ msgString + " From Node: " + from);
 		}
@@ -148,8 +147,7 @@ public class Client extends RIONode {
 	 */
 	public void createFile(String fileName) {
 		if (verbose) {
-			printVerbose("Node: " + addr + " attempting to CREATE file: "
-					+ fileName);
+			printVerbose("attempting to CREATE file: " + fileName);
 		}
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
@@ -177,8 +175,7 @@ public class Client extends RIONode {
 	 */
 	public void deleteFile(String fileName) {
 		if (verbose) {
-			printVerbose("Node: " + addr + " attempting to DELETE file: "
-					+ fileName);
+			printVerbose("attempting to DELETE file: " + fileName);
 		}
 		// check if the file even exists
 		if (!Utility.fileExists(this, fileName))
@@ -204,8 +201,8 @@ public class Client extends RIONode {
 	 */
 	public void getFile(String fileName, int from) {
 		if (verbose) {
-			printVerbose("Node: " + addr + " attempting to READ/GET file: "
-					+ fileName + " for Node: " + from);
+			printVerbose("attempting to READ/GET file: " + fileName
+					+ " for Node: " + from);
 		}
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName))
@@ -229,8 +226,8 @@ public class Client extends RIONode {
 			// send the payload
 			byte[] payload = Utility.stringToByteArray(sendMsg);
 			RIOLayer.RIOSend(from, Protocol.DATA, payload);
-			printVerbose("Node: " + addr + " sending contents of file: "
-					+ fileName + " to Node: " + from);
+			printVerbose("sending contents of file: " + fileName + " to Node: "
+					+ from);
 		}
 	}
 
@@ -245,8 +242,8 @@ public class Client extends RIONode {
 	 */
 	public void writeFile(String fileName, String contents, int protocol) {
 		if (verbose) {
-			printVerbose("Node: " + addr + " attempting to PUT/APPEND File: "
-					+ fileName + " with Contents: " + contents);
+			printVerbose("attempting to PUT/APPEND File: " + fileName
+					+ " with Contents: " + contents);
 		}
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -278,8 +275,7 @@ public class Client extends RIONode {
 	 */
 	public void receiveFile(String fileName, String contents) {
 		if (verbose) {
-			printVerbose("Node: " + addr + " received the contents of file: "
-					+ fileName);
+			printVerbose("received the contents of file: " + fileName);
 		}
 		String output = fileName + " received with contents: " + contents;
 		printVerbose(output);
