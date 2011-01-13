@@ -80,6 +80,13 @@ public class ReliableInOrderMsgLayer {
 			System.out.println("Node " + n.addr
 					+ " received HANDSHAKE, mapping " + from + " to "
 					+ receivedID);
+			
+			/*
+			 * a handshake also means that whoever sent us this handshake probably dropped all of our packets.
+			 * so, whatever we had in queue to be resent should be dropped.
+			 */
+			// TODO: This may result in a null pointer exception if the timeout callback attempts to resend a null packet
+			outConnections.put(from, new OutChannel(this, from));
 		}
 
 		LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
