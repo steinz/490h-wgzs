@@ -55,7 +55,8 @@ public class ReliableInOrderMsgLayer {
 		// handshake or a packet from an old session, pass it along
 		
 		// at-most-once semantics
-		System.out.println("Node " + n.addr + " sending ACK to " + from);
+                //TODO: Factor out to logger
+		System.out.println("Node " + n.addr + " sending ACK " + riopkt.getSeqNum() + " to " + from);
 		byte[] seqNumByteArray = Utility.stringToByteArray(""
 				+ riopkt.getSeqNum());
 		n.send(from, Protocol.ACK, seqNumByteArray);
@@ -83,6 +84,7 @@ public class ReliableInOrderMsgLayer {
 
 		if (riopkt.getUUID().equals(n.getID())  && riopkt.getProtocol() != Protocol.HANDSHAKE)
 		{
+                    //TODO: Factor out to logger
 			System.out.println("Node " + n.addr + " got packet protocol: " + riopkt.getProtocol());
 			LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
 	
@@ -99,6 +101,7 @@ public class ReliableInOrderMsgLayer {
 				.getPayload()));
 		n.addrToSessionIDMap.put(from, receivedID);
 
+                //TODO: Factor out to logger
 		System.out.println("Node " + n.addr + " received HANDSHAKE, mapping "
 				+ from + " to " + receivedID);
 
@@ -177,6 +180,7 @@ public class ReliableInOrderMsgLayer {
 	}
 	
 	public void printSeqStateDebug() {
+            //TODO: Factor out to logger
 		System.out.println("Node " + n.addr + " sequence state");
 		Iterator<Entry<Integer, InChannel>> inIter = inConnections.entrySet().iterator();
 		while (inIter.hasNext()) {

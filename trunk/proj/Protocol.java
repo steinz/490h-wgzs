@@ -6,6 +6,7 @@
 public class Protocol {
 	// Protocols for the Reliable in-order message layer
 	// These should be Packet protocols
+    // Extended to include with Client file system commands
 	public static final int DATA = 0;
 	public static final int ACK = 1;
 	public static final int CREATE = 2;
@@ -16,6 +17,8 @@ public class Protocol {
 	public static final int HANDSHAKE = 7;
 	public static final int NOOP = 8;
 	
+    //TODO: split protocols into groups and add more valid methods to make parsing easier
+
 	// Protocols for Testing Reliable in-order message delivery
 	// These should be RIOPacket protocols
 	public static final int RIOTEST_PKT = 10;
@@ -45,10 +48,15 @@ public class Protocol {
 	 * @return True if protocol is valid, else false
 	 */
 	public static boolean isRIOProtocolValid(int protocol) {
+            //TODO: hacky
 		return isPktProtocolValid(protocol);
 		//return protocol == RIOTEST_PKT;
 	}
 
+    /**
+     * Maps the string name of a protocol to it's internal integer representation.
+     * The string identifier is case insensitive.
+     */
 	public static int stringToProtocol(String protocol) {
             protocol = protocol.toUpperCase();
 		if (protocol.equals("DATA")) { return 0;
