@@ -32,6 +32,35 @@ public class Client extends RIONode {
 	}
 
 	public void start() {
+		// Replace .temp to its old file, if a crash occurred
+		if (Utility.fileExists(this, ".temp"))
+		{
+			try{
+				PersistentStorageReader reader = getReader(".temp");
+				
+				if (!reader.ready())
+					deleteFile(".temp");
+				else
+				{
+					String oldString = "";
+					String inLine = "";
+					String fileName = reader.readLine();
+					while ((inLine = reader.readLine()) != null)
+						oldString += inLine; 
+					PersistentStorageWriter writer = getWriter(fileName, false);
+					writer.write(oldString);
+					deleteFile(".temp");
+				}
+			} catch (FileNotFoundException e)
+			{
+				System.err.println(e.getMessage());
+				e.printStackTrace();
+			} catch (IOException e)
+			{
+				System.err.println(e.getMessage());
+				e.printStackTrace();
+			}
+		}
 	}
 
 	/**
@@ -132,7 +161,6 @@ public class Client extends RIONode {
 					+ msgString + " From Node: " + from);
 		}
 		
-
 		super.onReceive(from, protocol, msg);
 	}
 
@@ -244,7 +272,7 @@ public class Client extends RIONode {
 		}
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
-			if (protocol == Protocol.APPEND)
+			if (protocol == Protocol.PUT)
 				printError(ErrorCode.FileDoesNotExist, "put", addr, fileName);
 			else
 				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
@@ -256,13 +284,28 @@ public class Client extends RIONode {
 				if (protocol == Protocol.APPEND) {
 					writer = getWriter(fileName, true);
 				} else {
+					// Temporary storage in case of a crash
+					String oldString = "";
+					String inLine;
+					PersistentStorageReader oldFileReader = getReader(fileName);
+					while ((inLine = oldFileReader.readLine()) != null)
+					{
+						oldString += inLine;
+					}
+					PersistentStorageWriter temp = getWriter(".temp", false);
+					temp.write(fileName + "\n" + oldString);
+					
 					writer = getWriter(fileName, false);
 				}
 				writer.write(contents);
 				writer.flush();
 				writer.close();
+				// Delete the temporary file if it exists
+				if (protocol == Protocol.PUT)
+					deleteFile(".temp");
 			} catch (IOException e) {
-				// ioexception
+				System.err.println(e.getMessage());
+				e.printStackTrace();
 			}
 		}
 	}
