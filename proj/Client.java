@@ -386,7 +386,9 @@ public class Client extends RIONode {
 			}
 			break;
 		}
-		sendResponse(from, Protocol.protocolToString(protocol), true);
+		
+		if (protocol != Protocol.GET)
+			sendResponse(from, Protocol.protocolToString(protocol), true);
 	}
 
 	/**

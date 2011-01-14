@@ -15,7 +15,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  * reliable, in-order message delivery, even in the presence of node failures.
  */
 public class ReliableInOrderMsgLayer {
-	public static int TIMEOUT = 3;
+	public static int TIMEOUT = 5;
 
 	private HashMap<Integer, InChannel> inConnections;
 	private HashMap<Integer, OutChannel> outConnections;
@@ -61,15 +61,15 @@ public class ReliableInOrderMsgLayer {
 		n.send(from, Protocol.ACK, seqNumByteArray);
 
 		// check if UUID is what we think it is.
-		if (!(riopkt.getUUID().equals(n.getID())) && !(riopkt.getProtocol() == Protocol.HANDSHAKE)) {
+		if (!(riopkt.getUUID().equals(n.getID()))) {
 			// if it's not, we should initiate a handshake immediately and make
 			// a new channel to clear our cache of bad packets from an old
 			// session
 			RIOSend(from, Protocol.HANDSHAKE,
 					Utility.stringToByteArray(n.getID().toString()));
-			riopkt.setProtocol(Protocol.NOOP);
-			if (inConnections.containsKey(from))
-				inConnections.put(from, new InChannel());
+			inConnections.put(from, new InChannel());
+			if (outConnections.containsKey(from))
+				outConnections.get(from).reset();	
 		}
 
 		InChannel in = inConnections.get(from);
@@ -78,40 +78,34 @@ public class ReliableInOrderMsgLayer {
 			inConnections.put(from, in);
 		}
 
-
-
-		LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
-
-		for (RIOPacket p : toBeDelivered) {
-			// deliver in-order the next sequence of packets
-			n.onRIOReceive(from, p.getProtocol(), p.getPayload());
+		if (riopkt.getUUID().equals(n.getID())  && riopkt.getProtocol() != Protocol.HANDSHAKE)
+		{
+			System.out.println("Node " + n.addr + " got packet protocol: " + riopkt.getProtocol());
+			LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
+	
+			for (RIOPacket p : toBeDelivered) {
+				// deliver in-order the next sequence of packets
+				n.onRIOReceive(from, p.getProtocol(), p.getPayload());
+			}
 		}
-
 	}
 
 	private RIOPacket mapUUID(int from, RIOPacket riopkt) {
 		// handshake, so store this UUID
 		UUID receivedID = UUID.fromString(Utility.byteArrayToString(riopkt
 				.getPayload()));
-		// if we've already received this UUID, then this must be a duplicate request, so let's not clear anything
-		if (n.addrToSessionIDMap.get(from) == null || !n.addrToSessionIDMap.get(from).equals(receivedID))
-		{
-			n.addrToSessionIDMap.put(from, receivedID);
+		n.addrToSessionIDMap.put(from, receivedID);
 
-
-			System.out.println("Node " + n.addr + " received HANDSHAKE, mapping "
+		System.out.println("Node " + n.addr + " received HANDSHAKE, mapping "
 				+ from + " to " + receivedID);
 
-			/*
-			 * a handshake also means that whoever sent us this handshake probably
-			 * dropped all of our packets. so, whatever we had in queue to be resent
-			 * should be dropped.
-			 */
-			if (outConnections.containsKey(from))
-				outConnections.get(from).reset();
-		}
-		riopkt.setProtocol(Protocol.NOOP);
-		
+		/*
+		 * a handshake also means that whoever sent us this handshake probably
+		 * dropped all of our packets. so, whatever we had in queue to be resent
+		 * should be dropped.
+		 */
+		if (outConnections.containsKey(from))
+			outConnections.get(from).reset();
 		return riopkt;
 	}
 
