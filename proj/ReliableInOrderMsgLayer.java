@@ -62,6 +62,9 @@ public class ReliableInOrderMsgLayer {
 			riopkt.setProtocol(Protocol.NOOP);
 		} else {
 			// at-most-once semantics
+
+			System.out.println("Node " + n.addr + " sending ACK to " + from);
+
 			byte[] seqNumByteArray = Utility.stringToByteArray(""
 					+ riopkt.getSeqNum());
 			n.send(from, Protocol.ACK, seqNumByteArray);
@@ -91,13 +94,13 @@ public class ReliableInOrderMsgLayer {
 		n.addrToSessionIDMap.put(from, receivedID);
 		riopkt.setProtocol(Protocol.NOOP);
 
-		System.out.println("Node " + n.addr
-				+ " received HANDSHAKE, mapping " + from + " to "
-				+ receivedID);
-		
+		System.out.println("Node " + n.addr + " received HANDSHAKE, mapping "
+				+ from + " to " + receivedID);
+
 		/*
-		 * a handshake also means that whoever sent us this handshake probably dropped all of our packets.
-		 * so, whatever we had in queue to be resent should be dropped.
+		 * a handshake also means that whoever sent us this handshake probably
+		 * dropped all of our packets. so, whatever we had in queue to be resent
+		 * should be dropped.
 		 */
 		if (outConnections.containsKey(from))
 			outConnections.get(from).reset();
