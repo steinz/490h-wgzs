@@ -46,11 +46,14 @@ public class ReliableInOrderMsgLayer {
 	public void RIODataReceive(int from, byte[] msg) {
 		RIOPacket riopkt = RIOPacket.unpack(msg);
 
+		if (riopkt.getProtocol() == Protocol.HANDSHAKE) {
+			riopkt = mapUUID(from, riopkt);
+		}
 		// ack the packet immediately, then deal with handshakes, if not a
 		// handshake or a packet from an old session, pass it along
 
 		// check if UUID is what we think it is.
-		if (!(riopkt.getUUID().equals(n.getID())) && riopkt.getProtocol() != Protocol.HANDSHAKE) {
+		if (!(riopkt.getUUID().equals(n.getID()))) {
 			// if it's not, we should initiate a handshake immediately and make
 			// a new channel to clear our cache of bad packets from an old
 			// session
@@ -70,9 +73,7 @@ public class ReliableInOrderMsgLayer {
 			inConnections.put(from, in);
 		}
 
-		if (riopkt.getProtocol() == Protocol.HANDSHAKE) {
-			riopkt = mapUUID(from, riopkt);
-		}
+
 
 		LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
 
