@@ -20,8 +20,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 public class Client extends RIONode {
 
 	/**
-	 * Delimeter used in protocol payloads
-         * Should be a single character
+	 * Delimeter used in protocol payloads Should be a single character
 	 */
 	private final String delimiter = " ";
 
@@ -29,55 +28,51 @@ public class Client extends RIONode {
 	 * Verbose flag for debugging
 	 */
 	private static final boolean verbose = true;
-    //TODO: Move to a more globaly accessible place - probably a logger class
+
+	// TODO: Move to a more globaly accessible place - probably a logger class
 
 	public Client() {
 		super();
 	}
 
-    /**
-     * Mandatory start method
-     * Cleans up failed puts if necessary
-     */
+	/**
+	 * Mandatory start method Cleans up failed puts if necessary
+	 */
 	public void start() {
 		// Replace .temp to its old file, if a crash occurred
-		if (Utility.fileExists(this, ".temp"))
-		{
-			try{
+		if (Utility.fileExists(this, ".temp")) {
+			try {
 				PersistentStorageReader reader = getReader(".temp");
-				
+
 				if (!reader.ready())
 					deleteFile(this.addr, ".temp");
-				else
-				{
+				else {
 					String oldString = "";
 					String inLine = "";
 					String fileName = reader.readLine();
 					while ((inLine = reader.readLine()) != null)
-						oldString = oldString + inLine + System.getProperty("line.separator"); 
+						oldString = oldString + inLine
+								+ System.getProperty("line.separator");
 					PersistentStorageWriter writer = getWriter(fileName, false);
 					writer.write(oldString);
 					writer.flush();
 					writer.close();
 					deleteFile(this.addr, ".temp");
 				}
-			} catch (FileNotFoundException e)
-			{
-                            //TODO: use printError (overload maybe)?
+			} catch (FileNotFoundException e) {
+				// TODO: use printError (overload maybe)?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
-			} catch (IOException e)
-			{
+			} catch (IOException e) {
 				System.err.println(e.getMessage());
-				e.printStackTrace(); 
+				e.printStackTrace();
 			}
 		}
 	}
 
 	/**
-	 * Process a command from user or file
-	 * Expects lowercase commands 
-         *
+	 * Process a command from user or file Expects lowercase commands
+	 * 
 	 * @param command
 	 *            The command for this node
 	 */
@@ -86,7 +81,7 @@ public class Client extends RIONode {
 			RIOLayer.printSeqStateDebug();
 			return;
 		}
-		
+
 		StringTokenizer tokens = new StringTokenizer(command, " ");
 		String cmd = "", filename = "";
 		int server = -1;
@@ -144,7 +139,7 @@ public class Client extends RIONode {
 	 * Prints msg if verbose is true Also prints a frame if frame is true
 	 */
 	public void printVerbose(String msg, boolean frame) {
-            //TODO: Factor out to logging class
+		// TODO: Factor out to logging class
 		if (verbose) {
 			if (frame) {
 				System.out.println("\n===VERBOSE===");
@@ -171,25 +166,22 @@ public class Client extends RIONode {
 		String stringOut = "";
 		stringOut += "Node " + addr + ": Error: " + command + " on server: "
 				+ server + " and file: " + filename + " returned error code: "
-                                + ErrorCode.lookup(error);
+				+ ErrorCode.lookup(error);
 		System.err.println(stringOut);
 	}
 
 	/**
-	 * Extends onReceive for extra logging
-         * Currently turned off
+	 * Extends onReceive for extra logging Currently turned off
 	 */
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
-                /*
-                if (verbose) {
-			// feedback for the console
-			String msgString = Utility.byteArrayToString(msg);
-			printVerbose("RECEIVED Protocol: "
-					+ Protocol.protocolToString(protocol) + " With Arguments: "
-					+ msgString + " From Node: " + from);
-                }//*/
-		
+		/*
+		 * if (verbose) { // feedback for the console String msgString =
+		 * Utility.byteArrayToString(msg); printVerbose("RECEIVED Protocol: " +
+		 * Protocol.protocolToString(protocol) + " With Arguments: " + msgString
+		 * + " From Node: " + from); }//
+		 */
+
 		super.onReceive(from, protocol, msg);
 	}
 
@@ -216,7 +208,7 @@ public class Client extends RIONode {
 				PersistentStorageWriter writer = getWriter(fileName, false);
 				writer.close();
 			} catch (IOException e) {
-                            //TODO: use printError?
+				// TODO: use printError?
 				System.err.println(e.getMessage());
 				System.err.println(e.getStackTrace());
 			}
@@ -236,21 +228,19 @@ public class Client extends RIONode {
 			printVerbose("attempting to DELETE file: " + fileName);
 		}
 		// check if the file even exists
-		if (!Utility.fileExists(this, fileName))
-		{
+		if (!Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileDoesNotExist, "delete", addr, fileName);
 			if (from != this.addr)
 				sendResponse(from, "delete", false);
 			return;
-		}
-		else {
+		} else {
 			// delete file
 			try {
 				PersistentStorageWriter writer = getWriter(fileName, false);
 				writer.delete();
 				writer.close();
 			} catch (IOException e) {
-                            //TODO: use printError?
+				// TODO: use printError?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			}
@@ -271,13 +261,12 @@ public class Client extends RIONode {
 					+ " for Node: " + from);
 		}
 		// check if the file exists
-		if (!Utility.fileExists(this, fileName))
-		{
+		if (!Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
 			sendResponse(from, "get", false);
 			return;
 		}
-			// send the file if it does
+		// send the file if it does
 		else {
 			// load the file into a reader
 			String sendMsg = fileName + delimiter;
@@ -285,7 +274,8 @@ public class Client extends RIONode {
 			try {
 				PersistentStorageReader reader = getReader(fileName);
 				while (!((inLine = reader.readLine()) == null))
-					sendMsg = sendMsg + inLine + System.getProperty("line.separator");
+					sendMsg = sendMsg + inLine
+							+ System.getProperty("line.separator");
 				reader.close();
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -298,8 +288,7 @@ public class Client extends RIONode {
 			RIOLayer.RIOSend(from, Protocol.DATA, payload);
 			printVerbose("sending contents of file: " + fileName + " to Node: "
 					+ from);
-			
-			
+
 		}
 	}
 
@@ -312,7 +301,8 @@ public class Client extends RIONode {
 	 * @param contents
 	 *            the contents to write
 	 */
-	public void writeFile(int from, String fileName, String contents, int protocol) {
+	public void writeFile(int from, String fileName, String contents,
+			int protocol) {
 		if (verbose) {
 			printVerbose("attempting to PUT/APPEND File: " + fileName
 					+ " with Contents: " + contents);
@@ -338,10 +328,11 @@ public class Client extends RIONode {
 					String inLine;
 					PersistentStorageReader oldFileReader = getReader(fileName);
 					while ((inLine = oldFileReader.readLine()) != null)
-						oldString = oldString + inLine + System.getProperty("line.separator");
+						oldString = oldString + inLine
+								+ System.getProperty("line.separator");
 					PersistentStorageWriter temp = getWriter(".temp", false);
 					temp.write(fileName + "\n" + oldString);
-					
+
 					writer = getWriter(fileName, false);
 				}
 				writer.write(contents);
@@ -352,7 +343,7 @@ public class Client extends RIONode {
 					deleteFile(this.addr, ".temp");
 			} catch (IOException e) {
 				sendResponse(from, Protocol.protocolToString(protocol), false);
-                                // use printError?
+				// use printError?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			}
@@ -361,11 +352,11 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Prints the file received from the get command
-         * Also used to print success/failure responses returned from the server
+	 * Prints the file received from the get command. Also used to print
+	 * success/failure responses returned from the server.
 	 */
-	public void receiveData(String fileName, String contents) {
-		String output = fileName + " received with contents: " + contents;
+	public void receiveData(String cmdOrFileName, String contents) {
+		String output = cmdOrFileName + " received with contents: " + contents;
 		printVerbose(output);
 	}
 
@@ -381,7 +372,7 @@ public class Client extends RIONode {
 	 */
 	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
 		printVerbose("reading packet");
-		
+
 		String msgString = Utility.byteArrayToString(msg);
 
 		switch (protocol) {
@@ -418,27 +409,33 @@ public class Client extends RIONode {
 			}
 			break;
 		}
-			
+
 	}
 
 	/**
-	 * Sends 
-	 * @param destAddr Who to send the response to
-	 * @param protocol The protocol
-	 * @param successful Whether the operation was successful
+	 * Sends
+	 * 
+	 * @param destAddr
+	 *            Who to send the response to
+	 * @param protocol
+	 *            The protocol
+	 * @param successful
+	 *            Whether the operation was successful
 	 */
-	private void sendResponse(Integer destAddr, String protocol, boolean successful) 
-	{
-		String sendMsg = protocol + delimiter + (successful ? "successful" : "not successful");
-		
+	private void sendResponse(Integer destAddr, String protocol,
+			boolean successful) {
+		String sendMsg = protocol + delimiter
+				+ (successful ? "successful" : "not successful");
+
 		byte[] payload = Utility.stringToByteArray(sendMsg);
 		RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
-		printVerbose("sending response: " + protocol + " status: " + (successful ? "successful" : "not successful"));
+		printVerbose("sending response: " + protocol + " status: "
+				+ (successful ? "successful" : "not successful"));
 	}
 
 	@Override
 	public String toString() {
-            //TODO: Come up w/ a better toString?
+		// TODO: Come up w/ a better toString?
 		return RIOLayer.toString();
 	}
 }
