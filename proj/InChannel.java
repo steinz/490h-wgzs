@@ -58,6 +58,7 @@ class InChannel {
 	}
 	
 	public void printSeqNumDebug() {
+            //TODO: Factor out to logger
 		System.out.println(lastSeqNumDelivered);
 	}
 }

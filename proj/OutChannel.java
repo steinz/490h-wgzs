@@ -75,8 +75,11 @@ class OutChannel {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
 
-			System.out.println("Node " + n.addr + " giving up sending packet "
-					+ seqNum + " to " + destAddr);
+                        //TODO: Factor out to logger
+			System.out.println("Node " + n.addr + " Error: " +
+                                           Protocol.protocolToString(packet.getProtocol()) +
+                                           " on server " + n.addr + " returned error code" +
+                                           ErrorCode.lookup(ErrorCode.Timeout));
 
 		} else if (unACKedPackets.containsKey(seqNum)) {
 			resendRIOPacket(n, seqNum);
@@ -127,9 +130,13 @@ class OutChannel {
 			} else {
 				newID = n.getID();
 			}
+
 			// update the session ID if we know the address, otherwise set it to
 			// our current UUID
+                        //TODO: is this still necessary? - I think we just flush channels now
 			riopkt.setUUID(newID);
+
+                        //TODO: Factor out to logger class
 			System.out.println("Node " + n.addr + ": resending packet " + riopkt.getSeqNum());
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
@@ -140,6 +147,7 @@ class OutChannel {
 	}
 	
 	public void printSeqNumDebug() {
+            //TODO: Factor out to logger
 		System.out.println(lastSeqNumSent);
 	}
 }

@@ -21,6 +21,7 @@ public class Client extends RIONode {
 
 	/**
 	 * Delimeter used in protocol payloads
+         * Should be a single character
 	 */
 	private final String delimiter = " ";
 
@@ -28,11 +29,16 @@ public class Client extends RIONode {
 	 * Verbose flag for debugging
 	 */
 	private static final boolean verbose = true;
+    //TODO: Move to a more globaly accessible place - probably a logger class
 
 	public Client() {
 		super();
 	}
 
+    /**
+     * Mandatory start method
+     * Cleans up failed puts if necessary
+     */
 	public void start() {
 		// Replace .temp to its old file, if a crash occurred
 		if (Utility.fileExists(this, ".temp"))
@@ -48,6 +54,7 @@ public class Client extends RIONode {
 					String inLine = "";
 					String fileName = reader.readLine();
 					while ((inLine = reader.readLine()) != null)
+                                            //TODO: Does this lose line breaks?
 						oldString += inLine; 
 					PersistentStorageWriter writer = getWriter(fileName, false);
 					writer.write(oldString);
@@ -57,6 +64,7 @@ public class Client extends RIONode {
 				}
 			} catch (FileNotFoundException e)
 			{
+                            //TODO: use printError (overload maybe)?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			} catch (IOException e)
@@ -69,7 +77,8 @@ public class Client extends RIONode {
 
 	/**
 	 * Process a command from user or file
-	 * 
+	 * Expects lowercase commands 
+         *
 	 * @param command
 	 *            The command for this node
 	 */
@@ -136,6 +145,7 @@ public class Client extends RIONode {
 	 * Prints msg if verbose is true Also prints a frame if frame is true
 	 */
 	public void printVerbose(String msg, boolean frame) {
+            //TODO: Factor out to logging class
 		if (verbose) {
 			if (frame) {
 				System.out.println("\n===VERBOSE===");
@@ -162,22 +172,24 @@ public class Client extends RIONode {
 		String stringOut = "";
 		stringOut += "Node " + addr + ": Error: " + command + " on server: "
 				+ server + " and file: " + filename + " returned error code: "
-				+ error;
-		System.out.println(stringOut);
+                                + ErrorCode.lookup(error);
+		System.err.println(stringOut);
 	}
 
 	/**
 	 * Extends onReceive for extra logging
+         * Currently turned off
 	 */
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
-		/*if (verbose) {
+                /*
+                if (verbose) {
 			// feedback for the console
 			String msgString = Utility.byteArrayToString(msg);
 			printVerbose("RECEIVED Protocol: "
 					+ Protocol.protocolToString(protocol) + " With Arguments: "
 					+ msgString + " From Node: " + from);
-		}*/
+                }//*/
 		
 		super.onReceive(from, protocol, msg);
 	}
@@ -205,6 +217,7 @@ public class Client extends RIONode {
 				PersistentStorageWriter writer = getWriter(fileName, false);
 				writer.close();
 			} catch (IOException e) {
+                            //TODO: use printError?
 				System.err.println(e.getMessage());
 				System.err.println(e.getStackTrace());
 			}
@@ -238,6 +251,7 @@ public class Client extends RIONode {
 				writer.delete();
 				writer.close();
 			} catch (IOException e) {
+                            //TODO: use printError?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			}
@@ -326,6 +340,7 @@ public class Client extends RIONode {
 					PersistentStorageReader oldFileReader = getReader(fileName);
 					while ((inLine = oldFileReader.readLine()) != null)
 					{
+                                            //TODO: does this lose line breaks?
 						oldString += inLine;
 					}
 					PersistentStorageWriter temp = getWriter(".temp", false);
@@ -341,6 +356,7 @@ public class Client extends RIONode {
 					deleteFile(this.addr, ".temp");
 			} catch (IOException e) {
 				sendResponse(from, Protocol.protocolToString(protocol), false);
+                                // use printError?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			}
@@ -350,6 +366,7 @@ public class Client extends RIONode {
 
 	/**
 	 * Prints the file received from the get command
+         * Also used to print success/failure responses returned from the server
 	 */
 	public void receiveFile(String fileName, String contents) {
             //TODO: this should probably renamed to receiveData now
