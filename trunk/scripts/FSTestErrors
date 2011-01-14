@@ -4,6 +4,11 @@ start 0
 start 1
 time
 
+0 noop 1
+time
+time
+time
+
 # 10 File does not exist
 
 0 get 1 test
@@ -27,7 +32,4 @@ time
 
 # 20 Timeout
 
-
-
 # 30 File too large
-
