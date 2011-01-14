@@ -60,7 +60,7 @@ public class Client extends RIONode {
 			} catch (IOException e)
 			{
 				System.err.println(e.getMessage());
-				e.printStackTrace();
+				e.printStackTrace(); 
 			}
 		}
 	}
@@ -194,6 +194,7 @@ public class Client extends RIONode {
 		if (Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileAlreadyExists, "create", addr, fileName);
 			sendResponse(from, "create", false);
+			return;
 		}
 
 		// create the file
@@ -226,6 +227,7 @@ public class Client extends RIONode {
 			printError(ErrorCode.FileDoesNotExist, "delete", addr, fileName);
 			if (from != this.addr)
 				sendResponse(from, "delete", false);
+			return;
 		}
 		else {
 			// delete file
@@ -258,6 +260,7 @@ public class Client extends RIONode {
 		{
 			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
 			sendResponse(from, "get", false);
+			return;
 		}
 			// send the file if it does
 		else {
@@ -304,6 +307,7 @@ public class Client extends RIONode {
 			else
 				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
 			sendResponse(from, Protocol.protocolToString(protocol), false);
+			return;
 		} else {
 			try {
 				PersistentStorageWriter writer = null;
@@ -344,9 +348,6 @@ public class Client extends RIONode {
 	 * Prints the file received from the get command
 	 */
 	public void receiveFile(String fileName, String contents) {
-		if (verbose) {
-			printVerbose("received the contents of file: " + fileName);
-		}
 		String output = fileName + " received with contents: " + contents;
 		printVerbose(output);
 	}

@@ -68,7 +68,7 @@ public class ReliableInOrderMsgLayer {
 			RIOSend(from, Protocol.HANDSHAKE,
 					Utility.stringToByteArray(n.getID().toString()));
 			
-			//TODO: Send failure to client
+			// Don't send failure to client - they've crashed since they sent this packet
 			
 			inConnections.put(from, new InChannel());
 			if (outConnections.containsKey(from))
