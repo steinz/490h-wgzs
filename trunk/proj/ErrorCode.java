@@ -15,8 +15,8 @@ public class ErrorCode {
     /**
      * Returns the string associated with the given error code
      */
-    public static string lookup(int code) {
-        switch (protocol) {
+    public static String lookup(int code) {
+        switch (code) {
         case 10:
             return "10 FileDoesNotExist";
         case 11:

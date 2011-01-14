@@ -120,21 +120,10 @@ class OutChannel {
 	 */
 	private void resendRIOPacket(RIONode n, int seqNum) {
 		try {
-			UUID newID = null;
 			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			RIOPacket riopkt = unACKedPackets.get(seqNum);
-			// figure out if we know the destination addresses session ID
-			if (n.addrToSessionIDMap.get(destAddr) != null) {
-				newID = n.addrToSessionIDMap.get(destAddr);
-			} else {
-				newID = n.getID();
-			}
 
-			// update the session ID if we know the address, otherwise set it to
-			// our current UUID
-                        //TODO: is this still necessary? - I think we just flush channels now
-			riopkt.setUUID(newID);
 
                         //TODO: Factor out to logger class
 			System.out.println("Node " + n.addr + ": resending packet " + riopkt.getSeqNum());
