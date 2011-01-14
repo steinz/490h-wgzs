@@ -138,4 +138,8 @@ class OutChannel {
 			e.printStackTrace();
 		}
 	}
+	
+	public void printSeqNumDebug() {
+		System.out.println(lastSeqNumSent);
+	}
 }

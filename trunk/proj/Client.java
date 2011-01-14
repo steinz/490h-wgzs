@@ -72,6 +72,11 @@ public class Client extends RIONode {
 	 *            The command for this node
 	 */
 	public void onCommand(String command) {
+		if (command.toUpperCase().equals("DEBUG")) {
+			RIOLayer.printSeqStateDebug();
+			return;
+		}
+		
 		StringTokenizer tokens = new StringTokenizer(command, " ");
 		String cmd = "", filename = "";
 		int server = -1;

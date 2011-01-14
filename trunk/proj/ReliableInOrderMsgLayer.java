@@ -1,5 +1,7 @@
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map.Entry;
 import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -167,5 +169,21 @@ public class ReliableInOrderMsgLayer {
 		}
 
 		return sb.toString();
+	}
+	
+	public void printSeqStateDebug() {
+		System.out.println("Node " + n.addr + " sequence state");
+		Iterator<Entry<Integer, InChannel>> inIter = inConnections.entrySet().iterator();
+		while (inIter.hasNext()) {
+			Entry<Integer, InChannel> entry = inIter.next();
+			System.out.print("In connection to " + entry.getKey() + " lastSeqNumDelivered = ");
+			entry.getValue().printSeqNumDebug();
+		}
+		Iterator<Entry<Integer, OutChannel>> outIter = outConnections.entrySet().iterator();
+		while (outIter.hasNext()) {
+			Entry<Integer, OutChannel> entry = outIter.next();
+			System.out.print("Out connection to " + entry.getKey() + " lastSeqNumSent = ");
+			entry.getValue().printSeqNumDebug();
+		}
 	}
 }
