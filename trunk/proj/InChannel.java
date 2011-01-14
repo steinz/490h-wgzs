@@ -1,6 +1,6 @@
 /**
  * CSE 490h
- * @author wayneg, steinz
+ * @author wayger, steinz
  */
 
 import java.util.HashMap;
