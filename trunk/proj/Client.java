@@ -30,9 +30,8 @@ public class Client extends RIONode {
 	/**
 	 * Verbose flag for debugging
 	 */
-	private static final boolean verbose = true;
-
 	// TODO: Move to a more globaly accessible place - probably a logger class
+	private static final boolean verbose = true;
 
 	public Client() {
 		super();
@@ -63,7 +62,8 @@ public class Client extends RIONode {
 					deleteFile(this.addr, ".temp");
 				}
 			} catch (FileNotFoundException e) {
-				// TODO: use printError (add an overload that takes an exception maybe)?
+				// TODO: use printError (add an overload that takes an exception
+				// maybe)?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			} catch (IOException e) {

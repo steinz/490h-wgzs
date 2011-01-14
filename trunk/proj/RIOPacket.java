@@ -103,7 +103,9 @@ public class RIOPacket {
 
 			if (payload.length + HEADER_SIZE > MAX_PACKET_SIZE)
 			{
+				//TODO: Factor out to logger
 				System.err.println("Payload too large for one packet!");
+				//TODO: Throw an exception to inform the Client of the faliure?
 			}
 			// write the UUID to the packet
 			long IDMostSignificantBits = ID.getMostSignificantBits();
