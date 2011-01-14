@@ -96,6 +96,10 @@ public class RIOPacket {
 			ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
 			DataOutputStream out = new DataOutputStream(byteStream);
 
+			if (payload.length + HEADER_SIZE > MAX_PACKET_SIZE)
+			{
+				System.err.println("Payload too large for one packet!");
+			}
 			// write the UUID to the packet
 			long IDMostSignificantBits = ID.getMostSignificantBits();
 			long IDLeastSignificantBits = ID.getLeastSignificantBits();

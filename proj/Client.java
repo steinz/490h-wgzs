@@ -283,6 +283,8 @@ public class Client extends RIONode {
 			RIOLayer.RIOSend(from, Protocol.DATA, payload);
 			printVerbose("sending contents of file: " + fileName + " to Node: "
 					+ from);
+			
+			
 		}
 	}
 
