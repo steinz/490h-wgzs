@@ -60,7 +60,8 @@ public class Protocol {
 		} else if (protocol.equals("APPEND")) { return 6;
 		} else if (protocol.equals("HANDSHAKE")) { return 7;
 		} else if (protocol.equals("NOOP")) { return 8;
-		}  else { return -1; }
+		} else { return -1; 
+		}
 	}
 	
 	/**

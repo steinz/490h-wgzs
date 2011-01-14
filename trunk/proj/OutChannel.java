@@ -13,7 +13,7 @@ class OutChannel {
 	private int lastSeqNumSent;
 	private ReliableInOrderMsgLayer parent;
 	private int destAddr;
-	
+
 	private int MAX_RESENDS = 5;
 
 	OutChannel(ReliableInOrderMsgLayer parent, int destAddr) {
@@ -34,9 +34,10 @@ class OutChannel {
 	 * @param payload
 	 *            The payload to be sent
 	 * @param ID
-	 * 			  What the node thinks the ID of the recipient node is currently           
+	 *            What the node thinks the ID of the recipient node is currently
 	 */
-	protected void sendRIOPacket(RIONode n, int protocol, byte[] payload, UUID ID) {
+	protected void sendRIOPacket(RIONode n, int protocol, byte[] payload,
+			UUID ID) {
 		try {
 			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
@@ -73,6 +74,10 @@ class OutChannel {
 		if (resendCounts.get(packet) >= MAX_RESENDS) {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
+
+			System.out.println("Node " + n.addr + " giving up sending packet "
+					+ seqNum + " to " + destAddr);
+
 		} else if (unACKedPackets.containsKey(seqNum)) {
 			resendRIOPacket(n, seqNum);
 			resendCounts.put(packet, resendCounts.get(packet) + 1);
@@ -122,7 +127,8 @@ class OutChannel {
 			} else {
 				newID = n.getID();
 			}
-			// update the session ID if we know the address, otherwise set it to our current UUID
+			// update the session ID if we know the address, otherwise set it to
+			// our current UUID
 			riopkt.setUUID(newID);
 			System.out.println("RESENDING PACKET: " + riopkt.getSeqNum());
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
