@@ -39,7 +39,7 @@ public class Client extends RIONode {
 				PersistentStorageReader reader = getReader(".temp");
 				
 				if (!reader.ready())
-					deleteFile(".temp");
+					deleteFile(this.addr, ".temp");
 				else
 				{
 					String oldString = "";
@@ -51,7 +51,7 @@ public class Client extends RIONode {
 					writer.write(oldString);
 					writer.flush();
 					writer.close();
-					deleteFile(".temp");
+					deleteFile(this.addr, ".temp");
 				}
 			} catch (FileNotFoundException e)
 			{
@@ -186,13 +186,14 @@ public class Client extends RIONode {
 	 * @param fileName
 	 *            the file to create
 	 */
-	public void createFile(String fileName) {
+	public void createFile(int from, String fileName) {
 		if (verbose) {
 			printVerbose("attempting to CREATE file: " + fileName);
 		}
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileAlreadyExists, "create", addr, fileName);
+			sendResponse(from, "create", false);
 		}
 
 		// create the file
@@ -205,6 +206,7 @@ public class Client extends RIONode {
 				System.err.println(e.getStackTrace());
 			}
 		}
+		sendResponse(from, "create", true);
 	}
 
 	/**
@@ -214,13 +216,17 @@ public class Client extends RIONode {
 	 * @param fileName
 	 *            the file name to delete
 	 */
-	public void deleteFile(String fileName) {
+	public void deleteFile(int from, String fileName) {
 		if (verbose) {
 			printVerbose("attempting to DELETE file: " + fileName);
 		}
 		// check if the file even exists
 		if (!Utility.fileExists(this, fileName))
+		{
 			printError(ErrorCode.FileDoesNotExist, "delete", addr, fileName);
+			if (from != this.addr)
+				sendResponse(from, "delete", false);
+		}
 		else {
 			// delete file
 			try {
@@ -232,6 +238,8 @@ public class Client extends RIONode {
 				e.printStackTrace();
 			}
 		}
+		if (from != this.addr)
+			sendResponse(from, "delete", true);
 	}
 
 	/**
@@ -247,8 +255,11 @@ public class Client extends RIONode {
 		}
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName))
+		{
 			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
-		// send the file if it does
+			sendResponse(from, "get", false);
+		}
+			// send the file if it does
 		else {
 			// load the file into a reader
 			String sendMsg = fileName + delimiter;
@@ -259,9 +270,9 @@ public class Client extends RIONode {
 					sendMsg += inLine;
 				reader.close();
 			} catch (FileNotFoundException e) {
-				// file not found, but should have been caught earlier...
+				e.printStackTrace();
 			} catch (IOException e) {
-				// ioexception
+				e.printStackTrace();
 			}
 
 			// send the payload
@@ -281,7 +292,7 @@ public class Client extends RIONode {
 	 * @param contents
 	 *            the contents to write
 	 */
-	public void writeFile(String fileName, String contents, int protocol) {
+	public void writeFile(int from, String fileName, String contents, int protocol) {
 		if (verbose) {
 			printVerbose("attempting to PUT/APPEND File: " + fileName
 					+ " with Contents: " + contents);
@@ -292,6 +303,7 @@ public class Client extends RIONode {
 				printError(ErrorCode.FileDoesNotExist, "put", addr, fileName);
 			else
 				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
+			sendResponse(from, Protocol.protocolToString(protocol), false);
 		} else {
 			try {
 				PersistentStorageWriter writer = null;
@@ -318,12 +330,14 @@ public class Client extends RIONode {
 				writer.close();
 				// Delete the temporary file if it exists
 				if (protocol == Protocol.PUT)
-					deleteFile(".temp");
+					deleteFile(from, ".temp");
 			} catch (IOException e) {
+				sendResponse(from, Protocol.protocolToString(protocol), false);
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			}
 		}
+		sendResponse(from, Protocol.protocolToString(protocol), true);
 	}
 
 	/**
@@ -355,10 +369,10 @@ public class Client extends RIONode {
 		switch (protocol) {
 
 		case Protocol.CREATE:
-			createFile(msgString);
+			createFile(from, msgString);
 			break;
 		case Protocol.DELETE:
-			deleteFile(msgString);
+			deleteFile(from, msgString);
 			break;
 		case Protocol.GET:
 			getFile(msgString, from);
@@ -377,7 +391,7 @@ public class Client extends RIONode {
 			if (protocol == Protocol.DATA) {
 				receiveFile(fileName, contents);
 			} else {
-				writeFile(fileName, contents, protocol);
+				writeFile(from, fileName, contents, protocol);
 			}
 			break;
 		case Protocol.NOOP:
@@ -386,9 +400,7 @@ public class Client extends RIONode {
 			}
 			break;
 		}
-		
-		if (protocol != Protocol.GET && protocol != Protocol.DATA)
-			sendResponse(from, Protocol.protocolToString(protocol), true);
+			
 	}
 
 	/**
