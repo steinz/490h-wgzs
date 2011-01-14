@@ -98,7 +98,8 @@ public class ReliableInOrderMsgLayer {
 		 * a handshake also means that whoever sent us this handshake probably dropped all of our packets.
 		 * so, whatever we had in queue to be resent should be dropped.
 		 */
-		outConnections.get(from).reset();
+		if (outConnections.containsKey(from))
+			outConnections.get(from).reset();
 		return riopkt;
 	}
 
