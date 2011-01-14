@@ -20,7 +20,7 @@ public class Client extends RIONode {
 	/**
 	 * Delimeter used in protocol payloads
 	 */
-	private final String delimeter = " ";
+	private final String delimiter = " ";
 
 	/**
 	 * Verbose flag for debugging
@@ -119,7 +119,7 @@ public class Client extends RIONode {
 			payload = filename;
 		}
 		if (cmd.equals("put") || cmd.equals("append")) {
-			payload += delimeter + contents;
+			payload += delimiter + contents;
 		}
 		int protocol = Protocol.stringToProtocol(cmd);
 		if (protocol == -1) {
@@ -251,7 +251,7 @@ public class Client extends RIONode {
 		// send the file if it does
 		else {
 			// load the file into a reader
-			String sendMsg = fileName + delimeter;
+			String sendMsg = fileName + delimiter;
 			String inLine = "";
 			try {
 				PersistentStorageReader reader = getReader(fileName);
@@ -387,7 +387,7 @@ public class Client extends RIONode {
 			break;
 		}
 		
-		if (protocol != Protocol.GET)
+		if (protocol != Protocol.GET && protocol != Protocol.DATA)
 			sendResponse(from, Protocol.protocolToString(protocol), true);
 	}
 
@@ -399,11 +399,11 @@ public class Client extends RIONode {
 	 */
 	private void sendResponse(Integer destAddr, String protocol, boolean successful) 
 	{
-		String sendMsg = protocol;
+		String sendMsg = protocol + delimiter + (successful ? "successful" : "not successful");
 		
 		byte[] payload = Utility.stringToByteArray(sendMsg);
 		RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
-		printVerbose("sending response: " + protocol + " status: " + successful);
+		printVerbose("sending response: " + protocol + " status: " + (successful ? "successful" : "not successful"));
 	}
 
 	@Override
