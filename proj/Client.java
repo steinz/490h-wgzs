@@ -352,6 +352,7 @@ public class Client extends RIONode {
 	 * Prints the file received from the get command
 	 */
 	public void receiveFile(String fileName, String contents) {
+            //TODO: this should probably renamed to receiveData now
 		String output = fileName + " received with contents: " + contents;
 		printVerbose(output);
 	}
@@ -425,6 +426,7 @@ public class Client extends RIONode {
 
 	@Override
 	public String toString() {
+            //TODO: Come up w/ a better toString?
 		return RIOLayer.toString();
 	}
 }
