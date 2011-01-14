@@ -1,5 +1,17 @@
 start 0
 start 1
 time
-0 handshake 1
+0 noop 1
+1 noop 0
+0 DEBUG
+1 DEBUG
+time
+0 DEBUG
+1 DEBUG
+time
+0 DEBUG
+1 DEBUG
+time
+0 DEBUG
+1 DEBUG
 time
