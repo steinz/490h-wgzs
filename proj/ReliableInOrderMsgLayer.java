@@ -71,22 +71,7 @@ public class ReliableInOrderMsgLayer {
 		}
 
 		if (riopkt.getProtocol() == Protocol.HANDSHAKE) {
-			// handshake, so store this UUID
-			UUID receivedID = UUID.fromString(Utility.byteArrayToString(riopkt
-					.getPayload()));
-			n.addrToSessionIDMap.put(from, receivedID);
-			riopkt.setProtocol(Protocol.NOOP);
-
-			System.out.println("Node " + n.addr
-					+ " received HANDSHAKE, mapping " + from + " to "
-					+ receivedID);
-			
-			/*
-			 * a handshake also means that whoever sent us this handshake probably dropped all of our packets.
-			 * so, whatever we had in queue to be resent should be dropped.
-			 */
-			// TODO: This may result in a null pointer exception if the timeout callback attempts to resend a null packet
-			outConnections.put(from, new OutChannel(this, from));
+			riopkt = mapUUID(from, riopkt);
 		}
 
 		LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
@@ -96,6 +81,25 @@ public class ReliableInOrderMsgLayer {
 			n.onRIOReceive(from, p.getProtocol(), p.getPayload());
 		}
 
+	}
+
+	private RIOPacket mapUUID(int from, RIOPacket riopkt) {
+		// handshake, so store this UUID
+		UUID receivedID = UUID.fromString(Utility.byteArrayToString(riopkt
+				.getPayload()));
+		n.addrToSessionIDMap.put(from, receivedID);
+		riopkt.setProtocol(Protocol.NOOP);
+
+		System.out.println("Node " + n.addr
+				+ " received HANDSHAKE, mapping " + from + " to "
+				+ receivedID);
+		
+		/*
+		 * a handshake also means that whoever sent us this handshake probably dropped all of our packets.
+		 * so, whatever we had in queue to be resent should be dropped.
+		 */
+		outConnections.get(from).reset();
+		return riopkt;
 	}
 
 	/**

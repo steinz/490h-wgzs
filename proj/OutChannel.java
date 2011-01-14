@@ -78,6 +78,16 @@ class OutChannel {
 			resendCounts.put(packet, resendCounts.get(packet) + 1);
 		}
 	}
+	
+	/**
+	 * Resets both the sequence number and the timeout data structures
+	 */
+	public void reset()
+	{
+		unACKedPackets.clear();
+		resendCounts.clear();
+		lastSeqNumSent = -1;
+	}
 
 	/**
 	 * Called when we get an ACK back. Removes the outstanding packet if it is
