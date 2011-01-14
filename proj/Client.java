@@ -54,8 +54,7 @@ public class Client extends RIONode {
 					String inLine = "";
 					String fileName = reader.readLine();
 					while ((inLine = reader.readLine()) != null)
-                                            //TODO: Does this lose line breaks?
-						oldString += inLine; 
+						oldString = oldString + inLine + System.getProperty("line.separator"); 
 					PersistentStorageWriter writer = getWriter(fileName, false);
 					writer.write(oldString);
 					writer.flush();
@@ -286,7 +285,7 @@ public class Client extends RIONode {
 			try {
 				PersistentStorageReader reader = getReader(fileName);
 				while (!((inLine = reader.readLine()) == null))
-					sendMsg += inLine;
+					sendMsg = sendMsg + inLine + System.getProperty("line.separator");
 				reader.close();
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
