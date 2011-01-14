@@ -386,6 +386,22 @@ public class Client extends RIONode {
 			}
 			break;
 		}
+		sendResponse(from, Protocol.protocolToString(protocol), true);
+	}
+
+	/**
+	 * Sends 
+	 * @param destAddr Who to send the response to
+	 * @param protocol The protocol
+	 * @param successful Whether the operation was successful
+	 */
+	private void sendResponse(Integer destAddr, String protocol, boolean successful) 
+	{
+		String sendMsg = protocol;
+		
+		byte[] payload = Utility.stringToByteArray(sendMsg);
+		RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
+		printVerbose("sending response: " + protocol + " status: " + successful);
 	}
 
 	@Override
