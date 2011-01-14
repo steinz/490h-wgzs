@@ -1,4 +1,7 @@
-//TODO: Comment everything
+/**
+ * CSE 490h
+ * @author wayneg, steinz
+ */
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -60,7 +63,7 @@ public class Client extends RIONode {
 					deleteFile(this.addr, ".temp");
 				}
 			} catch (FileNotFoundException e) {
-				// TODO: use printError (overload maybe)?
+				// TODO: use printError (add an overload that takes an exception maybe)?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			} catch (IOException e) {
@@ -139,7 +142,7 @@ public class Client extends RIONode {
 	 * Prints msg if verbose is true Also prints a frame if frame is true
 	 */
 	public void printVerbose(String msg, boolean frame) {
-		// TODO: Factor out to logging class
+		// TODO: Factor out to logger class
 		if (verbose) {
 			if (frame) {
 				System.out.println("\n===VERBOSE===");
@@ -435,7 +438,6 @@ public class Client extends RIONode {
 
 	@Override
 	public String toString() {
-		// TODO: Come up w/ a better toString?
 		return RIOLayer.toString();
 	}
 }

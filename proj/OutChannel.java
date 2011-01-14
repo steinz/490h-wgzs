@@ -1,3 +1,8 @@
+/**
+ * CSE 490h
+ * @author wayneg, steinz
+ */
+
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.UUID;
@@ -75,23 +80,22 @@ class OutChannel {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
 
-                        //TODO: Factor out to logger
-			System.out.println("Node " + n.addr + " Error: " +
-                                           Protocol.protocolToString(packet.getProtocol()) +
-                                           " on server " + n.addr + " returned error code" +
-                                           ErrorCode.lookup(ErrorCode.Timeout));
+			// TODO: Factor out to logger
+			System.out.println("Node " + n.addr + " Error: "
+					+ Protocol.protocolToString(packet.getProtocol())
+					+ " on server " + n.addr + " returned error code"
+					+ ErrorCode.lookup(ErrorCode.Timeout));
 
 		} else if (unACKedPackets.containsKey(seqNum)) {
 			resendRIOPacket(n, seqNum);
 			resendCounts.put(packet, resendCounts.get(packet) + 1);
 		}
 	}
-	
+
 	/**
 	 * Resets both the sequence number and the timeout data structures
 	 */
-	public void reset()
-	{
+	public void reset() {
 		unACKedPackets.clear();
 		resendCounts.clear();
 		lastSeqNumSent = -1;
@@ -124,9 +128,9 @@ class OutChannel {
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			RIOPacket riopkt = unACKedPackets.get(seqNum);
 
-
-                        //TODO: Factor out to logger class
-			System.out.println("Node " + n.addr + ": resending packet " + riopkt.getSeqNum());
+			// TODO: Factor out to logger class
+			System.out.println("Node " + n.addr + ": resending packet "
+					+ riopkt.getSeqNum());
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
 					destAddr, seqNum }), ReliableInOrderMsgLayer.TIMEOUT);
@@ -134,9 +138,9 @@ class OutChannel {
 			e.printStackTrace();
 		}
 	}
-	
+
 	public void printSeqNumDebug() {
-            //TODO: Factor out to logger
+		// TODO: Factor out to logger
 		System.out.println(lastSeqNumSent);
 	}
 }

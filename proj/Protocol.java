@@ -1,4 +1,9 @@
 /**
+ * CSE 490h
+ * @author wayneg, steinz
+ */
+
+/**
  * <pre>
  * Contains details about the recognized protocols
  * </pre>
@@ -6,7 +11,7 @@
 public class Protocol {
 	// Protocols for the Reliable in-order message layer
 	// These should be Packet protocols
-    // Extended to include with Client file system commands
+	// Extended to include with Client file system commands
 	public static final int DATA = 0;
 	public static final int ACK = 1;
 	public static final int CREATE = 2;
@@ -16,13 +21,14 @@ public class Protocol {
 	public static final int APPEND = 6;
 	public static final int HANDSHAKE = 7;
 	public static final int NOOP = 8;
-	
-    //TODO: split protocols into groups and add more valid methods to make parsing easier
+
+	// TODO: split protocols into groups and add more valid methods to make
+	// parsing easier
 
 	// Protocols for Testing Reliable in-order message delivery
 	// These should be RIOPacket protocols
 	public static final int RIOTEST_PKT = 10;
-	
+
 	public static final int MAX_PROTOCOL = 127;
 
 	/**
@@ -33,8 +39,7 @@ public class Protocol {
 	 * @return true if the protocol is valid, false otherwise
 	 */
 	public static boolean isPktProtocolValid(int protocol) {
-		
-		//	TODO: This is awful
+		// TODO: This is awful
 		return (9 > protocol && protocol > -1);
 	}
 
@@ -48,30 +53,40 @@ public class Protocol {
 	 * @return True if protocol is valid, else false
 	 */
 	public static boolean isRIOProtocolValid(int protocol) {
-            //TODO: hacky
+		// TODO: hacky
 		return isPktProtocolValid(protocol);
-		//return protocol == RIOTEST_PKT;
+		// return protocol == RIOTEST_PKT;
 	}
 
-    /**
-     * Maps the string name of a protocol to it's internal integer representation.
-     * The string identifier is case insensitive.
-     */
+	/**
+	 * Maps the string name of a protocol to it's internal integer
+	 * representation. The string identifier is case insensitive.
+	 */
 	public static int stringToProtocol(String protocol) {
-            protocol = protocol.toUpperCase();
-		if (protocol.equals("DATA")) { return 0;
-		} else if (protocol.equals("ACK")) { return 1;
-		} else if (protocol.equals("CREATE")) { return 2;
-		} else if (protocol.equals("DELETE")) { return 3;
-		} else if (protocol.equals("GET")) { return 4;
-		} else if (protocol.equals("PUT")) { return 5;
-		} else if (protocol.equals("APPEND")) { return 6;
-		} else if (protocol.equals("HANDSHAKE")) { return 7;
-		} else if (protocol.equals("NOOP")) { return 8;
-		} else { return -1; 
+		protocol = protocol.toUpperCase();
+		if (protocol.equals("DATA")) {
+			return 0;
+		} else if (protocol.equals("ACK")) {
+			return 1;
+		} else if (protocol.equals("CREATE")) {
+			return 2;
+		} else if (protocol.equals("DELETE")) {
+			return 3;
+		} else if (protocol.equals("GET")) {
+			return 4;
+		} else if (protocol.equals("PUT")) {
+			return 5;
+		} else if (protocol.equals("APPEND")) {
+			return 6;
+		} else if (protocol.equals("HANDSHAKE")) {
+			return 7;
+		} else if (protocol.equals("NOOP")) {
+			return 8;
+		} else {
+			return -1;
 		}
 	}
-	
+
 	/**
 	 * Returns a string representation of the given protocol. Can be used for
 	 * debugging
