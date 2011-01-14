@@ -18,19 +18,19 @@ January 13, 2011
 
 \textbf{Description:} \\
 
-We decided to pass commands by extending the packet’s existing protocol field. This involved adding additional protocol identifiers to the Protocol class. We also considered packing the command into the payload as a string, but decided this  which would be unnecessarily fragile. Or approach makes parsing simple without complicating packet payloads. In fact, onCommand sends requests by mapping the given command string to the correct protocol identifier using the Protocol class’s static stringToProtocol method. This means that additional commands can be added by editing only the Protocol class (unless custom parsing is needed).
+We decided to pass commands by extending the packetï¿½s existing protocol field. This involved adding additional protocol identifiers to the Protocol class. We also considered packing the command into the payload as a string, but decided this  which would be unnecessarily fragile. Or approach makes parsing simple without complicating packet payloads. In fact, onCommand sends requests by mapping the given command string to the correct protocol identifier using the Protocol classï¿½s static stringToProtocol method. This means that additional commands can be added by editing only the Protocol class (unless custom parsing is needed).
 
-The file operations were implemented in the obvious ways, using the Utility class to check for file existence, printing the proper error codes on failure, and sending responses to the requesting client after completion. Put was implemented as suggested in Vincent’s email to deal with Java’s FileWriter quirk. \\
+The file operations were implemented in the obvious ways, using the Utility class to check for file existence, printing the proper error codes on failure, and sending responses to the requesting client after completion. Put was implemented as suggested in Vincentï¿½s email to deal with Javaï¿½s FileWriter quirk. \\
 
 \textbf{RIO Fault Tolerance:} \\
 
-To handle faults, we decided to implement a handshaking mechanism. When any node comes alive, it generates a UUID (which is universally unique) and uses that for its entire lifetime. If we have two nodes A and B that have never communicated previously and A wishes to send a message to B, A will first send a junk command to B (Ideally Protocol.NOOP, but any command will work). B will recognize that A does not have its current UUID, and initiate a handshake. The contents of this handshake packet are B’s UUID. A will recognize this as a handshake attempt (via the protocol field), and store B’s UUID in a hashmap mapping addresses to UUIDs. For reasons specified in the next section, A will also immediately send B a handshake packet containing its own UUID.
+To handle faults, we decided to implement a handshaking mechanism. When any node comes alive, it generates a UUID (which is universally unique) and uses that for its entire lifetime. If we have two nodes A and B that have never communicated previously and A wishes to send a message to B, A will first send a junk command to B (Ideally Protocol.NOOP, but any command will work). B will recognize that A does not have its current UUID, and initiate a handshake. The contents of this handshake packet are Bï¿½s UUID. A will recognize this as a handshake attempt (via the protocol field), and store Bï¿½s UUID in a hashmap mapping addresses to UUIDs. For reasons specified in the next section, A will also immediately send B a handshake packet containing its own UUID.
 
 When A sends a message to B, part of the packet header for packet P is a UUID which represents the UUID that node A thinks node B has. So, our modified RIO Packet looks like this:
 
 \begin{verbatim}
 ---HEADER----
-Sender’s stored UUID for destination address
+Senderï¿½s stored UUID for destination address
 Protocol
 ---PAYLOAD---
 Contents
@@ -42,15 +42,15 @@ If B receives a UUID that is not its current UUID the following occurs:
 \begin{description}
    \item B drops any packets it currently has from A.
    \begin{description}
-         \item The reason we drop all packets is to keep at-most-once semantics. Even if some of the packets in the RIO queue have the correct UUID, from B’s point-of-view it’s unclear whether P arrived late, or whether a node (either A or B) crashed and a new handshake needs to occur. In the event that A crashed, storing old packets may result in B waiting for a packet (in order to keep the packets in-order) that may never come. Rather than attempt to determine which situation occurred, which may result in some actions being executed twice, we decided to liberally apply at-most-once semantics in this case and just drop all packets in queue.
+         \item The reason we drop all packets is to keep at-most-once semantics. Even if some of the packets in the RIO queue have the correct UUID, from Bï¿½s point-of-view itï¿½s unclear whether P arrived late, or whether a node (either A or B) crashed and a new handshake needs to occur. In the event that A crashed, storing old packets may result in B waiting for a packet (in order to keep the packets in-order) that may never come. Rather than attempt to determine which situation occurred, which may result in some actions being executed twice, we decided to liberally apply at-most-once semantics in this case and just drop all packets in queue.
 	 \end{description}
    \item B initiates a new handshake.
 	 \begin{description}
-         \item B will immediately send A a handshake packet, containing its actual UUID in the contents of the packet. If P was simply arriving late,     A will have B’s correct UUID and so A will proceed as normal. If A or B crashed, then a handshake will initiate and both nodes will have each other’s correct UUID afterward.
+         \item B will immediately send A a handshake packet, containing its actual UUID in the contents of the packet. If P was simply arriving late,     A will have Bï¿½s correct UUID and so A will proceed as normal. If A or B crashed, then a handshake will initiate and both nodes will have each otherï¿½s correct UUID afterward.
 	 \end{description}
-   \item A will drop any packets it’s attempting to resend currently.
+   \item A will drop any packets itï¿½s attempting to resend currently.
 	 \begin{description}
-         \item Knowing that a fault may have occurred, A will drop all packets it’s attempting to resend (packets that have not been ACKed). It does this because it knows that B is dropping all packets in its queue, meaning that the sequence number on the resent packet will not be correct (i.e. B will be waiting for packet number 0 immediately after this occurs, whereas the resent packet may have a sequence number of 10, resulting in commands being executed out-of-order).
+         \item Knowing that a fault may have occurred, A will drop all packets itï¿½s attempting to resend (packets that have not been ACKed). It does this because it knows that B is dropping all packets in its queue, meaning that the sequence number on the resent packet will not be correct (i.e. B will be waiting for packet number 0 immediately after this occurs, whereas the resent packet may have a sequence number of 10, resulting in commands being executed out-of-order).
 	 \end{description}
 \end{description}
 
@@ -62,7 +62,7 @@ Due to our handshaking mechanism, we expect that before any commands are sent fr
 A noop B
 \end{verbatim}
 
-If this step is not done, then at the very least the first command from A to B will be ignored - possibly more depending on whether or not A waits for B’s response.
+If this step is not done, then at the very least the first command from A to B will be ignored - possibly more depending on whether or not A waits for Bï¿½s response.
 
 We assume that after initiating a handshake via a NOOP, whoever initiated the handshake (likely the client) will wait for the response (the reciprocal handshake) to arrive before sending any other commands. If the sender does not, then the recipient will likely ignore incoming packets until the client begins sending packets with the correct UUID attached. \\
 
@@ -83,9 +83,9 @@ The FSTest scripts test some simple operations and errors. Timeouts are best tes
 
 \textbf{Logging:} \\
 
-We added considerably more output through the use of the Client’s printVerbose method. All commands print a message after executing. Messages are also printed after command responses are sent and when packets are presented to the Client from the RIOLayer. Message are printed to stderr when errors occur. Error codes are described in the ErrorCode class.
+We added considerably more output through the use of the Clientï¿½s printVerbose method. All commands print a message after executing. Messages are also printed after command responses are sent and when packets are presented to the Client from the RIOLayer. Message are printed to stderr when errors occur. Error codes are described in the ErrorCode class.
 
-We also added a command DEBUG that can be entered in the simulator. It currently outputs the given node’s sequence number data (used for debugging handshakes).
+We also added a command DEBUG that can be entered in the simulator. It currently outputs the given nodeï¿½s sequence number data (used for debugging handshakes).
 
 Messages are also printed when packets are resent by the OutChannel.
 
@@ -93,18 +93,12 @@ The ReliableInOrderMsgLayer prints a message when it ACKs a packet, receives a p
 
 \textbf{Outstanding issues:} \\
 
-It would be nice if a delayed packet with a bad UUID did not cause a total reset of both client and server, but we’re hesitant to call this an outstanding issue since it does implement at-most-once semantics, though admittedly at the cost of performance and reliability (i.e. the client can not rely that the server has actually done what the client sent it in a previous lifetime). Whether this is an “outstanding issue” is something we leave up to you, but we thought we should mention it anyway.
+It would be nice if a delayed packet with a bad UUID did not cause a total reset of both client and server, but weï¿½re hesitant to call this an outstanding issue since it does implement at-most-once semantics, though admittedly at the cost of performance and reliability (i.e. the client can not rely that the server has actually done what the client sent it in a previous lifetime). Whether this is an ï¿½outstanding issueï¿½ is something we leave up to you, but we thought we should mention it anyway.
 
 We did try resending packets using timeouts with corrected UUIDs, but the sequence numbers got out of sync in some tricky edge cases, and simply resetting the connections ended up seeming cleaner.
 
-For this assignment, we haven’t really completely implemented RPC on top of the onCommand function, which will likely be useful in future assignments. It turned out to be easier to test the command sending functionality by just using the onCommand function since we were testing directly from the simulator - not calling file system operations from code. In the future, we will probably migrate these commands to separate methods, although we’re unsure how to make these methods block until a response is received without adding a thread and some thread-safe data structures.
+For this assignment, we havenï¿½t really completely implemented RPC on top of the onCommand function, which will likely be useful in future assignments. It turned out to be easier to test the command sending functionality by just using the onCommand function since we were testing directly from the simulator - not calling file system operations from code. In the future, we will probably migrate these commands to separate methods, although weï¿½re unsure how to make these methods block until a response is received without adding a thread and some thread-safe data structures.
 
 Several TODOs remain in the codebase at this point - most are notes and ideas about generalizing our logging mechanism and do not affect functionality. \\
-
-\textbf{TODOs:} \\
-
-Does writeFile’s temporary storage lose line breaks (maybe start too)? ~Lines 342 and 58 \\
-Is OutChannel resetting UUIDs still necessary? \\
-Check comments, add names to source \\
 
 \end{document}
