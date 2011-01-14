@@ -338,10 +338,7 @@ public class Client extends RIONode {
 					String inLine;
 					PersistentStorageReader oldFileReader = getReader(fileName);
 					while ((inLine = oldFileReader.readLine()) != null)
-					{
-                                            //TODO: does this lose line breaks?
-						oldString += inLine;
-					}
+						oldString = oldString + inLine + System.getProperty("line.separator");
 					PersistentStorageWriter temp = getWriter(".temp", false);
 					temp.write(fileName + "\n" + oldString);
 					
@@ -367,8 +364,7 @@ public class Client extends RIONode {
 	 * Prints the file received from the get command
          * Also used to print success/failure responses returned from the server
 	 */
-	public void receiveFile(String fileName, String contents) {
-            //TODO: this should probably renamed to receiveData now
+	public void receiveData(String fileName, String contents) {
 		String output = fileName + " received with contents: " + contents;
 		printVerbose(output);
 	}
@@ -411,7 +407,7 @@ public class Client extends RIONode {
 					msgString.length());
 
 			if (protocol == Protocol.DATA) {
-				receiveFile(fileName, contents);
+				receiveData(fileName, contents);
 			} else {
 				writeFile(from, fileName, contents, protocol);
 			}
