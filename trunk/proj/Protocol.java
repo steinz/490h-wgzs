@@ -39,7 +39,6 @@ public class Protocol {
 	 * @return true if the protocol is valid, false otherwise
 	 */
 	public static boolean isPktProtocolValid(int protocol) {
-		// TODO: This is awful
 		return (9 > protocol && protocol > -1);
 	}
 
@@ -53,7 +52,6 @@ public class Protocol {
 	 * @return True if protocol is valid, else false
 	 */
 	public static boolean isRIOProtocolValid(int protocol) {
-		// TODO: hacky
 		return isPktProtocolValid(protocol);
 		// return protocol == RIOTEST_PKT;
 	}
