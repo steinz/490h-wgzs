@@ -49,6 +49,8 @@ public class Client extends RIONode {
 						oldString += inLine; 
 					PersistentStorageWriter writer = getWriter(fileName, false);
 					writer.write(oldString);
+					writer.flush();
+					writer.close();
 					deleteFile(".temp");
 				}
 			} catch (FileNotFoundException e)
@@ -153,13 +155,13 @@ public class Client extends RIONode {
 	 */
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
-		if (verbose) {
+		/*if (verbose) {
 			// feedback for the console
 			String msgString = Utility.byteArrayToString(msg);
 			printVerbose("RECEIVED Protocol: "
 					+ Protocol.protocolToString(protocol) + " With Arguments: "
 					+ msgString + " From Node: " + from);
-		}
+		}*/
 		
 		super.onReceive(from, protocol, msg);
 	}
@@ -332,7 +334,7 @@ public class Client extends RIONode {
 	 *            The message that was received
 	 */
 	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
-		printVerbose("reading a message...");
+		printVerbose("reading packet");
 		
 		String msgString = Utility.byteArrayToString(msg);
 
@@ -365,6 +367,9 @@ public class Client extends RIONode {
 			}
 			break;
 		case Protocol.NOOP:
+			if (verbose) {
+				printVerbose("noop");
+			}
 			break;
 		}
 	}
