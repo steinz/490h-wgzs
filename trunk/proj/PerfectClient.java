@@ -1,4 +1,9 @@
 /**
+ * CSE 490h
+ * @author wayneg, steinz
+ */
+
+/**
  * An ideal clone of client that never fails, drop packets, etc.
  * for testing purposes
  */

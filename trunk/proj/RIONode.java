@@ -1,3 +1,8 @@
+/**
+ * CSE 490h
+ * @author wayneg, steinz
+ */
+
 import edu.washington.cs.cse490h.lib.Node;
 
 import java.util.HashMap;
@@ -16,16 +21,15 @@ public abstract class RIONode extends Node {
 	protected ReliableInOrderMsgLayer RIOLayer;
 	private UUID ID;
 	public HashMap<Integer, UUID> addrToSessionIDMap;
-	
+
 	public static int NUM_NODES = 10;
-	
-	
+
 	public RIONode() {
 		setID(UUID.randomUUID());
 		addrToSessionIDMap = new HashMap<Integer, UUID>();
 		RIOLayer = new ReliableInOrderMsgLayer(this);
 	}
-	
+
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
 		if (protocol == Protocol.ACK) {
@@ -46,10 +50,10 @@ public abstract class RIONode extends Node {
 	 *            The payload of the message
 	 */
 	public void RIOSend(int destAddr, int protocol, byte[] payload) {
-		if (!addrToSessionIDMap.containsKey(destAddr))
-		{
-			// session ID for this address not found - ask for one!
-			
+		if (!addrToSessionIDMap.containsKey(destAddr)) {
+			// TODO: session ID for this address not found - ask for one!
+			// TODO: this is implicit, right? Could change it to a noop, but no real reason to
+
 		}
 		RIOLayer.RIOSend(destAddr, protocol, payload);
 	}
@@ -65,7 +69,7 @@ public abstract class RIONode extends Node {
 	 *            The message that was received
 	 */
 	public abstract void onRIOReceive(Integer from, int protocol, byte[] msg);
-	
+
 	@Override
 	public String toString() {
 		return RIOLayer.toString();

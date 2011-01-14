@@ -1,3 +1,8 @@
+/**
+ * CSE 490h
+ * @author wayneg, steinz
+ */
+
 import java.util.HashMap;
 import java.util.LinkedList;
 
