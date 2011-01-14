@@ -50,11 +50,6 @@ public abstract class RIONode extends Node {
 	 *            The payload of the message
 	 */
 	public void RIOSend(int destAddr, int protocol, byte[] payload) {
-		if (!addrToSessionIDMap.containsKey(destAddr)) {
-			// TODO: session ID for this address not found - ask for one!
-			// TODO: this is implicit, right? Could change it to a noop, but no real reason to
-
-		}
 		RIOLayer.RIOSend(destAddr, protocol, payload);
 	}
 
