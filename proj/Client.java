@@ -78,7 +78,9 @@ public class Client extends RIONode {
 		try {
 			cmd = tokens.nextToken();
 			server = Integer.parseInt(tokens.nextToken());
-			filename = tokens.nextToken();
+			if (!cmd.equals("handshake") && !cmd.equals("noop")) {
+				filename = tokens.nextToken();
+			}
 		} catch (NumberFormatException e) {
 			printError(ErrorCode.InvalidServerAddress, cmd, server, filename);
 			return;
@@ -103,7 +105,14 @@ public class Client extends RIONode {
 		}
 
 		// build and send message
-		String payload = filename;
+		String payload = "";
+		if (cmd.equals("handshake")) {
+			payload = getID().toString();
+		} else if (cmd.equals("noop")) {
+			payload = " ";
+		} else {
+			payload = filename;
+		}
 		if (cmd.equals("put") || cmd.equals("append")) {
 			payload += delimeter + contents;
 		}
