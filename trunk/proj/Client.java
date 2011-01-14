@@ -334,7 +334,7 @@ public class Client extends RIONode {
 				writer.close();
 				// Delete the temporary file if it exists
 				if (protocol == Protocol.PUT)
-					deleteFile(from, ".temp");
+					deleteFile(this.addr, ".temp");
 			} catch (IOException e) {
 				sendResponse(from, Protocol.protocolToString(protocol), false);
 				System.err.println(e.getMessage());
