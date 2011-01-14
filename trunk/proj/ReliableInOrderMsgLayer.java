@@ -51,6 +51,12 @@ public class ReliableInOrderMsgLayer {
 		}
 		// ack the packet immediately, then deal with handshakes, if not a
 		// handshake or a packet from an old session, pass it along
+		
+		// at-most-once semantics
+		System.out.println("Node " + n.addr + " sending ACK to " + from);
+		byte[] seqNumByteArray = Utility.stringToByteArray(""
+				+ riopkt.getSeqNum());
+		n.send(from, Protocol.ACK, seqNumByteArray);
 
 		// check if UUID is what we think it is.
 		if (!(riopkt.getUUID().equals(n.getID()))) {
@@ -60,14 +66,6 @@ public class ReliableInOrderMsgLayer {
 			RIOSend(from, Protocol.HANDSHAKE,
 					Utility.stringToByteArray(n.getID().toString()));
 			riopkt.setProtocol(Protocol.NOOP);
-		} else {
-			// at-most-once semantics
-
-			System.out.println("Node " + n.addr + " sending ACK to " + from);
-
-			byte[] seqNumByteArray = Utility.stringToByteArray(""
-					+ riopkt.getSeqNum());
-			n.send(from, Protocol.ACK, seqNumByteArray);
 		}
 
 		InChannel in = inConnections.get(from);
