@@ -44,23 +44,7 @@ public class Client extends RIONode {
 		// Replace .temp to its old file, if a crash occurred
 		if (Utility.fileExists(this, ".temp")) {
 			try {
-				PersistentStorageReader reader = getReader(".temp");
-
-				if (!reader.ready())
-					deleteFile(this.addr, ".temp");
-				else {
-					String oldString = "";
-					String inLine = "";
-					String fileName = reader.readLine();
-					while ((inLine = reader.readLine()) != null)
-						oldString = oldString + inLine
-								+ System.getProperty("line.separator");
-					PersistentStorageWriter writer = getWriter(fileName, false);
-					writer.write(oldString);
-					writer.flush();
-					writer.close();
-					deleteFile(this.addr, ".temp");
-				}
+				restoreFromTempFile();
 			} catch (FileNotFoundException e) {
 				// TODO: use printError (add an overload that takes an exception
 				// maybe)?
@@ -70,6 +54,32 @@ public class Client extends RIONode {
 				System.err.println(e.getMessage());
 				e.printStackTrace();
 			}
+		}
+	}
+
+	/**
+	 * Attempts to delete the temporary file used in case of a crash.
+	 * Replaces the old file with the temporary file
+	 * @throws FileNotFoundException
+	 * @throws IOException
+	 */
+	private void restoreFromTempFile() throws FileNotFoundException, IOException {
+		PersistentStorageReader reader = getReader(".temp");
+
+		if (!reader.ready())
+			deleteFile(this.addr, ".temp");
+		else {
+			String oldString = "";
+			String inLine = "";
+			String fileName = reader.readLine();
+			while ((inLine = reader.readLine()) != null)
+				oldString = oldString + inLine
+						+ System.getProperty("line.separator");
+			PersistentStorageWriter writer = getWriter(fileName, false);
+			writer.write(oldString);
+			writer.flush();
+			writer.close();
+			deleteFile(this.addr, ".temp");
 		}
 	}
 
@@ -188,6 +198,8 @@ public class Client extends RIONode {
 		super.onReceive(from, protocol, msg);
 	}
 
+	// TODO: Maybe it would be nice if we wrote a class that handled all disk reads/writes, basically
+	// a wrapper for persistentstoragereader/writer
 	/**
 	 * Creates a file on the local filesystem
 	 * 
@@ -326,15 +338,7 @@ public class Client extends RIONode {
 				if (protocol == Protocol.APPEND) {
 					writer = getWriter(fileName, true);
 				} else {
-					// Temporary storage in case of a crash
-					String oldString = "";
-					String inLine;
-					PersistentStorageReader oldFileReader = getReader(fileName);
-					while ((inLine = oldFileReader.readLine()) != null)
-						oldString = oldString + inLine
-								+ System.getProperty("line.separator");
-					PersistentStorageWriter temp = getWriter(".temp", false);
-					temp.write(fileName + "\n" + oldString);
+					writeTempFile(fileName);
 
 					writer = getWriter(fileName, false);
 				}
@@ -352,6 +356,24 @@ public class Client extends RIONode {
 			}
 		}
 		sendResponse(from, Protocol.protocolToString(protocol), true);
+	}
+
+	/**
+	 * @param fileName
+	 * @throws FileNotFoundException
+	 * @throws IOException
+	 */
+	private void writeTempFile(String fileName) throws FileNotFoundException,
+			IOException {
+		// Temporary storage in case of a crash
+		String oldString = "";
+		String inLine;
+		PersistentStorageReader oldFileReader = getReader(fileName);
+		while ((inLine = oldFileReader.readLine()) != null)
+			oldString = oldString + inLine
+					+ System.getProperty("line.separator");
+		PersistentStorageWriter temp = getWriter(".temp", false);
+		temp.write(fileName + "\n" + oldString);
 	}
 
 	/**
@@ -392,19 +414,7 @@ public class Client extends RIONode {
 		case Protocol.PUT:
 		case Protocol.APPEND:
 		case Protocol.DATA:
-			// tokenize the string and parse out the contents and filename
-			StringTokenizer tokenizer = new StringTokenizer(msgString);
-			String fileName = tokenizer.nextToken();
-			int length = fileName.length();
-
-			String contents = msgString.substring(length + 1,
-					msgString.length());
-
-			if (protocol == Protocol.DATA) {
-				receiveData(fileName, contents);
-			} else {
-				writeFile(from, fileName, contents, protocol);
-			}
+			decideParseOrAppend(from, protocol, msgString);
 			break;
 		case Protocol.NOOP:
 			if (verbose) {
@@ -413,6 +423,29 @@ public class Client extends RIONode {
 			break;
 		}
 
+	}
+
+	/**
+	 * Parses a received command to decide whether to put or append to file
+	 * @param from
+	 * @param protocol
+	 * @param msgString
+	 */
+	private void decideParseOrAppend(Integer from, int protocol,
+			String msgString) {
+		// tokenize the string and parse out the contents and filename
+		StringTokenizer tokenizer = new StringTokenizer(msgString);
+		String fileName = tokenizer.nextToken();
+		int length = fileName.length();
+
+		String contents = msgString.substring(length + 1,
+				msgString.length());
+
+		if (protocol == Protocol.DATA) {
+			receiveData(fileName, contents);
+		} else {
+			writeFile(from, fileName, contents, protocol);
+		}
 	}
 
 	/**
