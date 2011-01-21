@@ -19,7 +19,15 @@ import java.util.UUID;
  */
 public abstract class RIONode extends Node {
 	protected ReliableInOrderMsgLayer RIOLayer;
-	private UUID ID;
+	
+	/**
+	 * This node's session UUID
+	 */
+	protected UUID ID;
+	
+	/**
+	 * Mapping from other node addresses to session UUIDs
+	 */
 	public HashMap<Integer, UUID> addrToSessionIDMap;
 
 	public RIONode() {
@@ -68,10 +76,18 @@ public abstract class RIONode extends Node {
 		return RIOLayer.toString();
 	}
 
+	/**
+	 * Set session UUID
+	 * @param iD
+	 */
 	public void setID(UUID iD) {
 		ID = iD;
 	}
 
+	/**
+	 * Get session UUID
+	 * @return
+	 */
 	public UUID getID() {
 		return ID;
 	}
