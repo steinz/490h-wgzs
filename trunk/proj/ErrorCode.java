@@ -7,8 +7,10 @@
  * Put all error codes in here
  */
 public class ErrorCode {
-	// ALL CAPS FOR ERROR CODE NAMES?
+	// TODO: Should these be an enum?
 
+	public static final int UnknownError = -1;
+	
 	// file system errors
 	public static final int FileDoesNotExist = 10;
 	public static final int FileAlreadyExists = 11;
@@ -19,6 +21,7 @@ public class ErrorCode {
 	public static final int InvalidCommand = 900;
 	public static final int IncompleteCommand = 901;
 	public static final int InvalidServerAddress = 910;
+	public static final int DynamicCommandError = 950;
 
 	/**
 	 * Returns the string associated with the given error code
@@ -39,6 +42,9 @@ public class ErrorCode {
 			return "901 IncompleteCommand";
 		case 910:
 			return "910 IncompleteServerAddress";
+		case 950:
+			return "950 DynamicCommandError";
+		case -1:
 		default:
 			return "UnknownError";
 		}

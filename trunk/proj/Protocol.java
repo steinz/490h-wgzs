@@ -9,13 +9,14 @@
  * </pre>
  */
 public class Protocol {
-	// Protocols for the Reliable in-order message layer
-	// These should be Packet protocols
-	// Extended to include with Client file system commands
+
+	// TODO: Should these be an enum?
+
+	// Base RIO Types
 	public static final int DATA = 0;
 	public static final int ACK = 1;
-	
-	
+
+	// FS RPC Commands
 	public static final int CREATE = 2;
 	public static final int DELETE = 3;
 	public static final int GET = 4;
@@ -23,19 +24,30 @@ public class Protocol {
 	public static final int APPEND = 6;
 	public static final int HANDSHAKE = 7;
 	public static final int NOOP = 8;
-	
-	// TODO: Add Cache Coherence types
-	
-	// TODO: Add Error type??
 
-	// TODO: split protocols into groups and add more valid methods to make
-	// parsing easier
+	// Cache Coherence Commands
+	public static final int WQ = 9;
+	public static final int WD = 10;
+	public static final int WF = 11;
+	public static final int WC = 12;
+	public static final int RQ = 13;
+	public static final int RD = 14;
+	public static final int RF = 15;
+	public static final int RC = 16;
+	public static final int IV = 17;
+	public static final int IC = 18;
+
+	// Error Type
+	// TODO: Actually send ERROR packets on errors instead of Data packets with
+	// error message strings.
+	public static final int ERROR = 127;
+
+	public static final int MAX_PROTOCOL = 127;
 
 	// Protocols for Testing Reliable in-order message delivery
 	// These should be RIOPacket protocols
-	public static final int RIOTEST_PKT = 10;
-
-	public static final int MAX_PROTOCOL = 127;
+	@Deprecated
+	public static final int RIOTEST_PKT = 126;
 
 	/**
 	 * Tests if this is a valid protocol for a Packet
@@ -45,41 +57,11 @@ public class Protocol {
 	 * @return true if the protocol is valid, false otherwise
 	 */
 	public static boolean isPktProtocolValid(int protocol) {
-		return (9 > protocol && protocol > -1);
+		return ((19 > protocol && protocol > -1) || protocol == 127);
 	}
 
 	/**
-	 * Maps the string name of a protocol to it's internal integer
-	 * representation. The string identifier is case insensitive.
-	 */
-	public static int stringToProtocol(String protocol) {
-		protocol = protocol.toUpperCase();
-		if (protocol.equals("DATA")) {
-			return 0;
-		} else if (protocol.equals("ACK")) {
-			return 1;
-		} else if (protocol.equals("CREATE")) {
-			return 2;
-		} else if (protocol.equals("DELETE")) {
-			return 3;
-		} else if (protocol.equals("GET")) {
-			return 4;
-		} else if (protocol.equals("PUT")) {
-			return 5;
-		} else if (protocol.equals("APPEND")) {
-			return 6;
-		} else if (protocol.equals("HANDSHAKE")) {
-			return 7;
-		} else if (protocol.equals("NOOP")) {
-			return 8;
-		} else {
-			return -1;
-		}
-	}
-
-	/**
-	 * Returns a string representation of the given protocol. Can be used for
-	 * debugging
+	 * Returns a string representation of the given protocol for debugging.
 	 * 
 	 * @param protocol
 	 *            The protocol whose string representation is desired
@@ -92,8 +74,6 @@ public class Protocol {
 			return "RIO Data Packet";
 		case ACK:
 			return "RIO Acknowledgement Packet";
-		case RIOTEST_PKT:
-			return "RIO Testing Packet";
 		case CREATE:
 			return "RIO Create Packet";
 		case PUT:
@@ -107,7 +87,11 @@ public class Protocol {
 		case HANDSHAKE:
 			return "RIO Handshake";
 		case NOOP:
-			return "RIO NOOP";
+			return "RIO Noop Packet";
+		case RIOTEST_PKT:
+			return "RIO Testing Packet";
+		case ERROR:
+			return "RIO Error Packet";
 		default:
 			return "Unknown Protocol";
 		}

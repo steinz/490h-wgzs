@@ -5,6 +5,14 @@
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.NoSuchElementException;
 
@@ -19,33 +27,74 @@ import edu.washington.cs.cse490h.lib.Utility;
  * onRIOReceive to send/receive the packets from the RIO layer. The underlying
  * layer can also be used by sending using the regular send() method and
  * overriding the onReceive() method to include a call to super.onReceive()
+ * 
+ * IMPORTANT: Methods names should not end in Handler unless they are meant to
+ * handle commands passed in by onCommand - onCommand dynamically dispatches
+ * commands to the method named <cmdName>Handler.
  */
 public class Client extends RIONode {
 
 	/**
-	 * Delimeter used in protocol payloads Should be a single character
+	 * Possible cache statuses
+	 */
+	public static enum CacheStatuses {
+		Invalid, ReadWrite, ReadOnly
+	};
+
+	/**
+	 * Delimeter used in protocol payloads. Should be a single character.
 	 */
 	private final String delimiter = " ";
 
-	//TODO: Add onCommand parsing to set this
-	private boolean isManager = false;
-	
-	//TODO: Add ds for client to track files it has RW or RO for (cache)
-	
-	//TODO: Add a locked table for the manager
-	//TODO: Add a ownership/status table for the manager
-	//TODO: Add waiting for IC table for manager
-	
-	//TODO: Add queue for pending requests of locked files
-	
 	/**
 	 * Verbose flag for debugging
 	 */
 	// TODO: Move to a more globaly accessible place - probably a logger class
 	private static final boolean verbose = true;
+	
+	/**
+	 * Status of cached files on disk. Keys are filenames.
+	 */
+	private Map<String, CacheStatuses> cacheStatus;
+
+	
+	/**
+	 * Whether or not this node is the manager for project 2.
+	 */
+	private boolean isManager;
+
+	/*************************************************
+	 * BEGIN MANAGER ONLY DATA STRUCTURES
+	 ************************************************/
+
+	/**
+	 * List of files whose requests are currently being worked out.
+	 */
+	private Set<String> lockedFiles;
+
+	/**
+	 * Status of cached files for all clients.
+	 */
+	private Map<String, CacheStatuses> clientCacheStatus;
+
+	/**
+	 * List of nodes the manager is waiting for ICs from.
+	 */
+	private Map<String, List<Integer>> pendingICs;
+	
+	// TODO: Add queue for pending requests of locked files. I think we need to
+	// add a queuedFileRequest class to keep in here or something if we want to
+	// queue requests we can't satisfy right away.
+	// private Queue<E> queuedFileRequests;
+
+	/*************************************************
+	 * END MANAGER ONLY DATA STRUCTURES
+	 ************************************************/
 
 	public Client() {
 		super();
+		this.cacheStatus = new HashMap<String, CacheStatuses>();
+		this.isManager = false;
 	}
 
 	/**
@@ -57,7 +106,7 @@ public class Client extends RIONode {
 			try {
 				restoreFromTempFile();
 			} catch (FileNotFoundException e) {
-				// TODO: use printError (add an overload that takes an exception
+				// TODO: use printError - overload to take exception
 				// maybe)?
 				System.err.println(e.getMessage());
 				e.printStackTrace();
@@ -69,12 +118,14 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Attempts to delete the temporary file used in case of a crash.
-	 * Replaces the old file with the temporary file
+	 * Attempts to delete the temporary file used in case of a crash. Replaces
+	 * the old file with the temporary file
+	 * 
 	 * @throws FileNotFoundException
 	 * @throws IOException
 	 */
-	private void restoreFromTempFile() throws FileNotFoundException, IOException {
+	private void restoreFromTempFile() throws FileNotFoundException,
+			IOException {
 		PersistentStorageReader reader = getReader(".temp");
 
 		if (!reader.ready())
@@ -95,72 +146,222 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Process a command from user or file Expects lowercase commands
+	 * Prints expected numbers for in and out channels. Likely to change as new
+	 * problems arise.
 	 * 
+	 * @param tokens
 	 * @param command
-	 *            The command for this node
 	 */
-	public void onCommand(String command) {
-		if (command.toUpperCase().equals("DEBUG")) {
-			RIOLayer.printSeqStateDebug();
-			return;
-		}
+	public void debugHandler(StringTokenizer tokens, String line) {
+		RIOLayer.printSeqStateDebug();
+	}
 
-		StringTokenizer tokens = new StringTokenizer(command, " ");
-		String cmd = "", filename = "";
-		int server = -1;
+	/**
+	 * Used for project2 to tell a node it is the manager.
+	 * 
+	 * @param tokens
+	 * @param command
+	 */
+	public void managerHandler(StringTokenizer tokens, String line) {
+		if (!isManager) {
+			this.isManager = true;
+			this.lockedFiles = new HashSet<String>();
+			this.clientCacheStatus = new HashMap<String, CacheStatuses>();
+			this.pendingICs = new HashMap<String, List<Integer>>();
+		}
+		
+		//TODO: Log this
+	}
+
+	/**
+	 * Create RPC
+	 * 
+	 * @param tokens
+	 * @param line
+	 */
+	public void createHandler(StringTokenizer tokens, String line) {
+		int server = parseServer(tokens, "append");
+		String filename = parseFilename(tokens, "append");
+		RIOSend(server, Protocol.CREATE, Utility.stringToByteArray(filename));
+	}
+
+	/**
+	 * Delete RPC
+	 * 
+	 * @param tokens
+	 * @param line
+	 */
+	public void deleteHandler(StringTokenizer tokens, String line) {
+		int server = parseServer(tokens, "append");
+		String filename = parseFilename(tokens, "append");
+		RIOSend(server, Protocol.DELETE, Utility.stringToByteArray(filename));
+	}
+
+	/**
+	 * Get RPC
+	 * 
+	 * @param tokens
+	 * @param line
+	 */
+	public void getHandler(StringTokenizer tokens, String line) {
+		int server = parseServer(tokens, "append");
+		String filename = parseFilename(tokens, "append");
+		RIOSend(server, Protocol.GET, Utility.stringToByteArray(filename));
+	}
+
+	/**
+	 * Put RPC
+	 * 
+	 * @param tokens
+	 * @param line
+	 */
+	public void putHandler(StringTokenizer tokens, String line) {
+		int server = parseServer(tokens, "append");
+		String filename = parseFilename(tokens, "append");
+		String content = parseAddContent(line, "append", server, filename);
+		String payload = filename + delimiter + content;
+		RIOSend(server, Protocol.PUT, Utility.stringToByteArray(payload));
+	}
+
+	/**
+	 * Append RPC
+	 * 
+	 * @param tokens
+	 * @param line
+	 */
+	public void appendHandler(StringTokenizer tokens, String line) {
+		int server = parseServer(tokens, "append");
+		String filename = parseFilename(tokens, "append");
+		String content = parseAddContent(line, "append", server, filename);
+		String payload = filename + delimiter + content;
+		RIOSend(server, Protocol.APPEND, Utility.stringToByteArray(payload));
+	}
+
+	/**
+	 * Initiates a remote handshake
+	 * 
+	 * @param tokens
+	 * @param line
+	 */
+	public void handshakeHandler(StringTokenizer tokens, String line) {
+		int server = parseServer(tokens, "append");
+		String payload = getID().toString();
+		RIOSend(server, Protocol.HANDSHAKE, Utility.stringToByteArray(payload));
+	}
+
+	/**
+	 * Noop RPC
+	 * 
+	 * @param tokens
+	 * @param line
+	 */
+	public void noopHandler(StringTokenizer tokens, String line) {
+		int server = parseServer(tokens, "noop");
+		// TODO: see if this works sending the empty string instead
+		String payload = " ";
+		RIOSend(server, Protocol.NOOP, Utility.stringToByteArray(payload));
+
+	}
+
+	/**
+	 * Parses a server address from tokens
+	 * 
+	 * @param tokens
+	 * @param cmd
+	 * @return
+	 */
+	protected int parseServer(StringTokenizer tokens, String cmd) {
+		int server;
 		try {
-			cmd = tokens.nextToken();
 			server = Integer.parseInt(tokens.nextToken());
-			if (!cmd.equals("handshake") && !cmd.equals("noop")) {
-				filename = tokens.nextToken();
-			}
 		} catch (NumberFormatException e) {
-			printError(ErrorCode.InvalidServerAddress, cmd, server, filename);
-			return;
+			printError(ErrorCode.InvalidServerAddress, cmd);
+			throw e;
 		} catch (NoSuchElementException e) {
-			// incomplete command
+			printError(ErrorCode.IncompleteCommand, cmd);
+			throw e;
+		}
+		return server;
+	}
+
+	/**
+	 * Parses a filename from tokens
+	 * 
+	 * @param tokens
+	 * @param cmd
+	 * @return
+	 */
+	protected String parseFilename(StringTokenizer tokens, String cmd) {
+		String filename;
+		try {
+			filename = tokens.nextToken();
+		} catch (NoSuchElementException e) {
+			printError(ErrorCode.IncompleteCommand, cmd);
+			throw e;
+		}
+		return filename;
+	}
+
+	/**
+	 * Parse what content to add to a file for put and append (the rest of the
+	 * line)
+	 * 
+	 * @param tokens
+	 * @param cmd
+	 * @return
+	 */
+	protected String parseAddContent(String line, String cmd, int server,
+			String filename) {
+
+		int parsedLength = cmd.length() + Integer.toString(server).length()
+				+ filename.length() + 3;
+		if (parsedLength >= line.length()) {
+			// no contents
 			printError(ErrorCode.IncompleteCommand, cmd, server, filename);
+			// TODO: throw an exception
+		}
+
+		return line.substring(parsedLength);
+	}
+
+	/**
+	 * Process a command from user or file. Lowercases the command for further
+	 * internal use.
+	 * 
+	 */
+	public void onCommand(String line) {
+		// Create a tokenizer and get the first token (the actual cmd)
+		StringTokenizer tokens = new StringTokenizer(line, " ");
+		String cmd = "";
+		try {
+			cmd = tokens.nextToken().toLowerCase();
+		} catch (NoSuchElementException e) {
+			printError(ErrorCode.InvalidCommand, "");
 			return;
 		}
 
-		// parse contents for put and append
-		String contents = "";
-		if (cmd.equals("put") || cmd.equals("append")) {
-			int parsedLength = cmd.length() + Integer.toString(server).length()
-					+ filename.length() + 3;
-			if (parsedLength >= command.length()) {
-				// no contents
-				printError(ErrorCode.IncompleteCommand, cmd, server, filename);
-				return;
-			} else {
-				contents = command.substring(parsedLength);
-			}
-		}
-
-		// build and send message
-		String payload = "";
-		if (cmd.equals("handshake")) {
-			payload = getID().toString();
-		} else if (cmd.equals("noop")) {
-			payload = " ";
-		} else {
-			payload = filename;
-		}
-		if (cmd.equals("put") || cmd.equals("append")) {
-			payload += delimiter + contents;
-		}
-		int protocol = Protocol.stringToProtocol(cmd);
-		if (protocol == -1) {
-			printError(ErrorCode.InvalidCommand, cmd, server, filename);
-			return;
-		} else {
-			RIOSend(server, protocol, Utility.stringToByteArray(payload));
+		// Dynamically call <cmd>Command, passing off the tokenizer and the full
+		// command string
+		try {
+			Class[] paramTypes = { StringTokenizer.class, String.class };
+			Method handler = this.getClass().getMethod(cmd + "Handler",
+					paramTypes);
+			Object[] args = { tokens, line };
+			handler.invoke(this, args);
+		} catch (NoSuchMethodException e) {
+			printError(ErrorCode.InvalidCommand, cmd);
+		} catch (IllegalArgumentException e) {
+			printError(ErrorCode.DynamicCommandError, cmd);
+		} catch (IllegalAccessException e) {
+			printError(ErrorCode.DynamicCommandError, cmd);
+		} catch (InvocationTargetException e) {
+			printError(ErrorCode.DynamicCommandError, cmd);
 		}
 	}
 
 	/**
-	 * Prints msg if verbose is true Also prints a frame if frame is true
+	 * Prints msg if verbose is true. Also prints a frame if frame is true to
+	 * make the message easier to see.
 	 */
 	public void printVerbose(String msg, boolean frame) {
 		// TODO: Factor out to logger class
@@ -176,7 +377,7 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Stub for printVerbose that doesn't print a frame
+	 * Stub for printVerbose that doesn't print a frame.
 	 */
 	public void printVerbose(String msg) {
 		printVerbose(msg, false);
@@ -187,15 +388,41 @@ public class Client extends RIONode {
 	 */
 	public void printError(int error, String command, int server,
 			String filename) {
-		String stringOut = "";
-		stringOut += "Node " + addr + ": Error: " + command + " on server: "
-				+ server + " and file: " + filename + " returned error code: "
-				+ ErrorCode.lookup(error);
-		System.err.println(stringOut);
+		// TODO: Refactor to logger
+		StringBuilder sb = new StringBuilder();
+		sb.append("Node ");
+		sb.append(addr);
+		sb.append(": Error: ");
+		sb.append(command);
+		sb.append(" on server: ");
+		sb.append(server);
+		sb.append(" and file: ");
+		sb.append(filename);
+		sb.append(" returned error code: ");
+		sb.append(ErrorCode.lookup(error));
+		System.err.println(sb.toString());
 	}
 
 	/**
-	 * Extends onReceive for extra logging Currently turned off
+	 * Stub for printError for when less information is avaliable
+	 * 
+	 * @param error
+	 * @param command
+	 */
+	public void printError(int error, String command) {
+		// TODO: Refactor to logger
+		StringBuilder sb = new StringBuilder();
+		sb.append("Node ");
+		sb.append(addr);
+		sb.append(": Error: ");
+		sb.append(command);
+		sb.append(" returned error code: ");
+		sb.append(ErrorCode.lookup(error));
+		System.err.println(sb.toString());
+	}
+
+	/**
+	 * Extends onReceive for extra logging. Currently turned off.
 	 */
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
@@ -209,8 +436,9 @@ public class Client extends RIONode {
 		super.onReceive(from, protocol, msg);
 	}
 
-	// TODO: Maybe it would be nice if we wrote a class that handled all disk reads/writes, basically
-	// a wrapper for persistentstoragereader/writer
+	// TODO: Maybe it would be nice if we wrote a class that handled all disk
+	// reads/writes, basically a wrapper for persistentstoragereader/writer to
+	// make this file smaller.
 	/**
 	 * Creates a file on the local filesystem
 	 * 
@@ -434,15 +662,16 @@ public class Client extends RIONode {
 			break;
 		}
 
-		// TODO: implement {W,R}{D,Q,F,C} and I{C,V} handling - including state changes :D
+		// TODO: implement {W,R}{D,Q,F,C} and I{C,V} handling
 		// Only server receives: {R,W}{Q,C}, IC
 		// Only client receives: {R,W}F, IV
 		// Both ways: {W,R}D
-		
+
 	}
 
 	/**
 	 * Parses a received command to decide whether to put or append to file
+	 * 
 	 * @param from
 	 * @param protocol
 	 * @param msgString
@@ -454,8 +683,7 @@ public class Client extends RIONode {
 		String fileName = tokenizer.nextToken();
 		int length = fileName.length();
 
-		String contents = msgString.substring(length + 1,
-				msgString.length());
+		String contents = msgString.substring(length + 1, msgString.length());
 
 		if (protocol == Protocol.DATA) {
 			receiveData(fileName, contents);
