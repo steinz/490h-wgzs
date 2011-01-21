@@ -27,6 +27,17 @@ public class Client extends RIONode {
 	 */
 	private final String delimiter = " ";
 
+	//TODO: Add onCommand parsing to set this
+	private boolean isManager = false;
+	
+	//TODO: Add ds for client to track files it has RW or RO for (cache)
+	
+	//TODO: Add a locked table for the manager
+	//TODO: Add a ownership/status table for the manager
+	//TODO: Add waiting for IC table for manager
+	
+	//TODO: Add queue for pending requests of locked files
+	
 	/**
 	 * Verbose flag for debugging
 	 */
@@ -423,6 +434,11 @@ public class Client extends RIONode {
 			break;
 		}
 
+		// TODO: implement {W,R}{D,Q,F,C} and I{C,V} handling - including state changes :D
+		// Only server receives: {R,W}{Q,C}, IC
+		// Only client receives: {R,W}F, IV
+		// Both ways: {W,R}D
+		
 	}
 
 	/**
