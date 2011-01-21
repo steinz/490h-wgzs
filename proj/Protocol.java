@@ -14,6 +14,8 @@ public class Protocol {
 	// Extended to include with Client file system commands
 	public static final int DATA = 0;
 	public static final int ACK = 1;
+	
+	
 	public static final int CREATE = 2;
 	public static final int DELETE = 3;
 	public static final int GET = 4;
@@ -21,6 +23,10 @@ public class Protocol {
 	public static final int APPEND = 6;
 	public static final int HANDSHAKE = 7;
 	public static final int NOOP = 8;
+	
+	// TODO: Add Cache Coherence types
+	
+	// TODO: Add Error type??
 
 	// TODO: split protocols into groups and add more valid methods to make
 	// parsing easier
@@ -40,20 +46,6 @@ public class Protocol {
 	 */
 	public static boolean isPktProtocolValid(int protocol) {
 		return (9 > protocol && protocol > -1);
-	}
-
-	/**
-	 * Tests if the given protocol is valid for a RIOPacket. Note that the
-	 * current implementation of RIOPacket actually uses this to test validity
-	 * of packets.
-	 * 
-	 * @param protocol
-	 *            The protocol to be checked
-	 * @return True if protocol is valid, else false
-	 */
-	public static boolean isRIOProtocolValid(int protocol) {
-		return isPktProtocolValid(protocol);
-		// return protocol == RIOTEST_PKT;
 	}
 
 	/**

@@ -41,7 +41,7 @@ public class RIOPacket {
 	 */
 	public RIOPacket(int protocol, int seqNum, byte[] payload, UUID ID)
 			throws IllegalArgumentException {
-		if (!Protocol.isRIOProtocolValid(protocol)
+		if (!Protocol.isPktProtocolValid(protocol)
 				|| payload.length > MAX_PAYLOAD_SIZE) {
 			throw new IllegalArgumentException(
 					"Illegal arguments given to RIOPacket");
