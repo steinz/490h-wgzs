@@ -22,8 +22,6 @@ public abstract class RIONode extends Node {
 	private UUID ID;
 	public HashMap<Integer, UUID> addrToSessionIDMap;
 
-	public static int NUM_NODES = 10;
-
 	public RIONode() {
 		setID(UUID.randomUUID());
 		addrToSessionIDMap = new HashMap<Integer, UUID>();

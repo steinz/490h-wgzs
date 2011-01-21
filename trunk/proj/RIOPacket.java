@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Packet;
+import edu.washington.cs.cse490h.lib.Utility;
 
 /**
  * This conveys the header for reliable, in-order message transfer. This is
@@ -30,13 +31,20 @@ public class RIOPacket {
 
 	/**
 	 * Constructing a new RIO packet.
-	 * @param type The type of packet. Either SYN, ACK, FIN, or DATA
-	 * @param seqNum The sequence number of the packet
-	 * @param payload The payload of the packet.
+	 * 
+	 * @param type
+	 *            The type of packet. Either SYN, ACK, FIN, or DATA
+	 * @param seqNum
+	 *            The sequence number of the packet
+	 * @param payload
+	 *            The payload of the packet.
 	 */
-	public RIOPacket(int protocol, int seqNum, byte[] payload, UUID ID) throws IllegalArgumentException {
-		if (!Protocol.isRIOProtocolValid(protocol) || payload.length > MAX_PAYLOAD_SIZE) {
-			throw new IllegalArgumentException("Illegal arguments given to RIOPacket");
+	public RIOPacket(int protocol, int seqNum, byte[] payload, UUID ID)
+			throws IllegalArgumentException {
+		if (!Protocol.isRIOProtocolValid(protocol)
+				|| payload.length > MAX_PAYLOAD_SIZE) {
+			throw new IllegalArgumentException(
+					"Illegal arguments given to RIOPacket");
 		}
 
 		this.protocol = protocol;
@@ -51,7 +59,7 @@ public class RIOPacket {
 	public int getProtocol() {
 		return this.protocol;
 	}
-	
+
 	/**
 	 * @return The sequence number
 	 */
@@ -67,52 +75,54 @@ public class RIOPacket {
 	}
 
 	/**
-	 * @param newID The new ID to be set
+	 * @param newID
+	 *            The new ID to be set
 	 */
-	public void setUUID(UUID newID){
+	public void setUUID(UUID newID) {
 		ID = newID;
 	}
-	
+
 	/**
 	 * 
-	 * @param newProtocol The new protocol
+	 * @param newProtocol
+	 *            The new protocol
 	 */
-	public void setProtocol(int newProtocol){
+	public void setProtocol(int newProtocol) {
 		this.protocol = newProtocol;
 	}
-	
+
 	/**
 	 * 
 	 * @return newID The ID
 	 */
-	public UUID getUUID(){
+	public UUID getUUID() {
 		return this.ID;
 	}
+
 	/**
-	 * Convert the RIOPacket packet object into a byte array for sending over the wire.
-	 * Format:
-	 *        protocol = 1 byte
-	 *        sequence number = 4 bytes
-	 *        payload <= MAX_PAYLOAD_SIZE bytes
-	 * @return A byte[] for transporting over the wire. Null if failed to pack for some reason
+	 * Convert the RIOPacket packet object into a byte array for sending over
+	 * the wire. Format: protocol = 1 byte sequence number = 4 bytes payload <=
+	 * MAX_PAYLOAD_SIZE bytes
+	 * 
+	 * @return A byte[] for transporting over the wire. Null if failed to pack
+	 *         for some reason
 	 */
 	public byte[] pack() {
 		try {
 			ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
 			DataOutputStream out = new DataOutputStream(byteStream);
 
-			if (payload.length + HEADER_SIZE > MAX_PACKET_SIZE)
-			{
-				//TODO: Factor out to logger
+			if (payload.length + HEADER_SIZE > MAX_PACKET_SIZE) {
+				// TODO: Factor out to logger
 				System.err.println("Payload too large for one packet!");
-				//TODO: Throw an exception to inform the Client of the faliure?
+				// TODO: Throw an exception to inform the Client of the faliure?
 			}
 			// write the UUID to the packet
 			long IDMostSignificantBits = ID.getMostSignificantBits();
 			long IDLeastSignificantBits = ID.getLeastSignificantBits();
 			out.writeLong(IDMostSignificantBits);
 			out.writeLong(IDLeastSignificantBits);
-			
+
 			out.writeByte(protocol);
 			out.writeInt(seqNum);
 
@@ -127,21 +137,24 @@ public class RIOPacket {
 	}
 
 	/**
-	 * Unpacks a byte array to create a RIOPacket object
-	 * Assumes the array has been formatted using pack method in RIOPacket
-	 * @param packet String representation of the transport packet
-	 * @return RIOPacket object created or null if the byte[] representation was corrupted
+	 * Unpacks a byte array to create a RIOPacket object Assumes the array has
+	 * been formatted using pack method in RIOPacket
+	 * 
+	 * @param packet
+	 *            String representation of the transport packet
+	 * @return RIOPacket object created or null if the byte[] representation was
+	 *         corrupted
 	 */
 	public static RIOPacket unpack(byte[] packet) {
 		try {
-			DataInputStream in = new DataInputStream(new ByteArrayInputStream(packet));
+			DataInputStream in = new DataInputStream(new ByteArrayInputStream(
+					packet));
 
-			
 			// unpack the UUID
 			long mostSigBits = in.readLong();
 			long leastSigBits = in.readLong();
 			UUID name = new UUID(mostSigBits, leastSigBits);
-			
+
 			int protocol = in.readByte();
 			int seqNum = in.readInt();
 
@@ -155,9 +168,14 @@ public class RIOPacket {
 			return new RIOPacket(protocol, seqNum, payload, name);
 		} catch (IllegalArgumentException e) {
 			// will return null
-		} catch(IOException e) {
+		} catch (IOException e) {
 			// will return null
 		}
 		return null;
+	}
+
+	public String toString() {
+		return "rio-proto:" + this.protocol + " rio-seqNum:" + this.seqNum
+				+ " rio-payload:" + Utility.byteArrayToString(this.payload);
 	}
 }
