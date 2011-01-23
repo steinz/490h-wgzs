@@ -106,16 +106,16 @@ public class RIOPacket {
 	 * 
 	 * @return A byte[] for transporting over the wire. Null if failed to pack
 	 *         for some reason
+	 * @throws PacketPackException
 	 */
-	public byte[] pack() {
+	public byte[] pack() throws PacketPackException {
 		try {
 			ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
 			DataOutputStream out = new DataOutputStream(byteStream);
 
 			if (payload.length + HEADER_SIZE > MAX_PACKET_SIZE) {
-				Logger.write("Payload too large for one packet!");
-				System.err.println("Payload too large for one packet!");
-				// TODO: Throw an exception to inform the Client of the faliure
+				throw new PacketPackException(
+						"payload too large for one packet");
 			}
 			// write the UUID to the packet
 			long IDMostSignificantBits = ID.getMostSignificantBits();
@@ -132,6 +132,7 @@ public class RIOPacket {
 			out.close();
 			return byteStream.toByteArray();
 		} catch (IOException e) {
+			// TODO: This should throw an exception I think...
 			return null;
 		}
 	}
@@ -144,39 +145,33 @@ public class RIOPacket {
 	 *            String representation of the transport packet
 	 * @return RIOPacket object created or null if the byte[] representation was
 	 *         corrupted
-	 * @throws Exception 
+	 * @throws IOException 
+	 * @throws Exception
 	 */
-	public static RIOPacket unpack(byte[] packet) throws PacketPackException {
-		try {
-			DataInputStream in = new DataInputStream(new ByteArrayInputStream(
-					packet));
+	public static RIOPacket unpack(byte[] packet) throws PacketPackException, IOException {
+		DataInputStream in = new DataInputStream(new ByteArrayInputStream(
+				packet));
 
-			// unpack the UUID
-			long mostSigBits = in.readLong();
-			long leastSigBits = in.readLong();
-			UUID name = new UUID(mostSigBits, leastSigBits);
+		// unpack the UUID
+		long mostSigBits = in.readLong();
+		long leastSigBits = in.readLong();
+		UUID name = new UUID(mostSigBits, leastSigBits);
 
-			int protocol = in.readByte();
-			int seqNum = in.readInt();
+		int protocol = in.readByte();
+		int seqNum = in.readInt();
 
-			byte[] payload = new byte[packet.length - HEADER_SIZE];
+		byte[] payload = new byte[packet.length - HEADER_SIZE];
 
-			int bytesRead = in.read(payload, 0, payload.length);
+		int bytesRead = in.read(payload, 0, payload.length);
 
-			// If in is at EOF bytesRead will be -1 instead of 0, but that's
-			// expected.
-			if (bytesRead != payload.length
-					&& !(payload.length == 0 && bytesRead == -1)) {
-				throw new PacketPackException();
-			}
-
-			return new RIOPacket(protocol, seqNum, payload, name);
-		} catch (IllegalArgumentException e) {
-			// will return null
-		} catch (IOException e) {
-			// will return null
+		// If in is at EOF bytesRead will be -1 instead of 0, but that's
+		// expected.
+		if (bytesRead != payload.length
+				&& !(payload.length == 0 && bytesRead == -1)) {
+			throw new PacketPackException("failed to read entire payload");
 		}
-		return null;
+
+		return new RIOPacket(protocol, seqNum, payload, name);
 	}
 
 	public String toString() {

@@ -4,7 +4,6 @@
  */
 
 import edu.washington.cs.cse490h.lib.Node;
-
 import java.util.HashMap;
 import java.util.UUID;
 
@@ -19,12 +18,12 @@ import java.util.UUID;
  */
 public abstract class RIONode extends Node {
 	protected ReliableInOrderMsgLayer RIOLayer;
-	
+
 	/**
 	 * This node's session UUID
 	 */
 	protected UUID ID;
-	
+
 	/**
 	 * Mapping from other node addresses to session UUIDs
 	 */
@@ -35,7 +34,7 @@ public abstract class RIONode extends Node {
 		addrToSessionIDMap = new HashMap<Integer, UUID>();
 		RIOLayer = new ReliableInOrderMsgLayer(this);
 	}
-
+	
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
 		if (protocol == Protocol.ACK) {
@@ -78,6 +77,7 @@ public abstract class RIONode extends Node {
 
 	/**
 	 * Set session UUID
+	 * 
 	 * @param iD
 	 */
 	public void setID(UUID iD) {
@@ -86,9 +86,33 @@ public abstract class RIONode extends Node {
 
 	/**
 	 * Get session UUID
+	 * 
 	 * @return
 	 */
 	public UUID getID() {
 		return ID;
+	}
+
+	/**
+	 * Convenience call that initializes a new StringBuilder.
+	 * 
+	 * @return
+	 */
+	public StringBuilder appendNodeAddress() {
+		return appendNodeAddress(new StringBuilder());
+	}
+
+	/**
+	 * Returns a new StringBuilder with this node's address prepended for
+	 * logging.
+	 * 
+	 * @param sb
+	 * @return
+	 */
+	public StringBuilder appendNodeAddress(StringBuilder sb) {
+		sb.append("Node ");
+		sb.append(addr);
+		sb.append(": ");
+		return sb;
 	}
 }

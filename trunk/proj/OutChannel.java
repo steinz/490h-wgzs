@@ -56,8 +56,10 @@ class OutChannel {
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
 					destAddr, lastSeqNumSent }),
 					ReliableInOrderMsgLayer.TIMEOUT);
+		} catch (PacketPackException e) {
+			Logger.error(e);
 		} catch (Exception e) {
-			e.printStackTrace();
+			Logger.error(e);
 		}
 	}
 
@@ -81,10 +83,13 @@ class OutChannel {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
 
-			Logger.write(n.addr, " Error: "
-					+ Protocol.protocolToString(packet.getProtocol())
-					+ " on server " + n.addr + " returned error code"
-					+ ErrorCode.lookup(ErrorCode.Timeout));
+			StringBuilder sb = new StringBuilder();
+			sb.append("Node: ");
+			sb.append(n.addr);
+			sb.append(" Error: ");
+			sb.append(Protocol.protocolToString(packet.getProtocol()));
+			sb.append(" returned error code");
+			Logger.error(ErrorCode.Timeout, sb.toString());
 
 		} else if (unACKedPackets.containsKey(seqNum)) {
 			resendRIOPacket(n, seqNum);
@@ -128,7 +133,11 @@ class OutChannel {
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			RIOPacket riopkt = unACKedPackets.get(seqNum);
 
-			Logger.write(n.addr, ": resending packet " + riopkt.getSeqNum());
+			StringBuilder sb = n.appendNodeAddress();
+			sb.append("resending packet ");
+			sb.append(riopkt.getSeqNum());
+			Logger.verbose(sb.toString());
+
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
 					destAddr, seqNum }), ReliableInOrderMsgLayer.TIMEOUT);
@@ -137,7 +146,7 @@ class OutChannel {
 		}
 	}
 
-	public void printSeqNumDebug() {
-		Logger.write(lastSeqNumSent + "");
+	public int seqNumDebug() {
+		return lastSeqNumSent;
 	}
 }
