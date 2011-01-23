@@ -10,7 +10,7 @@
  */
 public class Protocol {
 
-	// TODO: Should these be an enum?
+	// TODO: @Discuss Should these be an enum?
 
 	// Base RIO Types
 	public static final int DATA = 0;

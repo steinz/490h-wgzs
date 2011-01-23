@@ -44,7 +44,7 @@ public class Client extends RIONode {
 	/**
 	 * Delimeter used in protocol payloads. Should be a single character.
 	 */
-	private final String delimiter = " ";
+	private static final String delimiter = " ";
 
 	/**
 	 * Status of cached files on disk. Keys are filenames.
@@ -57,7 +57,7 @@ public class Client extends RIONode {
 	private boolean isManager;
 
 	/*************************************************
-	 * BEGIN MANAGER ONLY DATA STRUCTURES
+	 * begin manager only data structures
 	 ************************************************/
 
 	/**
@@ -75,13 +75,13 @@ public class Client extends RIONode {
 	 */
 	private Map<String, List<Integer>> pendingICs;
 
-	// TODO: Add queue for pending requests of locked files. I think we need to
-	// add a queuedFileRequest class to keep in here or something if we want to
-	// queue requests we can't satisfy right away.
+	// TODO: Later - add queue for pending requests of locked files. I think we
+	// need to add a queuedFileRequest class to keep in here or something if we
+	// want to queue requests we can't satisfy right away.
 	// private Queue<E> queuedFileRequests;
 
 	/*************************************************
-	 * END MANAGER ONLY DATA STRUCTURES
+	 * end manager only data structures
 	 ************************************************/
 
 	public Client() {
@@ -92,7 +92,7 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Mandatory start method Cleans up failed puts if necessary
+	 * Cleans up failed puts if necessary
 	 */
 	public void start() {
 		// Replace .temp to its old file, if a crash occurred
@@ -100,12 +100,9 @@ public class Client extends RIONode {
 			try {
 				restoreFromTempFile();
 			} catch (FileNotFoundException e) {
-				Logger.printError(addr, ErrorCode.FileDoesNotExist, ".temp");
-				System.err.println(e.getMessage());
-				e.printStackTrace();
+				Logger.error(e);
 			} catch (IOException e) {
-				System.err.println(e.getMessage());
-				e.printStackTrace();
+				Logger.error(e);
 			}
 		}
 	}
@@ -117,7 +114,7 @@ public class Client extends RIONode {
 	 * @throws FileNotFoundException
 	 * @throws IOException
 	 */
-	private void restoreFromTempFile() throws FileNotFoundException,
+	protected void restoreFromTempFile() throws FileNotFoundException,
 			IOException {
 		PersistentStorageReader reader = getReader(".temp");
 
@@ -137,6 +134,10 @@ public class Client extends RIONode {
 			deleteFile(this.addr, ".temp");
 		}
 	}
+
+	/*************************************************
+	 * begin onCommand Handler methods / parse helpers
+	 ************************************************/
 
 	/**
 	 * Prints expected numbers for in and out channels. Likely to change as new
@@ -162,8 +163,8 @@ public class Client extends RIONode {
 			this.clientCacheStatus = new HashMap<String, CacheStatuses>();
 			this.pendingICs = new HashMap<String, List<Integer>>();
 		}
-		Logger.write(addr, " received command to become manager");
 
+		printInfo("promoted to manager");
 	}
 
 	/**
@@ -173,8 +174,8 @@ public class Client extends RIONode {
 	 * @param line
 	 */
 	public void createHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "append");
-		String filename = parseFilename(tokens, "append");
+		int server = parseServer(tokens, "create");
+		String filename = parseFilename(tokens, "create");
 		RIOSend(server, Protocol.CREATE, Utility.stringToByteArray(filename));
 	}
 
@@ -185,8 +186,8 @@ public class Client extends RIONode {
 	 * @param line
 	 */
 	public void deleteHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "append");
-		String filename = parseFilename(tokens, "append");
+		int server = parseServer(tokens, "delete");
+		String filename = parseFilename(tokens, "delete");
 		RIOSend(server, Protocol.DELETE, Utility.stringToByteArray(filename));
 	}
 
@@ -197,8 +198,8 @@ public class Client extends RIONode {
 	 * @param line
 	 */
 	public void getHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "append");
-		String filename = parseFilename(tokens, "append");
+		int server = parseServer(tokens, "get");
+		String filename = parseFilename(tokens, "get");
 		RIOSend(server, Protocol.GET, Utility.stringToByteArray(filename));
 	}
 
@@ -209,9 +210,9 @@ public class Client extends RIONode {
 	 * @param line
 	 */
 	public void putHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "append");
-		String filename = parseFilename(tokens, "append");
-		String content = parseAddContent(line, "append", server, filename);
+		int server = parseServer(tokens, "put");
+		String filename = parseFilename(tokens, "put");
+		String content = parseAddContent(line, "put", server, filename);
 		String payload = filename + delimiter + content;
 		RIOSend(server, Protocol.PUT, Utility.stringToByteArray(payload));
 	}
@@ -237,7 +238,7 @@ public class Client extends RIONode {
 	 * @param line
 	 */
 	public void handshakeHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "append");
+		int server = parseServer(tokens, "handshake");
 		String payload = getID().toString();
 		RIOSend(server, Protocol.HANDSHAKE, Utility.stringToByteArray(payload));
 	}
@@ -267,10 +268,10 @@ public class Client extends RIONode {
 		try {
 			server = Integer.parseInt(tokens.nextToken());
 		} catch (NumberFormatException e) {
-			Logger.printError(addr, ErrorCode.InvalidServerAddress, cmd);
+			printError(ErrorCode.InvalidServerAddress, cmd);
 			throw e;
 		} catch (NoSuchElementException e) {
-			Logger.printError(addr, ErrorCode.IncompleteCommand, cmd);
+			printError(ErrorCode.IncompleteCommand, cmd);
 			throw e;
 		}
 		return server;
@@ -288,7 +289,7 @@ public class Client extends RIONode {
 		try {
 			filename = tokens.nextToken();
 		} catch (NoSuchElementException e) {
-			Logger.printError(addr, ErrorCode.IncompleteCommand, cmd);
+			printError(ErrorCode.IncompleteCommand, cmd);
 			throw e;
 		}
 		return filename;
@@ -309,12 +310,16 @@ public class Client extends RIONode {
 				+ filename.length() + 3;
 		if (parsedLength >= line.length()) {
 			// no contents
-			Logger.printError(addr, ErrorCode.IncompleteCommand, cmd, server, filename);
-			// TODO: throw an exception
+			printError(ErrorCode.IncompleteCommand, cmd, server, filename);
+			//TODO: throw an exception
 		}
 
 		return line.substring(parsedLength);
 	}
+
+	/*************************************************
+	 * end onCommand Handler methods / parse helpers
+	 ************************************************/
 
 	/**
 	 * Process a command from user or file. Lowercases the command for further
@@ -328,44 +333,97 @@ public class Client extends RIONode {
 		try {
 			cmd = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
-			Logger.printError(addr, ErrorCode.InvalidCommand, "");
+			printError(ErrorCode.InvalidCommand, "");
 			return;
 		}
 
 		// Dynamically call <cmd>Command, passing off the tokenizer and the full
 		// command string
 		try {
-			Class[] paramTypes = { StringTokenizer.class, String.class };
+			Class<?>[] paramTypes = { StringTokenizer.class, String.class };
 			Method handler = this.getClass().getMethod(cmd + "Handler",
 					paramTypes);
 			Object[] args = { tokens, line };
 			handler.invoke(this, args);
 		} catch (NoSuchMethodException e) {
-			Logger.printError(addr, ErrorCode.InvalidCommand, cmd);
+			printError(ErrorCode.InvalidCommand, cmd);
 		} catch (IllegalArgumentException e) {
-			Logger.printError(addr, ErrorCode.DynamicCommandError, cmd);
+			printError(ErrorCode.DynamicCommandError, cmd);
 		} catch (IllegalAccessException e) {
-			Logger.printError(addr, ErrorCode.DynamicCommandError, cmd);
+			printError(ErrorCode.DynamicCommandError, cmd);
 		} catch (InvocationTargetException e) {
-			Logger.printError(addr, ErrorCode.DynamicCommandError, cmd);
+			printError(ErrorCode.DynamicCommandError, cmd);
 		}
 	}
 
-	/**
-	 * Extends onReceive for extra logging. Currently turned off.
-	 */
-	@Override
-	public void onReceive(Integer from, int protocol, byte[] msg) {
-		/*
-		 * if (verbose) { // feedback for the console String msgString =
-		 * Utility.byteArrayToString(msg); printVerbose("RECEIVED Protocol: " +
-		 * Protocol.protocolToString(protocol) + " With Arguments: " + msgString
-		 * + " From Node: " + from); }//
-		 */
+	/*************************************************
+	 * begin logger wrappers
+	 ************************************************/
 
-		super.onReceive(from, protocol, msg);
+	/**
+	 * Prepend the node address and then call Logger.verbose.
+	 */
+	public void printVerbose(String msg, boolean frame) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append(msg);
+		Logger.verbose(sb.toString(), frame);
 	}
 
+	/**
+	 * Stub for printVerbose that doesn't print a frame.
+	 */
+	public void printVerbose(String msg) {
+		printVerbose(msg, false);
+	}
+
+	public void printInfo(String msg) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append(msg);
+		Logger.info(sb.toString());
+	}
+
+	/**
+	 * Convenience method for printing errors
+	 */
+	public void printError(int error, String command, int server,
+			String filename) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append(" ");
+		appendError(sb, command);
+		sb.append(" on server ");
+		sb.append(server);
+		sb.append(", file ");
+		sb.append(filename);
+		Logger.error(sb.toString());
+	}
+
+	/**
+	 * Stub for printError for when less information is available
+	 * 
+	 * @param error
+	 * @param command
+	 */
+	public void printError(int error, String command) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append(" ");
+		appendError(sb, command);
+		Logger.error(sb.toString());
+	}
+
+	private StringBuilder appendError(StringBuilder sb, String command) {
+		sb.append("Error: ");
+		sb.append(command);
+		sb.append(" returned error code ");
+		return sb;
+	}
+
+	/*************************************************
+	 * end logger wrappers
+	 ************************************************/
+
+	/*************************************************
+	 * begin FS methods
+	 ************************************************/
 
 	/**
 	 * Creates a file on the local filesystem
@@ -374,10 +432,12 @@ public class Client extends RIONode {
 	 *            the file to create
 	 */
 	public void createFile(int from, String fileName) {
-		Logger.write(addr, "attempting to CREATE file: ");
+
+		printVerbose("attempting to CREATE file: " + fileName);
+
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
-			Logger.printError(addr, ErrorCode.FileAlreadyExists, "create", addr, fileName);
+			printError(ErrorCode.FileAlreadyExists, "create", addr, fileName);
 			sendResponse(from, "create", false);
 			return;
 		}
@@ -388,9 +448,7 @@ public class Client extends RIONode {
 				PersistentStorageWriter writer = getWriter(fileName, false);
 				writer.close();
 			} catch (IOException e) {
-				// TODO: use printError?
-				System.err.println(e.getMessage());
-				System.err.println(e.getStackTrace());
+				Logger.error(e);
 			}
 		}
 		sendResponse(from, "create", true);
@@ -404,11 +462,12 @@ public class Client extends RIONode {
 	 *            the file name to delete
 	 */
 	public void deleteFile(int from, String fileName) {
-		
-		Logger.write(addr, "attempting to DELETE file: " + fileName);
+
+		printVerbose("attempting to DELETE file: " + fileName);
+
 		// check if the file even exists
 		if (!Utility.fileExists(this, fileName)) {
-			Logger.printError(addr, ErrorCode.FileDoesNotExist, "delete", addr, fileName);
+			printError(ErrorCode.FileDoesNotExist, "delete", addr, fileName);
 			if (from != this.addr)
 				sendResponse(from, "delete", false);
 			return;
@@ -419,9 +478,7 @@ public class Client extends RIONode {
 				writer.delete();
 				writer.close();
 			} catch (IOException e) {
-				// TODO: use printError?
-				System.err.println(e.getMessage());
-				e.printStackTrace();
+				Logger.error(e);
 			}
 		}
 		if (from != this.addr)
@@ -435,12 +492,13 @@ public class Client extends RIONode {
 	 *            the filename to send
 	 */
 	public void getFile(String fileName, int from) {
-		
-		Logger.write(addr, "attempting to READ/GET file: " + fileName
-					+ " for Node: " + from);
+
+		printVerbose("attempting to READ/GET file: " + fileName + " for Node: "
+				+ from);
+
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
-			Logger.printError(addr, ErrorCode.FileDoesNotExist, "get", addr, fileName);
+			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
 			sendResponse(from, "get", false);
 			return;
 		}
@@ -464,7 +522,7 @@ public class Client extends RIONode {
 			// send the payload
 			byte[] payload = Utility.stringToByteArray(sendMsg);
 			RIOLayer.RIOSend(from, Protocol.DATA, payload);
-			Logger.write(addr, "sending contents of file: " + fileName + " to Node: "
+			printVerbose("sending contents of file: " + fileName + " to Node: "
 					+ from);
 
 		}
@@ -481,15 +539,16 @@ public class Client extends RIONode {
 	 */
 	public void writeFile(int from, String fileName, String contents,
 			int protocol) {
-		
-		Logger.write(addr, "attempting to PUT/APPEND File: " + fileName
-					+ " with Contents: " + contents);
+
+		printVerbose("attempting to PUT/APPEND File: " + fileName
+				+ " with Contents: " + contents);
+
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
 			if (protocol == Protocol.PUT)
-				Logger.printError(addr, ErrorCode.FileDoesNotExist, "put", addr, fileName);
+				printError(ErrorCode.FileDoesNotExist, "put", addr, fileName);
 			else
-				Logger.printError(addr, ErrorCode.FileDoesNotExist, "append", addr, fileName);
+				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
 			sendResponse(from, Protocol.protocolToString(protocol), false);
 			return;
 		} else {
@@ -521,6 +580,9 @@ public class Client extends RIONode {
 	}
 
 	/**
+	 * Used to temporarily save a file that could be lost in a crash since
+	 * getWriter deletes a file it doesn't open for appending.
+	 * 
 	 * @param fileName
 	 * @throws FileNotFoundException
 	 * @throws IOException
@@ -538,13 +600,19 @@ public class Client extends RIONode {
 		temp.write(fileName + "\n" + oldString);
 	}
 
+	/*************************************************
+	 * end FS methods
+	 ************************************************/
+
 	/**
 	 * Prints the file received from the get command. Also used to print
 	 * success/failure responses returned from the server.
 	 */
 	public void receiveData(String cmdOrFileName, String contents) {
+		// TODO: eventually we'll probably want to stop using this for
+		// success/failure responses, moving each to their own protocol types
 		String output = cmdOrFileName + " received with contents: " + contents;
-		Logger.write(addr, output);
+		printVerbose(output);
 	}
 
 	/**
@@ -558,7 +626,7 @@ public class Client extends RIONode {
 	 *            The message that was received
 	 */
 	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
-		Logger.write(addr, "reading packet");
+		printVerbose("reading packet");
 
 		String msgString = Utility.byteArrayToString(msg);
 
@@ -579,7 +647,7 @@ public class Client extends RIONode {
 			decideParseOrAppend(from, protocol, msgString);
 			break;
 		case Protocol.NOOP:
-			Logger.write(addr, "noop");
+			printVerbose("noop");
 			break;
 		case Protocol.IC:
 			receiveIC(from, msgString);
@@ -587,6 +655,8 @@ public class Client extends RIONode {
 		case Protocol.IV:
 			receiveIV(msgString);
 			break;
+		// TODO: default: throw an exception
+
 		}
 
 		// TODO: implement {W,R}{D,Q,F,C}
@@ -598,33 +668,31 @@ public class Client extends RIONode {
 
 	/**
 	 * 
-	 * @param from The node this IC was received from.
-	 * @param msgString Should be the file name. 
-	 * Throws an error if we were not waiting for an IC from this node for this file
+	 * @param from
+	 *            The node this IC was received from.
+	 * @param msgString
+	 *            Should be the file name. Throws an error if we were not
+	 *            waiting for an IC from this node for this file
 	 */
 	private void receiveIC(Integer from, String msgString) {
-		// TODO: Maybe different messages for the first two vs. the last scenario 
+		// TODO: Maybe different messages for the first two vs. the last
+		// scenario
 		// (node is manager but not expecting IC from this node for this file)?
-		if (!pendingICs.containsKey(msgString) || !isManager || !pendingICs.get(msgString).contains(from))
-		{
+		if (!pendingICs.containsKey(msgString) || !isManager
+				|| !pendingICs.get(msgString).contains(from)) {
 			sendResponse(from, Protocol.protocolToString(Protocol.ERROR), false);
-			Logger.printError(addr, ErrorCode.InvalidCommand, "IC: " + msgString);
-		}
-		else
-		{
+			Logger.error(ErrorCode.InvalidCommand, "IC: " + msgString);
+		} else {
 			pendingICs.get(msgString).remove(from);
 			// TODO: Check if pendingICs is empty now, and decide what to do?
 		}
 	}
-	
-	private void receiveIV(String msgString)
-	{
+
+	private void receiveIV(String msgString) {
 		// If we're the manager and we received and IV, something bad happened
-		if (isManager){
-			Logger.printError(addr, ErrorCode.InvalidCommand, "IV: " + msgString);
-		}
-		else
-		{
+		if (isManager) {
+			Logger.error(ErrorCode.InvalidCommand, "IV: " + msgString);
+		} else {
 			cacheStatus.put(msgString, CacheStatuses.Invalid);
 		}
 	}
@@ -669,12 +737,7 @@ public class Client extends RIONode {
 
 		byte[] payload = Utility.stringToByteArray(sendMsg);
 		RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
-		Logger.write(addr, "sending response: " + protocol + " status: "
+		printVerbose("sending response: " + protocol + " status: "
 				+ (successful ? "successful" : "not successful"));
-	}
-
-	@Override
-	public String toString() {
-		return RIOLayer.toString();
 	}
 }

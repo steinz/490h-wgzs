@@ -62,8 +62,7 @@ class InChannel {
 		return "last delivered: " + lastSeqNumDelivered + ", outstanding: " + outOfOrderMsgs.size();
 	}
 	
-	public void printSeqNumDebug() {
-		Logger.write(lastSeqNumDelivered + "");
-		System.out.println(lastSeqNumDelivered);
+	public int seqNumDebug() {
+        return lastSeqNumDelivered;
 	}
 }

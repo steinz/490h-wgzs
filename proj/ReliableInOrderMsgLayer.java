@@ -3,8 +3,11 @@
  * @author wayger, steinz
  */
 
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map.Entry;
 import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -58,11 +61,18 @@ public class ReliableInOrderMsgLayer {
 			// ack the packet immediately, then deal with handshakes, if not a
 			// handshake or a packet from an old session, pass it along
 
-		// at-most-once semantics
-		Logger.write(n.addr, " sending ACK " + riopkt.getSeqNum() + " to " + from);
-		byte[] seqNumByteArray = Utility.stringToByteArray(""
-				+ riopkt.getSeqNum());
-		n.send(from, Protocol.ACK, seqNumByteArray);
+			// at-most-once semantics
+			StringBuilder sb = n.appendNodeAddress();
+			sb.append(" sending ACK ");
+			sb.append(riopkt.getSeqNum());
+			sb.append(" to ");
+			sb.append(from);
+			Logger.verbose(sb.toString());
+			
+			// "" + <int> is ugly... thanks Java.
+			byte[] seqNumByteArray = Utility.stringToByteArray("" + riopkt.getSeqNum());
+			n.send(from, Protocol.ACK, seqNumByteArray);
+
 			// check if UUID is what we think it is.
 			if (!(riopkt.getUUID().equals(n.getID()))) {
 				// if it's not, we should initiate a handshake immediately and
@@ -87,18 +97,24 @@ public class ReliableInOrderMsgLayer {
 				inConnections.put(from, in);
 			}
 
-		if (riopkt.getUUID().equals(n.getID())
-				&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
-			Logger.write(n.addr, "got packet protocol: " + riopkt.getProtocol());
-			LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
+			if (riopkt.getUUID().equals(n.getID())
+					&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
+				sb = n.appendNodeAddress();
+				sb.append("got packet protocol ");
+				sb.append(riopkt.getProtocol());
+				Logger.verbose(sb.toString());
+
+				LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
+
 				for (RIOPacket p : toBeDelivered) {
 					// deliver in-order the next sequence of packets
 					n.onRIOReceive(from, p.getProtocol(), p.getPayload());
 				}
 			}
 		} catch (PacketPackException e) {
-			// TODO: Factor out to logger
-			System.err.println("Packet unpack failed");
+			Logger.error(e);
+		} catch (IOException e) {
+			Logger.error(e);
 		}
 	}
 
@@ -108,8 +124,12 @@ public class ReliableInOrderMsgLayer {
 				.getPayload()));
 		n.addrToSessionIDMap.put(from, receivedID);
 
-		Logger.write(n.addr," received HANDSHAKE, mapping "
-				+ from + " to " + receivedID);
+		StringBuilder sb = n.appendNodeAddress();
+		sb.append(" received HANDSHAKE, mapping ");
+		sb.append(from);
+		sb.append(" to ");
+		sb.append(receivedID);
+		Logger.info(sb.toString());
 
 		/*
 		 * a handshake also means that whoever sent us this handshake probably
@@ -186,9 +206,28 @@ public class ReliableInOrderMsgLayer {
 	}
 
 	public void printSeqStateDebug() {
-		Logger.printSeqStateDebug(n.addr, inConnections, outConnections);
+		StringBuilder sb = n.appendNodeAddress();
+		sb.append("sequence state");
 		
+		Iterator<Entry<Integer, InChannel>> inIter = inConnections.entrySet()
+				.iterator();
+		while (inIter.hasNext()) {
+			Entry<Integer, InChannel> entry = inIter.next();
+			sb.append("\nIn connection to ");
+			sb.append(entry.getKey());
+			sb.append(" last seqNumDelivered = ");
+			sb.append(entry.getValue().seqNumDebug());
+		}
+		Iterator<Entry<Integer, OutChannel>> outIter = outConnections
+				.entrySet().iterator();
+		while (outIter.hasNext()) {
+			Entry<Integer, OutChannel> entry = outIter.next();
+			sb.append("\nOut connection to ");
+			sb.append(entry.getKey());
+			sb.append(" lastSeqNumSent = ");
+			sb.append(entry.getValue().seqNumDebug());
+		}
+		
+		Logger.info(sb.toString());
 	}
-	
-
 }

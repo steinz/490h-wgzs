@@ -7,7 +7,7 @@
  * Put all error codes in here
  */
 public class ErrorCode {
-	// TODO: Should these be an enum?
+	// TODO: @Discuss Should these be an enum?
 
 	public static final int UnknownError = -1;
 	
