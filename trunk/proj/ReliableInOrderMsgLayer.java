@@ -4,9 +4,7 @@
  */
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.Map.Entry;
 import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -60,14 +58,11 @@ public class ReliableInOrderMsgLayer {
 			// ack the packet immediately, then deal with handshakes, if not a
 			// handshake or a packet from an old session, pass it along
 
-			// at-most-once semantics
-			// TODO: Factor out to logger
-			System.out.println("Node " + n.addr + " sending ACK "
-					+ riopkt.getSeqNum() + " to " + from);
-			byte[] seqNumByteArray = Utility.stringToByteArray(""
-					+ riopkt.getSeqNum());
-			n.send(from, Protocol.ACK, seqNumByteArray);
-
+		// at-most-once semantics
+		Logger.write(n.addr, " sending ACK " + riopkt.getSeqNum() + " to " + from);
+		byte[] seqNumByteArray = Utility.stringToByteArray(""
+				+ riopkt.getSeqNum());
+		n.send(from, Protocol.ACK, seqNumByteArray);
 			// check if UUID is what we think it is.
 			if (!(riopkt.getUUID().equals(n.getID()))) {
 				// if it's not, we should initiate a handshake immediately and
@@ -92,13 +87,10 @@ public class ReliableInOrderMsgLayer {
 				inConnections.put(from, in);
 			}
 
-			if (riopkt.getUUID().equals(n.getID())
-					&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
-				// TODO: Factor out to logger
-				System.out.println("Node " + n.addr + " got packet protocol: "
-						+ riopkt.getProtocol());
-				LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
-
+		if (riopkt.getUUID().equals(n.getID())
+				&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
+			Logger.write(n.addr, "got packet protocol: " + riopkt.getProtocol());
+			LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
 				for (RIOPacket p : toBeDelivered) {
 					// deliver in-order the next sequence of packets
 					n.onRIOReceive(from, p.getProtocol(), p.getPayload());
@@ -116,8 +108,7 @@ public class ReliableInOrderMsgLayer {
 				.getPayload()));
 		n.addrToSessionIDMap.put(from, receivedID);
 
-		// TODO: Factor out to logger
-		System.out.println("Node " + n.addr + " received HANDSHAKE, mapping "
+		Logger.write(n.addr," received HANDSHAKE, mapping "
 				+ from + " to " + receivedID);
 
 		/*
@@ -195,23 +186,9 @@ public class ReliableInOrderMsgLayer {
 	}
 
 	public void printSeqStateDebug() {
-		// TODO: Factor out to logger
-		System.out.println("Node " + n.addr + " sequence state");
-		Iterator<Entry<Integer, InChannel>> inIter = inConnections.entrySet()
-				.iterator();
-		while (inIter.hasNext()) {
-			Entry<Integer, InChannel> entry = inIter.next();
-			System.out.print("In connection to " + entry.getKey()
-					+ " lastSeqNumDelivered = ");
-			entry.getValue().printSeqNumDebug();
-		}
-		Iterator<Entry<Integer, OutChannel>> outIter = outConnections
-				.entrySet().iterator();
-		while (outIter.hasNext()) {
-			Entry<Integer, OutChannel> entry = outIter.next();
-			System.out.print("Out connection to " + entry.getKey()
-					+ " lastSeqNumSent = ");
-			entry.getValue().printSeqNumDebug();
-		}
+		Logger.printSeqStateDebug(n.addr, inConnections, outConnections);
+		
 	}
+	
+
 }
