@@ -47,15 +47,6 @@ public class Client extends RIONode {
 	private final String delimiter = " ";
 
 	/**
-<<<<<<< .mine
-=======
-	 * Verbose flag for debugging
-	 */
-	// TODO: Move to a more globaly accessible place - probably a logger class
-	private static final boolean verbose = true;
-
-	/**
->>>>>>> .r76
 	 * Status of cached files on disk. Keys are filenames.
 	 */
 	private Map<String, CacheStatuses> cacheStatus;
