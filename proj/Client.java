@@ -51,13 +51,12 @@ public class Client extends RIONode {
 	 */
 	// TODO: Move to a more globaly accessible place - probably a logger class
 	private static final boolean verbose = true;
-	
+
 	/**
 	 * Status of cached files on disk. Keys are filenames.
 	 */
 	private Map<String, CacheStatuses> cacheStatus;
 
-	
 	/**
 	 * Whether or not this node is the manager for project 2.
 	 */
@@ -81,7 +80,7 @@ public class Client extends RIONode {
 	 * List of nodes the manager is waiting for ICs from.
 	 */
 	private Map<String, List<Integer>> pendingICs;
-	
+
 	// TODO: Add queue for pending requests of locked files. I think we need to
 	// add a queuedFileRequest class to keep in here or something if we want to
 	// queue requests we can't satisfy right away.
@@ -169,8 +168,8 @@ public class Client extends RIONode {
 			this.clientCacheStatus = new HashMap<String, CacheStatuses>();
 			this.pendingICs = new HashMap<String, List<Integer>>();
 		}
-		
-		//TODO: Log this
+
+		// TODO: Log this
 	}
 
 	/**
@@ -258,7 +257,7 @@ public class Client extends RIONode {
 	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = parseServer(tokens, "noop");
 		// TODO: see if this works sending the empty string instead
-		String payload = " ";
+		String payload = "";
 		RIOSend(server, Protocol.NOOP, Utility.stringToByteArray(payload));
 
 	}
@@ -436,9 +435,9 @@ public class Client extends RIONode {
 		super.onReceive(from, protocol, msg);
 	}
 
-	// TODO: Maybe it would be nice if we wrote a class that handled all disk
-	// reads/writes, basically a wrapper for persistentstoragereader/writer to
-	// make this file smaller.
+	// TODO: @Wayne Maybe it would be nice if we wrote a class that handled all
+	// disk reads/writes, basically a wrapper for persistentstoragereader/writer
+	// to make this file smaller.
 	/**
 	 * Creates a file on the local filesystem
 	 * 

@@ -38,7 +38,7 @@ public class Protocol {
 	public static final int IC = 18;
 
 	// Error Type
-	// TODO: Actually send ERROR packets on errors instead of Data packets with
+	// TODO: Actually send ERROR packets on errors instead of DATA packets with
 	// error message strings.
 	public static final int ERROR = 127;
 

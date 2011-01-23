@@ -51,55 +51,62 @@ public class ReliableInOrderMsgLayer {
 	 *            The Packet of data
 	 */
 	public void RIODataReceive(int from, byte[] msg) {
-		RIOPacket riopkt = RIOPacket.unpack(msg);
+		try {
+			RIOPacket riopkt = RIOPacket.unpack(msg);
 
-		if (riopkt.getProtocol() == Protocol.HANDSHAKE) {
-			riopkt = mapUUID(from, riopkt);
-		}
-		// ack the packet immediately, then deal with handshakes, if not a
-		// handshake or a packet from an old session, pass it along
-
-		// at-most-once semantics
-		// TODO: Factor out to logger
-		System.out.println("Node " + n.addr + " sending ACK "
-				+ riopkt.getSeqNum() + " to " + from);
-		byte[] seqNumByteArray = Utility.stringToByteArray(""
-				+ riopkt.getSeqNum());
-		n.send(from, Protocol.ACK, seqNumByteArray);
-
-		// check if UUID is what we think it is.
-		if (!(riopkt.getUUID().equals(n.getID()))) {
-			// if it's not, we should initiate a handshake immediately and make
-			// a new channel to clear our cache of bad packets from an old
-			// session
-			RIOSend(from, Protocol.HANDSHAKE,
-					Utility.stringToByteArray(n.getID().toString()));
-
-			// Don't send failure to client - they've crashed since they sent
-			// this packet
-
-			inConnections.put(from, new InChannel());
-			if (outConnections.containsKey(from))
-				outConnections.get(from).reset();
-		}
-
-		InChannel in = inConnections.get(from);
-		if (in == null) {
-			in = new InChannel();
-			inConnections.put(from, in);
-		}
-
-		if (riopkt.getUUID().equals(n.getID())
-				&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
-			// TODO: Factor out to logger
-			System.out.println("Node " + n.addr + " got packet protocol: "
-					+ riopkt.getProtocol());
-			LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
-
-			for (RIOPacket p : toBeDelivered) {
-				// deliver in-order the next sequence of packets
-				n.onRIOReceive(from, p.getProtocol(), p.getPayload());
+			if (riopkt.getProtocol() == Protocol.HANDSHAKE) {
+				riopkt = mapUUID(from, riopkt);
 			}
+			// ack the packet immediately, then deal with handshakes, if not a
+			// handshake or a packet from an old session, pass it along
+
+			// at-most-once semantics
+			// TODO: Factor out to logger
+			System.out.println("Node " + n.addr + " sending ACK "
+					+ riopkt.getSeqNum() + " to " + from);
+			byte[] seqNumByteArray = Utility.stringToByteArray(""
+					+ riopkt.getSeqNum());
+			n.send(from, Protocol.ACK, seqNumByteArray);
+
+			// check if UUID is what we think it is.
+			if (!(riopkt.getUUID().equals(n.getID()))) {
+				// if it's not, we should initiate a handshake immediately and
+				// make
+				// a new channel to clear our cache of bad packets from an old
+				// session
+				RIOSend(from, Protocol.HANDSHAKE,
+						Utility.stringToByteArray(n.getID().toString()));
+
+				// Don't send failure to client - they've crashed since they
+				// sent
+				// this packet
+
+				inConnections.put(from, new InChannel());
+				if (outConnections.containsKey(from))
+					outConnections.get(from).reset();
+			}
+
+			InChannel in = inConnections.get(from);
+			if (in == null) {
+				in = new InChannel();
+				inConnections.put(from, in);
+			}
+
+			if (riopkt.getUUID().equals(n.getID())
+					&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
+				// TODO: Factor out to logger
+				System.out.println("Node " + n.addr + " got packet protocol: "
+						+ riopkt.getProtocol());
+				LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
+
+				for (RIOPacket p : toBeDelivered) {
+					// deliver in-order the next sequence of packets
+					n.onRIOReceive(from, p.getProtocol(), p.getPayload());
+				}
+			}
+		} catch (PacketPackException e) {
+			// TODO: Factor out to logger
+			System.err.println("Packet unpack failed");
 		}
 	}
 

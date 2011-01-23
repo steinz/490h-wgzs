@@ -144,8 +144,9 @@ public class RIOPacket {
 	 *            String representation of the transport packet
 	 * @return RIOPacket object created or null if the byte[] representation was
 	 *         corrupted
+	 * @throws Exception 
 	 */
-	public static RIOPacket unpack(byte[] packet) {
+	public static RIOPacket unpack(byte[] packet) throws PacketPackException {
 		try {
 			DataInputStream in = new DataInputStream(new ByteArrayInputStream(
 					packet));
@@ -159,10 +160,14 @@ public class RIOPacket {
 			int seqNum = in.readInt();
 
 			byte[] payload = new byte[packet.length - HEADER_SIZE];
+
 			int bytesRead = in.read(payload, 0, payload.length);
 
-			if (bytesRead != payload.length) {
-				return null;
+			// If in is at EOF bytesRead will be -1 instead of 0, but that's
+			// expected.
+			if (bytesRead != payload.length
+					&& !(payload.length == 0 && bytesRead == -1)) {
+				throw new PacketPackException();
 			}
 
 			return new RIOPacket(protocol, seqNum, payload, name);
