@@ -139,6 +139,9 @@ public class Client extends RIONode {
 	 * begin onCommand Handler methods / parse helpers
 	 ************************************************/
 
+	// TODO: Log sends. We kind of entirely re-wrote logging at this point...
+	// but I didn't like theirs enough to not do it...
+
 	/**
 	 * Prints expected numbers for in and out channels. Likely to change as new
 	 * problems arise.
@@ -224,6 +227,8 @@ public class Client extends RIONode {
 	 * @param line
 	 */
 	public void appendHandler(StringTokenizer tokens, String line) {
+		// TODO: I think I found a framework bug - "append 1 test  world" is
+		// losing the extra space
 		int server = parseServer(tokens, "append");
 		String filename = parseFilename(tokens, "append");
 		String content = parseAddContent(line, "append", server, filename);
@@ -311,7 +316,7 @@ public class Client extends RIONode {
 		if (parsedLength >= line.length()) {
 			// no contents
 			printError(ErrorCode.IncompleteCommand, cmd, server, filename);
-			//TODO: throw an exception
+			// TODO: throw an exception
 		}
 
 		return line.substring(parsedLength);
