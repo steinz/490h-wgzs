@@ -63,7 +63,7 @@ class InChannel {
 	}
 	
 	public void printSeqNumDebug() {
-            //TODO: Factor out to logger
+		Logger.write(lastSeqNumDelivered + "");
 		System.out.println(lastSeqNumDelivered);
 	}
 }

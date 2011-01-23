@@ -81,8 +81,7 @@ class OutChannel {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
 
-			// TODO: Factor out to logger
-			System.out.println("Node " + n.addr + " Error: "
+			Logger.write(n.addr, " Error: "
 					+ Protocol.protocolToString(packet.getProtocol())
 					+ " on server " + n.addr + " returned error code"
 					+ ErrorCode.lookup(ErrorCode.Timeout));
@@ -129,9 +128,7 @@ class OutChannel {
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			RIOPacket riopkt = unACKedPackets.get(seqNum);
 
-			// TODO: Factor out to logger class
-			System.out.println("Node " + n.addr + ": resending packet "
-					+ riopkt.getSeqNum());
+			Logger.write(n.addr, ": resending packet " + riopkt.getSeqNum());
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
 					destAddr, seqNum }), ReliableInOrderMsgLayer.TIMEOUT);
@@ -141,7 +138,6 @@ class OutChannel {
 	}
 
 	public void printSeqNumDebug() {
-		// TODO: Factor out to logger
-		System.out.println(lastSeqNumSent);
+		Logger.write(lastSeqNumSent + "");
 	}
 }

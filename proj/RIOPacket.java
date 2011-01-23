@@ -113,7 +113,7 @@ public class RIOPacket {
 			DataOutputStream out = new DataOutputStream(byteStream);
 
 			if (payload.length + HEADER_SIZE > MAX_PACKET_SIZE) {
-				// TODO: Factor out to logger
+				Logger.write("Payload too large for one packet!");
 				System.err.println("Payload too large for one packet!");
 				// TODO: Throw an exception to inform the Client of the faliure
 			}

@@ -27,7 +27,13 @@ public class RIOTester extends RIONode {
 	
 	@Override
 	public String packetBytesToString(byte[] bytes) {
-		RIOPacket packet = RIOPacket.unpack(bytes);
+		RIOPacket packet = null;
+		try {
+			packet = RIOPacket.unpack(bytes);
+		} catch (PacketPackException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		if (packet == null) {
 			return super.packetBytesToString(bytes);
 		}
