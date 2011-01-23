@@ -581,13 +581,52 @@ public class Client extends RIONode {
 		case Protocol.NOOP:
 			Logger.write(addr, "noop");
 			break;
+		case Protocol.IC:
+			receiveIC(from, msgString);
+			break;
+		case Protocol.IV:
+			receiveIV(msgString);
+			break;
 		}
 
-		// TODO: implement {W,R}{D,Q,F,C} and I{C,V} handling
+		// TODO: implement {W,R}{D,Q,F,C}
 		// Only server receives: {R,W}{Q,C}, IC
 		// Only client receives: {R,W}F, IV
 		// Both ways: {W,R}D
 
+	}
+
+	/**
+	 * 
+	 * @param from The node this IC was received from.
+	 * @param msgString Should be the file name. 
+	 * Throws an error if we were not waiting for an IC from this node for this file
+	 */
+	private void receiveIC(Integer from, String msgString) {
+		// TODO: Maybe different messages for the first two vs. the last scenario 
+		// (node is manager but not expecting IC from this node for this file)?
+		if (!pendingICs.containsKey(msgString) || !isManager || !pendingICs.get(msgString).contains(from))
+		{
+			sendResponse(from, Protocol.protocolToString(Protocol.ERROR), false);
+			Logger.printError(addr, ErrorCode.InvalidCommand, "IC: " + msgString);
+		}
+		else
+		{
+			pendingICs.get(msgString).remove(from);
+			// TODO: Check if pendingICs is empty now, and decide what to do?
+		}
+	}
+	
+	private void receiveIV(String msgString)
+	{
+		// If we're the manager and we received and IV, something bad happened
+		if (isManager){
+			Logger.printError(addr, ErrorCode.InvalidCommand, "IV: " + msgString);
+		}
+		else
+		{
+			cacheStatus.put(msgString, CacheStatuses.Invalid);
+		}
 	}
 
 	/**
