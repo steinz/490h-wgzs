@@ -88,6 +88,7 @@ public class Client extends RIONode {
 		super();
 		this.cacheStatus = new HashMap<String, CacheStatuses>();
 		this.isManager = false;
+		Logger.eraseLog(); // Wipe the server log
 	}
 
 	/**
@@ -249,7 +250,6 @@ public class Client extends RIONode {
 	 */
 	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = parseServer(tokens, "noop");
-		// TODO: see if this works sending the empty string instead
 		String payload = "";
 		RIOSend(server, Protocol.NOOP, Utility.stringToByteArray(payload));
 
