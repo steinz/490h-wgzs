@@ -15,8 +15,24 @@ import java.util.Map.Entry;
 public class Logger {
 
 	private static final String LOG_FILE = "server_log.txt";
-    private static boolean append = false;
     private static boolean verbose = true; // whether or not to even do anything at all
+    
+    
+    /**
+     * A quick and dirty method for wiping the server log at the beginning
+     */
+    public static void eraseLog()
+    {
+    	BufferedWriter r = null;
+    	try {
+			r = new BufferedWriter(new FileWriter(LOG_FILE, false));
+			r.write("");
+			r.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+    }
     
 	/**
 	 * Prints an error message
@@ -112,7 +128,7 @@ public class Logger {
     		if (!outFile.exists())
     			outFile.createNewFile();
     		
-    	    r = new BufferedWriter(new FileWriter(LOG_FILE, append));
+    	    r = new BufferedWriter(new FileWriter(LOG_FILE, true));
 			
     	    // Append a frame if necessary
     	    if (frame) 
