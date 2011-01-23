@@ -63,22 +63,22 @@ public class ReliableInOrderMsgLayer {
 
 			// at-most-once semantics
 			StringBuilder sb = n.appendNodeAddress();
-			sb.append(" sending ACK ");
+			sb.append("sending ACK ");
 			sb.append(riopkt.getSeqNum());
 			sb.append(" to ");
 			sb.append(from);
 			Logger.verbose(sb.toString());
-			
+
 			// "" + <int> is ugly... thanks Java.
-			byte[] seqNumByteArray = Utility.stringToByteArray("" + riopkt.getSeqNum());
+			byte[] seqNumByteArray = Utility.stringToByteArray(""
+					+ riopkt.getSeqNum());
 			n.send(from, Protocol.ACK, seqNumByteArray);
 
 			// check if UUID is what we think it is.
 			if (!(riopkt.getUUID().equals(n.getID()))) {
 				// if it's not, we should initiate a handshake immediately and
-				// make
-				// a new channel to clear our cache of bad packets from an old
-				// session
+				// makea new channel to clear our cache of bad packets from an
+				// old session
 				RIOSend(from, Protocol.HANDSHAKE,
 						Utility.stringToByteArray(n.getID().toString()));
 
@@ -125,7 +125,7 @@ public class ReliableInOrderMsgLayer {
 		n.addrToSessionIDMap.put(from, receivedID);
 
 		StringBuilder sb = n.appendNodeAddress();
-		sb.append(" received HANDSHAKE, mapping ");
+		sb.append("received HANDSHAKE, mapping ");
 		sb.append(from);
 		sb.append(" to ");
 		sb.append(receivedID);
@@ -208,7 +208,7 @@ public class ReliableInOrderMsgLayer {
 	public void printSeqStateDebug() {
 		StringBuilder sb = n.appendNodeAddress();
 		sb.append("sequence state");
-		
+
 		Iterator<Entry<Integer, InChannel>> inIter = inConnections.entrySet()
 				.iterator();
 		while (inIter.hasNext()) {
@@ -227,7 +227,7 @@ public class ReliableInOrderMsgLayer {
 			sb.append(" lastSeqNumSent = ");
 			sb.append(entry.getValue().seqNumDebug());
 		}
-		
+
 		Logger.info(sb.toString());
 	}
 }
