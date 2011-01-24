@@ -991,9 +991,13 @@ public class Client extends RIONode {
 		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
 				.get(filename);
 
+		if (clientStatuses == null)
+			clientStatuses = new HashMap<Integer, CacheStatuses>();
+		
 		Integer rw = null;
-		ArrayList<Integer> ro = new ArrayList<Integer>(); 
-	    for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
+		ArrayList<Integer> ro = new ArrayList<Integer>();
+		
+		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 	         if (entry.getValue().equals(CacheStatuses.ReadWrite)){
 	        	 if (rw != null)
 	        		 Logger.error(ErrorCode.MultipleOwners, "Multiple owners on file: " + filename);
@@ -1007,13 +1011,14 @@ public class Client extends RIONode {
 	     }
 	    if (rw != null) {	// If someone has RW status:
 	    	sendRequest(rw, filename, Protocol.WF);
-			// TODO: In WD, check to see if we were waiting for this file
 			// If so, send the data back to the client waiting 
 	    }
 	    pendingICs.put(filename, ro);
 	    for (Integer i : ro) { // Send invalidate requests to everyone with RO status
 	    	sendRequest(i, filename, Protocol.IV);
 		}
+	    // Else if no one has permissions on this file, send them a WD
+	    sendFile(client, filename, Protocol.WD);
 	}
 
 	/**
