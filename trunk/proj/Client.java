@@ -52,6 +52,48 @@ public class Client extends RIONode {
 	private Map<String, CacheStatuses> cacheStatus;
 
 	/**
+	 * 
+	 */
+	private Map<String, Intent> pendingOperations;
+
+	public static enum intentType {
+		CREATE, DELETE, PUT, APPEND
+	};
+
+	protected class Intent {
+		/**
+		 * What we intend to do later
+		 */
+		protected intentType type;
+
+		/**
+		 * The content to put or append
+		 */
+		protected String content;
+
+		/**
+		 * Create an intent for an op that has no content
+		 * 
+		 * @param type
+		 */
+		public Intent(intentType type) {
+			this.type = type;
+			this.content = null;
+		}
+
+		/**
+		 * Create an intent for an op that has content
+		 * 
+		 * @param type
+		 * @param content
+		 */
+		public Intent(intentType type, String content) {
+			this.type = type;
+			this.content = content;
+		}
+	}
+
+	/**
 	 * Whether or not this node is the manager for project 2.
 	 */
 	private boolean isManager;
@@ -59,8 +101,8 @@ public class Client extends RIONode {
 	/**
 	 * The address of the manager node.
 	 */
-	private int managerIs;
-	
+	private int managerAddr;
+
 	/*************************************************
 	 * begin manager only data structures
 	 ************************************************/
@@ -93,7 +135,7 @@ public class Client extends RIONode {
 		super();
 		this.cacheStatus = new HashMap<String, CacheStatuses>();
 		this.isManager = false;
-		this.managerIs = -1;
+		this.managerAddr = -1;
 		Logger.eraseLog(); // Wipe the server log
 	}
 
@@ -175,11 +217,17 @@ public class Client extends RIONode {
 
 		printInfo("promoted to manager");
 	}
-	
+
+	/**
+	 * Used for project2 to tell a node the address of the manager.
+	 * 
+	 * @param tokens
+	 * @param line
+	 */
 	public void managerisHandler(StringTokenizer tokens, String line) {
 		try {
-			this.managerIs = Integer.parseInt(tokens.nextToken());
-			printInfo("manager is " + this.managerIs);
+			this.managerAddr = Integer.parseInt(tokens.nextToken());
+			printInfo("manager is " + this.managerAddr);
 		} catch (NumberFormatException e) {
 			printError(ErrorCode.InvalidCommand, "manageris");
 		} catch (NoSuchElementException e) {
@@ -188,57 +236,95 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Create RPC
+	 * Get ownership of a file and create it
 	 * 
 	 * @param tokens
 	 * @param line
 	 */
 	public void createHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "create");
 		String filename = parseFilename(tokens, "create");
-		RIOSend(server, Protocol.CREATE, Utility.stringToByteArray(filename));
+
+		if (cacheStatus.containsKey(filename)
+				&& cacheStatus.get(filename) != CacheStatuses.Invalid) {
+			// The file is in my cache as RW or RO so it already exists, throw
+			// an error
+			printError(ErrorCode.FileAlreadyExists, "create", filename);
+		} else {
+			// Request ownership
+			RIOSend(managerAddr, Protocol.WQ,
+					Utility.stringToByteArray(filename));
+			// Remeber that I want to create this file
+			pendingOperations.put(filename, new Intent(intentType.CREATE));
+		}
 	}
 
 	/**
-	 * Delete RPC
+	 * Get ownership of a file and delete it
 	 * 
 	 * @param tokens
 	 * @param line
 	 */
 	public void deleteHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "delete");
 		String filename = parseFilename(tokens, "delete");
-		RIOSend(server, Protocol.DELETE, Utility.stringToByteArray(filename));
+
+		if (cacheStatus.containsKey(filename)
+				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+			// I have ownership
+			deleteFile(filename);
+		} else {
+			RIOSend(managerAddr, Protocol.WQ,
+					Utility.stringToByteArray(filename));
+			pendingOperations.put(filename, new Intent(intentType.DELETE));
+		}
 	}
 
 	/**
-	 * Get RPC
+	 * Get read access for a file and then get its contents
 	 * 
 	 * @param tokens
 	 * @param line
 	 */
 	public void getHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "get");
 		String filename = parseFilename(tokens, "get");
-		RIOSend(server, Protocol.GET, Utility.stringToByteArray(filename));
+
+		if (cacheStatus.containsKey(filename)
+				&& cacheStatus.get(filename) != CacheStatuses.Invalid) {
+			try {
+				getFile(filename);
+			} catch (IOException e) {
+				Logger.error(e);
+			}
+		} else {
+			RIOSend(managerAddr, Protocol.RQ,
+					Utility.stringToByteArray(filename));
+		}
 	}
 
 	/**
-	 * Put RPC
+	 * Get ownership of a file and put to it
 	 * 
 	 * @param tokens
 	 * @param line
 	 */
 	public void putHandler(StringTokenizer tokens, String line) {
-		int server = parseServer(tokens, "put");
 		String filename = parseFilename(tokens, "put");
-		String content = parseAddContent(line, "put", server, filename);
-		String payload = filename + delimiter + content;
-		RIOSend(server, Protocol.PUT, Utility.stringToByteArray(payload));
+		String content = parseAddContent(line, "put", filename);
+
+		if (cacheStatus.containsKey(filename)
+				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+			// I have ownership
+			writeFile(filename, content, Protocol.PUT);
+		} else {
+			// Request ownership
+			RIOSend(managerAddr, Protocol.WQ,
+					Utility.stringToByteArray(filename));
+			pendingOperations
+					.put(filename, new Intent(intentType.PUT, content));
+		}
 	}
 
 	/**
-	 * Append RPC
+	 * Get ownership of a file and append to it
 	 * 
 	 * @param tokens
 	 * @param line
@@ -246,11 +332,19 @@ public class Client extends RIONode {
 	public void appendHandler(StringTokenizer tokens, String line) {
 		// TODO: I think I found a framework bug - "append 1 test  world" is
 		// losing the extra space
-		int server = parseServer(tokens, "append");
 		String filename = parseFilename(tokens, "append");
-		String content = parseAddContent(line, "append", server, filename);
-		String payload = filename + delimiter + content;
-		RIOSend(server, Protocol.APPEND, Utility.stringToByteArray(payload));
+		String content = parseAddContent(line, "append", filename);
+		if (cacheStatus.containsKey(filename)
+				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+			// Have ownership
+			writeFile(filename, content, Protocol.APPEND);
+		} else {
+			// Request ownership
+			RIOSend(managerAddr, Protocol.WQ,
+					Utility.stringToByteArray(filename));
+			pendingOperations.put(filename, new Intent(intentType.APPEND,
+					content));
+		}
 	}
 
 	/**
@@ -325,14 +419,12 @@ public class Client extends RIONode {
 	 * @param cmd
 	 * @return
 	 */
-	protected String parseAddContent(String line, String cmd, int server,
-			String filename) {
+	protected String parseAddContent(String line, String cmd, String filename) {
 
-		int parsedLength = cmd.length() + Integer.toString(server).length()
-				+ filename.length() + 3;
+		int parsedLength = cmd.length() + filename.length() + 2;
 		if (parsedLength >= line.length()) {
 			// no contents
-			printError(ErrorCode.IncompleteCommand, cmd, server, filename);
+			printError(ErrorCode.IncompleteCommand, cmd, -1, filename);
 			// TODO: throw an exception
 		}
 
@@ -419,6 +511,15 @@ public class Client extends RIONode {
 		Logger.error(error, sb.toString());
 	}
 
+	public void printError(int error, String command, String filename) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append(" ");
+		appendError(sb, command);
+		sb.append(" on file ");
+		sb.append(filename);
+		Logger.error(error, sb.toString());
+	}
+
 	/**
 	 * Stub for printError for when less information is available
 	 * 
@@ -477,6 +578,15 @@ public class Client extends RIONode {
 	}
 
 	/**
+	 * Local delete file.
+	 * 
+	 * @param fileName
+	 */
+	public void deleteFile(String fileName) {
+		deleteFile(this.addr, fileName);
+	}
+
+	/**
 	 * Deletes a file from the local file system. Fails and prints an error if
 	 * the file does not exist
 	 * 
@@ -503,8 +613,40 @@ public class Client extends RIONode {
 				Logger.error(e);
 			}
 		}
-		if (from != this.addr)
+		if (from != this.addr) {
 			sendResponse(from, "delete", true);
+		}
+	}
+
+	/**
+	 * Local get file
+	 * 
+	 * @param fileName
+	 * @return
+	 * @throws IOException
+	 */
+	public String getFile(String fileName) throws IOException {
+
+		printVerbose("attempting to READ file: " + fileName);
+
+		// check if the file exists
+		if (!Utility.fileExists(this, fileName)) {
+			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
+			throw new FileNotFoundException();
+		} else {
+			// read and return the file if it does
+			StringBuilder contents = new StringBuilder();
+			String inLine = "";
+			PersistentStorageReader reader = getReader(fileName);
+			while ((inLine = reader.readLine()) != null) {
+				contents.append(inLine);
+				contents.append(System.getProperty("line.separator"));
+			}
+			reader.close();
+			printVerbose("reading contents of file: " + fileName);
+			return contents.toString();
+
+		}
 	}
 
 	/**
@@ -552,14 +694,14 @@ public class Client extends RIONode {
 
 	/**
 	 * Wrapper for writeFile, doesn't send a response
+	 * 
 	 * @param fileName
 	 * @param contents
 	 */
-	public void writeFile(String fileName, String contents, int protocol)
-	{
-		writeFile(-1, fileName, contents, protocol);
+	public void writeFile(String fileName, String contents, int protocol) {
+		writeFile(this.addr, fileName, contents, protocol);
 	}
-	
+
 	/**
 	 * Writes a file to the local filesystem. Fails if the file does not exist
 	 * already
@@ -608,7 +750,10 @@ public class Client extends RIONode {
 				e.printStackTrace();
 			}
 		}
-		sendResponse(from, Protocol.protocolToString(protocol), true);
+
+		if (from != this.addr) {
+			sendResponse(from, Protocol.protocolToString(protocol), true);
+		}
 	}
 
 	/**
@@ -705,47 +850,52 @@ public class Client extends RIONode {
 
 	}
 
-	
 	/*************************************************
 	 * begin manager-only cache coherency functions
 	 ************************************************/
 	/**
-	 * Manager only function
-	 * Changes the status of this client from IV or RW
-	 * @param client The client to change
-	 * @param fileName The filename
+	 * Manager only function Changes the status of this client from IV or RW
+	 * 
+	 * @param client
+	 *            The client to change
+	 * @param fileName
+	 *            The filename
 	 */
-	private void receiveWC(int client, String fileName)
-	{
+	private void receiveWC(int client, String fileName) {
 		updateClientCacheStatus(CacheStatuses.ReadWrite, client, fileName);
 	}
-	
+
 	/**
 	 * Receives an RC and changes this client's status from IV or RW to RO.
-	 * @param client The client to change
-	 * @param fileName The filename
+	 * 
+	 * @param client
+	 *            The client to change
+	 * @param fileName
+	 *            The filename
 	 */
-	private void receiveRC(int client, String fileName)
-	{
+	private void receiveRC(int client, String fileName) {
 		updateClientCacheStatus(CacheStatuses.ReadOnly, client, fileName);
 	}
-	
-	private void updateClientCacheStatus(CacheStatuses val, int client, String fileName)
-	{
+
+	private void updateClientCacheStatus(CacheStatuses val, int client,
+			String fileName) {
 		if (!isManager) {
-			Logger.error(ErrorCode.InvalidCommand, "Receieved confirm but not manager");
+			Logger.error(ErrorCode.InvalidCommand,
+					"Receieved confirm but not manager");
 			return;
 		}
-		
+
 		if (!clientCacheStatus.containsKey(fileName))
-			clientCacheStatus.put(fileName, new HashMap<Integer, CacheStatuses>());
-		
+			clientCacheStatus.put(fileName,
+					new HashMap<Integer, CacheStatuses>());
+
 		// Update the client status and put it back in the cache status map
-		HashMap<Integer, CacheStatuses> clientMap = (HashMap<Integer, CacheStatuses>) clientCacheStatus.get(fileName);
+		HashMap<Integer, CacheStatuses> clientMap = (HashMap<Integer, CacheStatuses>) clientCacheStatus
+				.get(fileName);
 		clientMap.put(client, val);
 		clientCacheStatus.put(fileName, clientMap);
 	}
-	
+
 	/**
 	 * 
 	 * @param from
@@ -771,7 +921,7 @@ public class Client extends RIONode {
 	/*************************************************
 	 * end manager-only cache coherency functions
 	 ************************************************/
-	
+
 	/*************************************************
 	 * begin client-only cache coherency functions
 	 ************************************************/
@@ -784,11 +934,38 @@ public class Client extends RIONode {
 		}
 	}
 
-	
 	/*************************************************
 	 * end client-only cache coherency functions
 	 ************************************************/
-	
+
+	/**
+	 * Only client receives WD as an indication from manager that they have
+	 * ownership.
+	 * 
+	 * @param msgString
+	 */
+	private void receiveWD(String msgString) {
+
+	}
+
+	/**
+	 * Only client receives WF as a request from the server to propogate their
+	 * changes.
+	 * 
+	 * @param msgString
+	 */
+	private void receiveWF(String msgString) {
+
+	}
+
+	private void receiveRD(String msgString) {
+
+	}
+
+	private void receiveRF(String msgString) {
+
+	}
+
 	/**
 	 * Parses a received command to decide whether to put or append to file
 	 * 
@@ -813,7 +990,8 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Sends a response if destAddr >= 0 (otherwise assumes that a response is not meant to be sent)
+	 * Sends a response if destAddr >= 0 (otherwise assumes that a response is
+	 * not meant to be sent)
 	 * 
 	 * @param destAddr
 	 *            Who to send the response to
@@ -824,14 +1002,12 @@ public class Client extends RIONode {
 	 */
 	private void sendResponse(Integer destAddr, String protocol,
 			boolean successful) {
-		if (destAddr >= 0) {
-			String sendMsg = protocol + delimiter
-					+ (successful ? "successful" : "not successful");
-	
-			byte[] payload = Utility.stringToByteArray(sendMsg);
-			RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
-			printVerbose("sending response: " + protocol + " status: "
-					+ (successful ? "successful" : "not successful"));
-		}
+		String sendMsg = protocol + delimiter
+				+ (successful ? "successful" : "not successful");
+
+		byte[] payload = Utility.stringToByteArray(sendMsg);
+		RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
+		printVerbose("sending response: " + protocol + " status: "
+				+ (successful ? "successful" : "not successful"));
 	}
 }
