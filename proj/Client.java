@@ -691,6 +691,7 @@ public class Client extends RIONode {
 			receiveWC(from, msgString);
 			break;
 		case Protocol.RC:
+			receiveRC(from, msgString);
 			break;
 		default:
 			Logger.error("Error: " + ErrorCode.InvalidCommand);
@@ -710,20 +711,31 @@ public class Client extends RIONode {
 	 ************************************************/
 	/**
 	 * Manager only function
-	 * Changes the status of this client from IV or RO to what the protocol dictates
+	 * Changes the status of this client from IV or RW
 	 * @param client The client to change
-	 * @param protocol The protocol, which determines the client's new status
+	 * @param fileName The filename
 	 */
 	private void receiveWC(int client, String fileName)
 	{
-		CacheStatuses val;
-		
+		updateClientCacheStatus(CacheStatuses.ReadWrite, client, fileName);
+	}
+	
+	/**
+	 * Receives an RC and changes this client's status from IV or RW to RO.
+	 * @param client The client to change
+	 * @param fileName The filename
+	 */
+	private void receiveRC(int client, String fileName)
+	{
+		updateClientCacheStatus(CacheStatuses.ReadOnly, client, fileName);
+	}
+	
+	private void updateClientCacheStatus(CacheStatuses val, int client, String fileName)
+	{
 		if (!isManager) {
 			Logger.error(ErrorCode.InvalidCommand, "Receieved confirm but not manager");
 			return;
 		}
-
-		val = CacheStatuses.ReadWrite;
 		
 		if (!clientCacheStatus.containsKey(fileName))
 			clientCacheStatus.put(fileName, new HashMap<Integer, CacheStatuses>());
@@ -732,7 +744,6 @@ public class Client extends RIONode {
 		HashMap<Integer, CacheStatuses> clientMap = (HashMap<Integer, CacheStatuses>) clientCacheStatus.get(fileName);
 		clientMap.put(client, val);
 		clientCacheStatus.put(fileName, clientMap);
-		
 	}
 	
 	/**
