@@ -885,6 +885,12 @@ public class Client extends RIONode {
 		case Protocol.WQ:
 			receiveWQ(from, msgString);
 			break;
+		case Protocol.WF:
+			receiveWF(msgString);
+			break;
+		case Protocol.RF:
+			receiveRF(msgString);
+			break;
 		default:
 			printError(ErrorCode.InvalidCommand, "receive");
 		}
@@ -1089,15 +1095,86 @@ public class Client extends RIONode {
 	 * begin client-only cache coherency functions
 	 ************************************************/
 
+	/**
+	 * Client receives IV as a notification to mark a cached file invalid
+	 */
 	private void receiveIV(String msgString) {
 		// If we're the manager and we received and IV, something bad happened
 		if (isManager) {
-			Logger.error(ErrorCode.InvalidCommand, "IV: " + msgString);
+			printError(ErrorCode.InvalidCommand, "iv " + msgString);
 		} else {
 			cacheStatus.put(msgString, CacheStatuses.Invalid);
 		}
 	}
 
+	// TODO: Cleanup state after {R,W}{D,F} etc fails
+
+	/**
+	 * Only client receives RF as a request from the server to propagate their
+	 * changes.
+	 * 
+	 * @param msgString
+	 */
+	private void receiveRF(String msgString) {
+		if (isManager) {
+			printError(ErrorCode.InvalidCommand, "rf " + msgString);
+		}
+
+		StringTokenizer tokens = new StringTokenizer(msgString);
+		String filename = tokens.nextToken();
+
+		// RW -> RO
+		cacheStatus.put(filename, CacheStatuses.ReadOnly);
+		printVerbose("RW -> RO for " + filename);
+
+		try {
+			String payload = filename + delimiter + getFile(filename);
+			SendToManager(Protocol.RD, Utility.stringToByteArray(payload));
+		} catch (UnknownManagerException e) {
+			printError(ErrorCode.UnknownManager, "rf");
+		} catch (IOException e) {
+			printError(ErrorCode.UnknownError, "rf");
+			// TODO: better error code
+		}
+	}
+
+	/**
+	 * Only client receives WF as a request from the server to propagate their
+	 * changes.
+	 * 
+	 * @param msgString
+	 */
+	private void receiveWF(String msgString) {
+		if (isManager) {
+			printError(ErrorCode.InvalidCommand, "wf " + msgString);
+		}
+
+		StringTokenizer tokens = new StringTokenizer(msgString);
+		String filename = tokens.nextToken();
+
+		// lose ownership
+		cacheStatus.put(filename, CacheStatuses.Invalid);
+		printVerbose("lost ownership of " + filename);
+
+		try {
+			String payload = filename + delimiter + getFile(filename);
+			SendToManager(Protocol.WD, Utility.stringToByteArray(payload));
+		} catch (UnknownManagerException e) {
+			printError(ErrorCode.UnknownManager, "wf");
+		} catch (IOException e) {
+			printError(ErrorCode.UnknownError, "wf");
+			// TODO: better error code
+		}
+	}
+
+	/**
+	 * Convenience wrapper of RIOSend that sends a message to the manager if
+	 * their address is known and throws an UnknownManagerException if not
+	 * 
+	 * @param protocol
+	 * @param payload
+	 * @throws UnknownManagerException
+	 */
 	public void SendToManager(int protocol, byte[] payload)
 			throws UnknownManagerException {
 		if (this.managerAddr == -1) {
@@ -1111,10 +1188,11 @@ public class Client extends RIONode {
 	 * end client-only cache coherency functions
 	 ************************************************/
 
+	/*************************************************
+	 * begin client and manager cache coherency functions
+	 ************************************************/
+	
 	/**
-	 * Only client receives WD as an indication from manager that they have
-	 * ownership.
-	 * 
 	 * @param msgString
 	 *            ex) test hello world <filename> <contents>
 	 */
@@ -1126,6 +1204,8 @@ public class Client extends RIONode {
 		String contents = msgString.substring(filename.length() + 1);
 		
 		if (!isManager) {
+			// TODO: this breaks for creates (empty contents)
+
 			// has RW!
 			cacheStatus.put(filename, CacheStatuses.ReadWrite);
 			printVerbose("got ReadWrite on " + filename);
@@ -1171,15 +1251,8 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Only client receives WF as a request from the server to propagate their
-	 * changes.
-	 * 
 	 * @param msgString
 	 */
-	private void receiveWF(String msgString) {
-		
-	}
-
 	private void receiveRD(int from, String msgString) {
 		// parse packet
 		StringTokenizer tokens = new StringTokenizer(msgString);
@@ -1211,16 +1284,10 @@ public class Client extends RIONode {
 		}
 	}
 
-	/**
-	 * Only client receives RF as a request from the server to propagate their
-	 * changes.
-	 * 
-	 * @param msgString
-	 */
-	private void receiveRF(String msgString) {
-
-	}
-
+	/*************************************************
+	 * end client and manager cache coherency functions
+	 ************************************************/
+	
 	/**
 	 * Parses a received command to decide whether to put or append to file
 	 * 

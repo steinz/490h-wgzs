@@ -11,7 +11,7 @@
 public class Protocol {
 
 	// TODO: @Discuss Should these be an enum?
-	
+
 	// Base RIO Types
 	public static final int DATA = 0;
 	public static final int ACK = 1;
@@ -69,6 +69,7 @@ public class Protocol {
 	 *         "Unknown Protocol" if the protocol is not recognized
 	 */
 	public static String protocolToString(int protocol) {
+		// TODO: Update :(
 		switch (protocol) {
 		case DATA:
 			return "RIO Data Packet";
