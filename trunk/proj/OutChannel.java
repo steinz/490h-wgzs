@@ -132,10 +132,12 @@ class OutChannel {
 			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			RIOPacket riopkt = unACKedPackets.get(seqNum);
-
+			
 			StringBuilder sb = n.appendNodeAddress();
 			sb.append("resending packet ");
 			sb.append(riopkt.getSeqNum());
+			sb.append(" protocol: ");
+			sb.append(riopkt.getProtocol());
 			Logger.verbose(sb.toString());
 
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
