@@ -85,7 +85,7 @@ public class Logger {
 		if (printError) {
 			sb.append(" [");
 			sb.append(ErrorCode.lookup(errorCode));
-			sb.append(" ]");
+			sb.append("]");
 			errorPrintln(sb.toString());
 		}
 	}
