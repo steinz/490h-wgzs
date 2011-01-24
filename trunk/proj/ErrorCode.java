@@ -17,6 +17,11 @@ public class ErrorCode {
 	public static final int Timeout = 20;
 	public static final int FileTooLarge = 30;
 
+	// cache coherence errors
+	public static final int NotManager = 40;
+	public static final int MultipleOwners = 41;
+	public static final int ReadWriteAndReadOnly = 42;
+	
 	// onCommand parsing errors
 	public static final int InvalidCommand = 900;
 	public static final int IncompleteCommand = 901;
@@ -36,6 +41,12 @@ public class ErrorCode {
 			return "20 Timeout";
 		case 30:
 			return "30 FileTooLarge";
+		case 40:
+			return "40 NotManager";
+		case 41:
+			return "41 MultipleOwners";
+		case 42:
+			return "42 ReadWriteAndReadOnly";
 		case 900:
 			return "900 InvalidCommand";
 		case 901:

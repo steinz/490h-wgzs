@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.StringTokenizer;
@@ -122,10 +124,7 @@ public class Client extends RIONode {
 	 */
 	private Map<String, List<Integer>> pendingICs;
 
-	// TODO: Later - add queue for pending requests of locked files. I think we
-	// need to add a queuedFileRequest class to keep in here or something if we
-	// want to queue requests we can't satisfy right away.
-	// private Queue<E> queuedFileRequests;
+	private Queue<QueuedFileRequest> queuedFileRequests;
 
 	/*************************************************
 	 * end manager only data structures
@@ -134,6 +133,7 @@ public class Client extends RIONode {
 	public Client() {
 		super();
 		this.cacheStatus = new HashMap<String, CacheStatuses>();
+		this.queuedFileRequests = new PriorityQueue<QueuedFileRequest>();
 		this.isManager = false;
 		this.managerAddr = -1;
 		Logger.eraseLog(); // Wipe the server log
@@ -838,12 +838,18 @@ public class Client extends RIONode {
 		case Protocol.RC:
 			receiveRC(from, msgString);
 			break;
+		case Protocol.RQ:
+			receiveRQ(from, msgString);
+			break;
+		case Protocol.WQ:
+			receiveWQ(from, msgString);
+			break;
 		default:
 			Logger.error("Error: " + ErrorCode.InvalidCommand);
 
 		}
 
-		// TODO: implement {W,R}{D,Q,F,C}
+		// TODO: implement {W,R}{D,Q,F}
 		// Only server receives: {R,W}{Q,C}, IC
 		// Only client receives: {R,W}F, IV
 		// Both ways: {W,R}D
@@ -853,13 +859,105 @@ public class Client extends RIONode {
 	/*************************************************
 	 * begin manager-only cache coherency functions
 	 ************************************************/
+	
+	private void receiveRQ(int client, String fileName)
+	{
+		// Deal with locked files, and lock the file if it's not currently
+		if (lockedFiles.contains(fileName)) {
+			queuedFileRequests.add(new QueuedFileRequest(client, Protocol.RQ, Utility.stringToByteArray(fileName)));
+			return;
+		}
+		lockedFiles.add(fileName);
+
+		// Check if anyone has RW status on this file
+		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus.get(fileName);
+		
+		Integer key = null;
+	    for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
+	         if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
+	        	 if (key != null)
+	        		 Logger.error(ErrorCode.MultipleOwners, "Multiple owners on file: " + fileName);
+	             key = entry.getKey();
+	         }
+	     }
+	 
+	    // If no one owns a copy of this file, send them a copy and remove the lock
+	    if (key == null) {
+	    	sendFile(client, fileName, Protocol.RD);
+	    	lockedFiles.remove(fileName);
+	    }
+	    else{
+			sendRequest(key, fileName, Protocol.WF);
+			// TODO: In "put or append", check to see if we were waiting for this file name to be written by this client
+		}
+	    
+	    // TODO: Deal with queued requests somewhere...
+	}
+	
+	private void sendFile(int client, String fileName, int protocol)
+	{
+		String sendMsg = "";
+		try {
+			sendMsg = fileName + delimiter + getFile(fileName);
+		} catch (IOException e) {
+			Logger.error(e);
+		}
+		byte[] payload = Utility.stringToByteArray(sendMsg);
+		RIOLayer.RIOSend(client, protocol, payload);
+	}
+	
+	private void sendRequest(int client, String fileName, int protocol)
+	{
+		String sendMsg = fileName;
+		byte[] payload = Utility.stringToByteArray(sendMsg);
+		RIOLayer.RIOSend(client, protocol, payload);
+	}
+	
+	private void receiveWQ(int client, String fileName)
+	{
+		// Deal with locked files, and lock the file if it's not currently
+		if (lockedFiles.contains(fileName)) {
+			queuedFileRequests.add(new QueuedFileRequest(client, Protocol.RQ, Utility.stringToByteArray(fileName)));
+			return;
+		}
+		lockedFiles.add(fileName);
+		
+		// Check if anyone has RW or RO status on this file
+		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus.get(fileName);
+		
+		Integer rw = null;
+		HashSet<Integer> ro = new HashSet<Integer>(); 
+	    for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
+	         if (entry.getValue().equals(CacheStatuses.ReadWrite)){
+	        	 if (rw != null)
+	        		 Logger.error(ErrorCode.MultipleOwners, "Multiple owners on file: " + fileName);
+	             rw = entry.getKey();
+	         }
+	         if (entry.getValue().equals(CacheStatuses.ReadOnly)){
+	        	 if (rw != null)
+	        		 Logger.error(ErrorCode.ReadWriteAndReadOnly, "ReadOnly copies while other client has ownership: " + fileName);
+	        	 ro.add(entry.getKey());
+	         }
+	     }
+	    if (rw != null) {	// If someone has RW status:
+	    	sendRequest(rw, fileName, Protocol.WF);
+			// TODO: In put or append, check to see if we were waiting for this file
+			// If so, send the data back to the client waiting 
+	    }
+	    for (Integer i : ro) { // Send invalidate requests to everyone with RO status
+	    	sendRequest(i, fileName, Protocol.IV);
+			// TODO: When all ICs come in, check to see if someone was waiting for this file
+			// If so, send a WD containing the current file contents to the client waiting
+			// Release the lock on this file
+	    }
+	    // TODO: Deal with queued file requests
+	}
+	
 	/**
-	 * Manager only function Changes the status of this client from IV or RW
-	 * 
-	 * @param client
-	 *            The client to change
-	 * @param fileName
-	 *            The filename
+	 * Manager Only
+	 * Changes the status of this client from IV or RW
+	 * @param client The client to change
+	 * @param fileName The filename
 	 */
 	private void receiveWC(int client, String fileName) {
 		updateClientCacheStatus(CacheStatuses.ReadWrite, client, fileName);
