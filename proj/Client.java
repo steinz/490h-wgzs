@@ -818,7 +818,7 @@ public class Client extends RIONode {
 		// TODO: eventually we'll probably want to stop using this for
 		// success/failure responses, moving each to their own protocol types
 		String output = cmdOrFileName + " received with contents: " + contents;
-		printVerbose(output);
+		printInfo(output);
 	}
 
 	/**
@@ -877,8 +877,7 @@ public class Client extends RIONode {
 			receiveWQ(from, msgString);
 			break;
 		default:
-			Logger.error("Error: " + ErrorCode.InvalidCommand);
-
+			printError(ErrorCode.InvalidCommand, "receive");
 		}
 
 		// TODO: implement {W,R}{D,Q,F}
@@ -891,43 +890,45 @@ public class Client extends RIONode {
 	/*************************************************
 	 * begin manager-only cache coherency functions
 	 ************************************************/
-	
-	private void receiveRQ(int client, String fileName)
-	{
+
+	private void receiveRQ(int client, String fileName) {
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(fileName)) {
-			queuedFileRequests.add(new QueuedFileRequest(client, Protocol.RQ, Utility.stringToByteArray(fileName)));
+			queuedFileRequests.add(new QueuedFileRequest(client, Protocol.RQ,
+					Utility.stringToByteArray(fileName)));
 			return;
 		}
 		lockedFiles.add(fileName);
 
 		// Check if anyone has RW status on this file
-		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus.get(fileName);
-		
+		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
+				.get(fileName);
+
 		Integer key = null;
-	    for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
-	         if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
-	        	 if (key != null)
-	        		 Logger.error(ErrorCode.MultipleOwners, "Multiple owners on file: " + fileName);
-	             key = entry.getKey();
-	         }
-	     }
-	 
-	    // If no one owns a copy of this file, send them a copy and remove the lock
-	    if (key == null) {
-	    	sendFile(client, fileName, Protocol.RD);
-	    	lockedFiles.remove(fileName);
-	    }
-	    else{
-			sendRequest(key, fileName, Protocol.WF);
-			// TODO: In "put or append", check to see if we were waiting for this file name to be written by this client
+		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
+			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
+				if (key != null)
+					Logger.error(ErrorCode.MultipleOwners,
+							"Multiple owners on file: " + fileName);
+				key = entry.getKey();
+			}
 		}
-	    
-	    // TODO: Deal with queued requests somewhere...
+
+		// If no one owns a copy of this file, send them a copy and remove the
+		// lock
+		if (key == null) {
+			sendFile(client, fileName, Protocol.RD);
+			lockedFiles.remove(fileName);
+		} else {
+			sendRequest(key, fileName, Protocol.WF);
+			// TODO: In "put or append", check to see if we were waiting for
+			// this file name to be written by this client
+		}
+
+		// TODO: Deal with queued requests somewhere...
 	}
-	
-	private void sendFile(int client, String fileName, int protocol)
-	{
+
+	private void sendFile(int client, String fileName, int protocol) {
 		String sendMsg = "";
 		try {
 			sendMsg = fileName + delimiter + getFile(fileName);
@@ -937,59 +938,68 @@ public class Client extends RIONode {
 		byte[] payload = Utility.stringToByteArray(sendMsg);
 		RIOLayer.RIOSend(client, protocol, payload);
 	}
-	
-	private void sendRequest(int client, String fileName, int protocol)
-	{
+
+	private void sendRequest(int client, String fileName, int protocol) {
 		String sendMsg = fileName;
 		byte[] payload = Utility.stringToByteArray(sendMsg);
 		RIOLayer.RIOSend(client, protocol, payload);
 	}
-	
-	private void receiveWQ(int client, String fileName)
-	{
+
+	private void receiveWQ(int client, String fileName) {
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(fileName)) {
-			queuedFileRequests.add(new QueuedFileRequest(client, Protocol.RQ, Utility.stringToByteArray(fileName)));
+			queuedFileRequests.add(new QueuedFileRequest(client, Protocol.RQ,
+					Utility.stringToByteArray(fileName)));
 			return;
 		}
 		lockedFiles.add(fileName);
-		
+
 		// Check if anyone has RW or RO status on this file
-		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus.get(fileName);
-		
+		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
+				.get(fileName);
+
 		Integer rw = null;
-		HashSet<Integer> ro = new HashSet<Integer>(); 
-	    for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
-	         if (entry.getValue().equals(CacheStatuses.ReadWrite)){
-	        	 if (rw != null)
-	        		 Logger.error(ErrorCode.MultipleOwners, "Multiple owners on file: " + fileName);
-	             rw = entry.getKey();
-	         }
-	         if (entry.getValue().equals(CacheStatuses.ReadOnly)){
-	        	 if (rw != null)
-	        		 Logger.error(ErrorCode.ReadWriteAndReadOnly, "ReadOnly copies while other client has ownership: " + fileName);
-	        	 ro.add(entry.getKey());
-	         }
-	     }
-	    if (rw != null) {	// If someone has RW status:
-	    	sendRequest(rw, fileName, Protocol.WF);
-			// TODO: In put or append, check to see if we were waiting for this file
-			// If so, send the data back to the client waiting 
-	    }
-	    for (Integer i : ro) { // Send invalidate requests to everyone with RO status
-	    	sendRequest(i, fileName, Protocol.IV);
-			// TODO: When all ICs come in, check to see if someone was waiting for this file
-			// If so, send a WD containing the current file contents to the client waiting
+		HashSet<Integer> ro = new HashSet<Integer>();
+		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
+			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
+				if (rw != null)
+					Logger.error(ErrorCode.MultipleOwners,
+							"Multiple owners on file: " + fileName);
+				rw = entry.getKey();
+			}
+			if (entry.getValue().equals(CacheStatuses.ReadOnly)) {
+				if (rw != null)
+					Logger.error(ErrorCode.ReadWriteAndReadOnly,
+							"ReadOnly copies while other client has ownership: "
+									+ fileName);
+				ro.add(entry.getKey());
+			}
+		}
+		if (rw != null) { // If someone has RW status:
+			sendRequest(rw, fileName, Protocol.WF);
+			// TODO: In put or append, check to see if we were waiting for this
+			// file
+			// If so, send the data back to the client waiting
+		}
+		for (Integer i : ro) { // Send invalidate requests to everyone with RO
+								// status
+			sendRequest(i, fileName, Protocol.IV);
+			// TODO: When all ICs come in, check to see if someone was waiting
+			// for this file
+			// If so, send a WD containing the current file contents to the
+			// client waiting
 			// Release the lock on this file
-	    }
-	    // TODO: Deal with queued file requests
+		}
+		// TODO: Deal with queued file requests
 	}
-	
+
 	/**
-	 * Manager Only
-	 * Changes the status of this client from IV or RW
-	 * @param client The client to change
-	 * @param fileName The filename
+	 * Manager Only Changes the status of this client from IV or RW
+	 * 
+	 * @param client
+	 *            The client to change
+	 * @param fileName
+	 *            The filename
 	 */
 	private void receiveWC(int client, String fileName) {
 		updateClientCacheStatus(CacheStatuses.ReadWrite, client, fileName);
@@ -1094,6 +1104,7 @@ public class Client extends RIONode {
 
 			// has RW!
 			cacheStatus.put(filename, CacheStatuses.ReadWrite);
+			printVerbose("got ReadWrite on " + filename);
 
 			// update in cache
 			writeFile(filename, contents, Protocol.PUT);
@@ -1121,25 +1132,47 @@ public class Client extends RIONode {
 
 		} else {
 			// TODO: Manager side of WD
-			
-			
+
 		}
 	}
 
 	/**
-	 * Only client receives WF as a request from the server to propogate their
+	 * Only client receives WF as a request from the server to propagate their
 	 * changes.
 	 * 
 	 * @param msgString
 	 */
 	private void receiveWF(String msgString) {
-
+		
 	}
 
 	private void receiveRD(String msgString) {
+		if (!isManager) {
+			// parse packet
+			StringTokenizer tokens = new StringTokenizer(msgString);
+			String filename = tokens.nextToken();
+			String contents = msgString.substring(filename.length() + 1);
 
+			// has RO
+			cacheStatus.put(filename, CacheStatuses.ReadOnly);
+			printVerbose("got ReadOnly on " + filename);
+
+			// update in cache
+			writeFile(filename, contents, Protocol.PUT);
+
+			// print GET result
+			printInfo(contents);
+		} else {
+			// TODO: Manager side of RD
+		}
 	}
 
+	/**
+	 * Only client receives RF as a request from the server to propagate their
+	 * changes.
+	 * 
+	 * @param msgString
+	 */
 	private void receiveRF(String msgString) {
 
 	}
