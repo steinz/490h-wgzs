@@ -73,7 +73,7 @@ public class Client extends RIONode {
 	/**
 	 * Status of cached files for all clients.
 	 */
-	private Map<String, CacheStatuses> clientCacheStatus;
+	private Map<String, Map<Integer, CacheStatuses>> clientCacheStatus;
 
 	/**
 	 * List of nodes the manager is waiting for ICs from.
@@ -169,7 +169,7 @@ public class Client extends RIONode {
 		if (!isManager) {
 			this.isManager = true;
 			this.lockedFiles = new HashSet<String>();
-			this.clientCacheStatus = new HashMap<String, CacheStatuses>();
+			this.clientCacheStatus = new HashMap<String, Map<Integer, CacheStatuses>>();
 			this.pendingICs = new HashMap<String, List<Integer>>();
 		}
 
@@ -551,6 +551,16 @@ public class Client extends RIONode {
 	}
 
 	/**
+	 * Wrapper for writeFile, doesn't send a response
+	 * @param fileName
+	 * @param contents
+	 */
+	public void writeFile(String fileName, String contents, int protocol)
+	{
+		writeFile(-1, fileName, contents, protocol);
+	}
+	
+	/**
 	 * Writes a file to the local filesystem. Fails if the file does not exist
 	 * already
 	 * 
@@ -677,7 +687,13 @@ public class Client extends RIONode {
 		case Protocol.IV:
 			receiveIV(msgString);
 			break;
-		// TODO: default: throw an exception
+		case Protocol.WC:
+			receiveWC(from, msgString);
+			break;
+		case Protocol.RC:
+			break;
+		default:
+			Logger.error("Error: " + ErrorCode.InvalidCommand);
 
 		}
 
@@ -688,6 +704,37 @@ public class Client extends RIONode {
 
 	}
 
+	
+	/*************************************************
+	 * begin manager-only cache coherency functions
+	 ************************************************/
+	/**
+	 * Manager only function
+	 * Changes the status of this client from IV or RO to what the protocol dictates
+	 * @param client The client to change
+	 * @param protocol The protocol, which determines the client's new status
+	 */
+	private void receiveWC(int client, String fileName)
+	{
+		CacheStatuses val;
+		
+		if (!isManager) {
+			Logger.error(ErrorCode.InvalidCommand, "Receieved confirm but not manager");
+			return;
+		}
+
+		val = CacheStatuses.ReadWrite;
+		
+		if (!clientCacheStatus.containsKey(fileName))
+			clientCacheStatus.put(fileName, new HashMap<Integer, CacheStatuses>());
+		
+		// Update the client status and put it back in the cache status map
+		HashMap<Integer, CacheStatuses> clientMap = (HashMap<Integer, CacheStatuses>) clientCacheStatus.get(fileName);
+		clientMap.put(client, val);
+		clientCacheStatus.put(fileName, clientMap);
+		
+	}
+	
 	/**
 	 * 
 	 * @param from
@@ -710,6 +757,13 @@ public class Client extends RIONode {
 		}
 	}
 
+	/*************************************************
+	 * end manager-only cache coherency functions
+	 ************************************************/
+	
+	/*************************************************
+	 * begin client-only cache coherency functions
+	 ************************************************/
 	private void receiveIV(String msgString) {
 		// If we're the manager and we received and IV, something bad happened
 		if (isManager) {
@@ -719,6 +773,11 @@ public class Client extends RIONode {
 		}
 	}
 
+	
+	/*************************************************
+	 * end client-only cache coherency functions
+	 ************************************************/
+	
 	/**
 	 * Parses a received command to decide whether to put or append to file
 	 * 
@@ -743,7 +802,7 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Sends
+	 * Sends a response if destAddr >= 0 (otherwise assumes that a response is not meant to be sent)
 	 * 
 	 * @param destAddr
 	 *            Who to send the response to
@@ -754,12 +813,14 @@ public class Client extends RIONode {
 	 */
 	private void sendResponse(Integer destAddr, String protocol,
 			boolean successful) {
-		String sendMsg = protocol + delimiter
-				+ (successful ? "successful" : "not successful");
-
-		byte[] payload = Utility.stringToByteArray(sendMsg);
-		RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
-		printVerbose("sending response: " + protocol + " status: "
-				+ (successful ? "successful" : "not successful"));
+		if (destAddr >= 0) {
+			String sendMsg = protocol + delimiter
+					+ (successful ? "successful" : "not successful");
+	
+			byte[] payload = Utility.stringToByteArray(sendMsg);
+			RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
+			printVerbose("sending response: " + protocol + " status: "
+					+ (successful ? "successful" : "not successful"));
+		}
 	}
 }
