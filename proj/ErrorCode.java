@@ -21,6 +21,8 @@ public class ErrorCode {
 	public static final int NotManager = 40;
 	public static final int MultipleOwners = 41;
 	public static final int ReadWriteAndReadOnly = 42;
+	public static final int UnknownManager = 45;
+	public static final int MissingIntent = 46;
 	
 	// onCommand parsing errors
 	public static final int InvalidCommand = 900;
@@ -47,6 +49,10 @@ public class ErrorCode {
 			return "41 MultipleOwners";
 		case 42:
 			return "42 ReadWriteAndReadOnly";
+		case 45:
+			return "45 UnknownManager";
+		case 46:
+			return "46 MissingIntent";
 		case 900:
 			return "900 InvalidCommand";
 		case 901:

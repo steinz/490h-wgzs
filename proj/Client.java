@@ -251,9 +251,14 @@ public class Client extends RIONode {
 			printError(ErrorCode.FileAlreadyExists, "create", filename);
 		} else {
 			// Request ownership
-			RIOSend(managerAddr, Protocol.WQ,
-					Utility.stringToByteArray(filename));
-			// Remeber that I want to create this file
+			try {
+				SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+				printInfo("requesting ownership of " + filename);
+			} catch (UnknownManagerException e) {
+				printError(ErrorCode.UnknownManager, "create", filename);
+				return;
+			}
+			// Remember that I want to create this file
 			pendingOperations.put(filename, new Intent(intentType.CREATE));
 		}
 	}
@@ -272,8 +277,13 @@ public class Client extends RIONode {
 			// I have ownership
 			deleteFile(filename);
 		} else {
-			RIOSend(managerAddr, Protocol.WQ,
-					Utility.stringToByteArray(filename));
+			try {
+				SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+				printInfo("requesting ownership of " + filename);
+			} catch (UnknownManagerException e) {
+				printError(ErrorCode.UnknownManager, "delete", filename);
+				return;
+			}
 			pendingOperations.put(filename, new Intent(intentType.DELETE));
 		}
 	}
@@ -295,8 +305,13 @@ public class Client extends RIONode {
 				Logger.error(e);
 			}
 		} else {
-			RIOSend(managerAddr, Protocol.RQ,
-					Utility.stringToByteArray(filename));
+			try {
+				SendToManager(Protocol.RQ, Utility.stringToByteArray(filename));
+				printInfo("requesting ownership of " + filename);
+			} catch (UnknownManagerException e) {
+				printError(ErrorCode.UnknownManager, "get", filename);
+				return;
+			}
 		}
 	}
 
@@ -316,8 +331,13 @@ public class Client extends RIONode {
 			writeFile(filename, content, Protocol.PUT);
 		} else {
 			// Request ownership
-			RIOSend(managerAddr, Protocol.WQ,
-					Utility.stringToByteArray(filename));
+			try {
+				SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+				printInfo("requesting ownership of " + filename);
+			} catch (UnknownManagerException e) {
+				printError(ErrorCode.UnknownManager, "put", filename);
+				return;
+			}
 			pendingOperations
 					.put(filename, new Intent(intentType.PUT, content));
 		}
@@ -340,8 +360,13 @@ public class Client extends RIONode {
 			writeFile(filename, content, Protocol.APPEND);
 		} else {
 			// Request ownership
-			RIOSend(managerAddr, Protocol.WQ,
-					Utility.stringToByteArray(filename));
+			try {
+				SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+				printInfo("requesting ownership of " + filename);
+			} catch (UnknownManagerException e) {
+				printError(ErrorCode.UnknownManager, "append", filename);
+				return;
+			}
 			pendingOperations.put(filename, new Intent(intentType.APPEND,
 					content));
 		}
@@ -357,6 +382,7 @@ public class Client extends RIONode {
 		int server = parseServer(tokens, "handshake");
 		String payload = getID().toString();
 		RIOSend(server, Protocol.HANDSHAKE, Utility.stringToByteArray(payload));
+		printInfo("sending handshake to " + server);
 	}
 
 	/**
@@ -370,6 +396,7 @@ public class Client extends RIONode {
 		String payload = "";
 		RIOSend(server, Protocol.NOOP, Utility.stringToByteArray(payload));
 
+		printInfo("sending noop to " + server);
 	}
 
 	/**
@@ -548,6 +575,10 @@ public class Client extends RIONode {
 	 * begin FS methods
 	 ************************************************/
 
+	public void createFile(String fileName) {
+		createFile(this.addr, fileName);
+	}
+
 	/**
 	 * Creates a file on the local filesystem
 	 * 
@@ -574,6 +605,7 @@ public class Client extends RIONode {
 				Logger.error(e);
 			}
 		}
+
 		sendResponse(from, "create", true);
 	}
 
@@ -613,9 +645,8 @@ public class Client extends RIONode {
 				Logger.error(e);
 			}
 		}
-		if (from != this.addr) {
-			sendResponse(from, "delete", true);
-		}
+
+		sendResponse(from, "delete", true);
 	}
 
 	/**
@@ -751,9 +782,7 @@ public class Client extends RIONode {
 			}
 		}
 
-		if (from != this.addr) {
-			sendResponse(from, Protocol.protocolToString(protocol), true);
-		}
+		sendResponse(from, Protocol.protocolToString(protocol), true);
 	}
 
 	/**
@@ -837,6 +866,9 @@ public class Client extends RIONode {
 			break;
 		case Protocol.RC:
 			receiveRC(from, msgString);
+			break;
+		case Protocol.WD:
+			receiveWD(msgString);
 			break;
 		case Protocol.RQ:
 			receiveRQ(from, msgString);
@@ -1023,12 +1055,22 @@ public class Client extends RIONode {
 	/*************************************************
 	 * begin client-only cache coherency functions
 	 ************************************************/
+
 	private void receiveIV(String msgString) {
 		// If we're the manager and we received and IV, something bad happened
 		if (isManager) {
 			Logger.error(ErrorCode.InvalidCommand, "IV: " + msgString);
 		} else {
 			cacheStatus.put(msgString, CacheStatuses.Invalid);
+		}
+	}
+
+	public void SendToManager(int protocol, byte[] payload)
+			throws UnknownManagerException {
+		if (this.managerAddr == -1) {
+			throw new UnknownManagerException();
+		} else {
+			RIOSend(managerAddr, protocol, payload);
 		}
 	}
 
@@ -1041,9 +1083,47 @@ public class Client extends RIONode {
 	 * ownership.
 	 * 
 	 * @param msgString
+	 *            ex) test hello world <filename> <contents>
 	 */
 	private void receiveWD(String msgString) {
+		if (!isManager) {
+			// parse packet
+			StringTokenizer tokens = new StringTokenizer(msgString);
+			String filename = tokens.nextToken();
+			String contents = msgString.substring(filename.length() + 1);
 
+			// has RW!
+			cacheStatus.put(filename, CacheStatuses.ReadWrite);
+
+			// update in cache
+			writeFile(filename, contents, Protocol.PUT);
+
+			// do what you originally intended with the file
+			if (pendingOperations.containsKey(filename)) {
+				Intent intent = pendingOperations.get(filename);
+				switch (intent.type) {
+				case CREATE:
+					createFile(filename);
+					break;
+				case DELETE:
+					deleteFile(filename);
+					break;
+				case PUT:
+					writeFile(filename, intent.content, Protocol.PUT);
+					break;
+				case APPEND:
+					writeFile(filename, intent.content, Protocol.APPEND);
+					break;
+				}
+			} else {
+				printError(ErrorCode.MissingIntent, "wd");
+			}
+
+		} else {
+			// TODO: Manager side of WD
+			
+			
+		}
 	}
 
 	/**
@@ -1100,12 +1180,14 @@ public class Client extends RIONode {
 	 */
 	private void sendResponse(Integer destAddr, String protocol,
 			boolean successful) {
-		String sendMsg = protocol + delimiter
-				+ (successful ? "successful" : "not successful");
+		if (destAddr != this.addr) {
+			String sendMsg = protocol + delimiter
+					+ (successful ? "successful" : "not successful");
 
-		byte[] payload = Utility.stringToByteArray(sendMsg);
-		RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
-		printVerbose("sending response: " + protocol + " status: "
-				+ (successful ? "successful" : "not successful"));
+			byte[] payload = Utility.stringToByteArray(sendMsg);
+			RIOLayer.RIOSend(destAddr, Protocol.DATA, payload);
+			printVerbose("sending response: " + protocol + " status: "
+					+ (successful ? "successful" : "not successful"));
+		}
 	}
 }
