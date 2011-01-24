@@ -16,3 +16,7 @@ time
 time
 time
 time
+0 put test hello world
+time
+2 get test
+time
