@@ -13,7 +13,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.StringTokenizer;
@@ -125,7 +124,7 @@ public class Client extends RIONode {
 	 */
 	private Map<String, List<Integer>> pendingICs;
 
-	private Queue<QueuedFileRequest> queuedFileRequests;
+	private Map<String,Queue<QueuedFileRequest>> queuedFileRequests;
 	
 	/**
 	 * Status of who is waiting for permission for this file
@@ -139,7 +138,7 @@ public class Client extends RIONode {
 	public Client() {
 		super();
 		this.cacheStatus = new HashMap<String, CacheStatuses>();
-		this.queuedFileRequests = new PriorityQueue<QueuedFileRequest>();
+		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
 		this.pendingPermissionRequests = new HashMap<String, Integer>();
 		this.isManager = false;
 		this.managerAddr = -1;
@@ -877,6 +876,9 @@ public class Client extends RIONode {
 		case Protocol.WD:
 			receiveWD(from, msgString);
 			break;
+		case Protocol.RD:
+			receiveRD(from, msgString);
+			break;
 		case Protocol.RQ:
 			receiveRQ(from, msgString);
 			break;
@@ -901,8 +903,10 @@ public class Client extends RIONode {
 	private void receiveRQ(int client, String fileName) {
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(fileName)) {
-			queuedFileRequests.add(new QueuedFileRequest(client, Protocol.RQ,
+			Queue<QueuedFileRequest> e = queuedFileRequests.get(fileName);
+			e.add(new QueuedFileRequest(client, Protocol.RQ,
 					Utility.stringToByteArray(fileName)));
+			queuedFileRequests.put(fileName, e);
 			return;
 		}
 		lockedFiles.add(fileName);
@@ -925,13 +929,11 @@ public class Client extends RIONode {
 		// lock
 		if (key == null) {
 			sendFile(client, fileName, Protocol.RD);
-			lockedFiles.remove(fileName);
+			removeLock(fileName);
 		} else {
 			sendRequest(key, fileName, Protocol.WF);
-			// TODO: In WD, check to see if we were waiting for this file name to be written by this client
 		}
 
-		// TODO: Deal with queued requests somewhere...
 	}
 
 	private void sendFile(int client, String fileName, int protocol) {
@@ -950,43 +952,55 @@ public class Client extends RIONode {
 		byte[] payload = Utility.stringToByteArray(sendMsg);
 		RIOLayer.RIOSend(client, protocol, payload);
 	}
+	
+	private void removeLock(String filename)
+	{
+		lockedFiles.remove(filename);
+		Queue<QueuedFileRequest> outstandingRequests = queuedFileRequests.get(filename);
+		QueuedFileRequest nextRequest = outstandingRequests.poll();
+		if (nextRequest != null){
+			onRIOReceive(nextRequest.from, nextRequest.protocol, nextRequest.msg);
+		}
+	}
 
-	private void receiveWQ(int client, String fileName) {
+	private void receiveWQ(int client, String filename) {
 		// Deal with locked files, and lock the file if it's not currently
-		if (lockedFiles.contains(fileName)) {
-			queuedFileRequests.add(new QueuedFileRequest(client, Protocol.WQ, Utility.stringToByteArray(fileName)));
+		if (lockedFiles.contains(filename)) {
+			Queue<QueuedFileRequest> e = queuedFileRequests.get(filename);
+			e.add(new QueuedFileRequest(client, Protocol.WQ,
+					Utility.stringToByteArray(filename)));
+			queuedFileRequests.put(filename, e);
 			return;
 		}
-		lockedFiles.add(fileName);
+		lockedFiles.add(filename);
 
 		// Check if anyone has RW or RO status on this file
 		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
-				.get(fileName);
+				.get(filename);
 
 		Integer rw = null;
 		ArrayList<Integer> ro = new ArrayList<Integer>(); 
 	    for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 	         if (entry.getValue().equals(CacheStatuses.ReadWrite)){
 	        	 if (rw != null)
-	        		 Logger.error(ErrorCode.MultipleOwners, "Multiple owners on file: " + fileName);
+	        		 Logger.error(ErrorCode.MultipleOwners, "Multiple owners on file: " + filename);
 	             rw = entry.getKey();
 	         }
 	         if (entry.getValue().equals(CacheStatuses.ReadOnly)){
 	        	 if (rw != null)
-	        		 Logger.error(ErrorCode.ReadWriteAndReadOnly, "ReadOnly copies while other client has ownership: " + fileName);
+	        		 Logger.error(ErrorCode.ReadWriteAndReadOnly, "ReadOnly copies while other client has ownership: " + filename);
 	        	 ro.add(entry.getKey());
 	         }
 	     }
 	    if (rw != null) {	// If someone has RW status:
-	    	sendRequest(rw, fileName, Protocol.WF);
+	    	sendRequest(rw, filename, Protocol.WF);
 			// TODO: In WD, check to see if we were waiting for this file
 			// If so, send the data back to the client waiting 
 	    }
-	    pendingICs.put(fileName, ro);
+	    pendingICs.put(filename, ro);
 	    for (Integer i : ro) { // Send invalidate requests to everyone with RO status
-	    	sendRequest(i, fileName, Protocol.IV);
+	    	sendRequest(i, filename, Protocol.IV);
 		}
-		// TODO: Deal with queued file requests
 	}
 
 	/**
@@ -1030,6 +1044,8 @@ public class Client extends RIONode {
 				.get(fileName);
 		clientMap.put(client, val);
 		clientCacheStatus.put(fileName, clientMap);
+		
+		// TODO: Deal with queued file requests
 	}
 
 	/**
@@ -1059,7 +1075,8 @@ public class Client extends RIONode {
 			if (pendingICs.get(filename).isEmpty()){ // If the pending ICs are now empty, someone's waiting for a WD, so check for that and send
 				int destAddr = pendingPermissionRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.WD);
-				lockedFiles.remove(filename);
+				removeLock(filename);
+				// TODO: Deal with queued file requests
 			}
 		}
 	}
@@ -1163,13 +1180,13 @@ public class Client extends RIONode {
 		
 	}
 
-	private void receiveRD(String msgString) {
+	private void receiveRD(int from, String msgString) {
+		// parse packet
+		StringTokenizer tokens = new StringTokenizer(msgString);
+		String filename = tokens.nextToken();
+		String contents = msgString.substring(filename.length() + 1);
+		
 		if (!isManager) {
-			// parse packet
-			StringTokenizer tokens = new StringTokenizer(msgString);
-			String filename = tokens.nextToken();
-			String contents = msgString.substring(filename.length() + 1);
-
 			// has RO
 			cacheStatus.put(filename, CacheStatuses.ReadOnly);
 			printVerbose("got ReadOnly on " + filename);
@@ -1180,7 +1197,17 @@ public class Client extends RIONode {
 			// print GET result
 			printInfo(contents);
 		} else {
-			// TODO: Manager side of RD
+			// first write the file to save a local copy
+			writeFile(filename, contents, Protocol.PUT);
+			
+			// send out a RD to anyone requesting this
+			int destAddr = pendingPermissionRequests.get(filename);
+			sendFile(destAddr, filename, Protocol.RD);
+			
+			// update the status of the client who sent the WD
+			Map<Integer, CacheStatuses> m = clientCacheStatus.get(filename);
+			m.put(from, CacheStatuses.ReadOnly);
+			clientCacheStatus.put(filename, m);
 		}
 	}
 
