@@ -56,6 +56,11 @@ public class Client extends RIONode {
 	 */
 	private boolean isManager;
 
+	/**
+	 * The address of the manager node.
+	 */
+	private int managerIs;
+	
 	/*************************************************
 	 * begin manager only data structures
 	 ************************************************/
@@ -88,6 +93,7 @@ public class Client extends RIONode {
 		super();
 		this.cacheStatus = new HashMap<String, CacheStatuses>();
 		this.isManager = false;
+		this.managerIs = -1;
 		Logger.eraseLog(); // Wipe the server log
 	}
 
@@ -168,6 +174,17 @@ public class Client extends RIONode {
 		}
 
 		printInfo("promoted to manager");
+	}
+	
+	public void managerisHandler(StringTokenizer tokens, String line) {
+		try {
+			this.managerIs = Integer.parseInt(tokens.nextToken());
+			printInfo("manager is " + this.managerIs);
+		} catch (NumberFormatException e) {
+			printError(ErrorCode.InvalidCommand, "manageris");
+		} catch (NoSuchElementException e) {
+			printError(ErrorCode.IncompleteCommand, "manageris");
+		}
 	}
 
 	/**
@@ -399,7 +416,7 @@ public class Client extends RIONode {
 		sb.append(server);
 		sb.append(", file ");
 		sb.append(filename);
-		Logger.error(sb.toString());
+		Logger.error(error, sb.toString());
 	}
 
 	/**
@@ -412,7 +429,7 @@ public class Client extends RIONode {
 		StringBuilder sb = appendNodeAddress();
 		sb.append(" ");
 		appendError(sb, command);
-		Logger.error(sb.toString());
+		Logger.error(error, sb.toString());
 	}
 
 	private StringBuilder appendError(StringBuilder sb, String command) {
