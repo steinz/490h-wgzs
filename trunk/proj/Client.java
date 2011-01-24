@@ -944,13 +944,20 @@ public class Client extends RIONode {
 
 	private void sendFile(int client, String fileName, int protocol) {
 		String sendMsg = "";
-		try {
-			sendMsg = fileName + delimiter + getFile(fileName);
-		} catch (IOException e) {
-			Logger.error(e);
+		
+		if (!Utility.fileExists(this, fileName)){
+			createFile(fileName);
+			sendMsg = fileName;
 		}
-		byte[] payload = Utility.stringToByteArray(sendMsg);
-		RIOLayer.RIOSend(client, protocol, payload);
+		else{
+			try {
+				sendMsg = fileName + delimiter + getFile(fileName);
+				} catch (IOException e) {
+					Logger.error(e);
+				}
+			byte[] payload = Utility.stringToByteArray(sendMsg);
+			RIOLayer.RIOSend(client, protocol, payload);
+		}
 	}
 
 	private void sendRequest(int client, String fileName, int protocol) {
