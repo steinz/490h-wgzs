@@ -944,7 +944,6 @@ public class Client extends RIONode {
 		// lock
 		if (key == null) {
 			sendFile(client, fileName, Protocol.RD);
-			removeLock(fileName);
 		} else {
 			sendRequest(key, fileName, Protocol.RF);
 			pendingPermissionRequests.put(fileName, client);
@@ -1091,6 +1090,7 @@ public class Client extends RIONode {
 		clientMap.put(client, val);
 		clientCacheStatus.put(fileName, clientMap);
 
+		Logger.verbose("Removing lock on file: " + fileName);
 		removeLock(fileName);
 	}
 
@@ -1125,8 +1125,6 @@ public class Client extends RIONode {
 														// send
 				int destAddr = pendingPermissionRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.WD);
-				removeLock(filename);
-				Logger.verbose("Lock removed on file: " + filename);
 				// TODO: Deal with queued file requests
 			}
 			else {
