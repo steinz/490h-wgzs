@@ -926,6 +926,11 @@ public class Client extends RIONode {
 				.get(fileName);
 
 		Integer key = null;
+		if (clientStatuses == null){
+			clientStatuses = new HashMap<Integer, CacheStatuses>();
+			clientCacheStatus.put(fileName, clientStatuses);
+			
+		}
 		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
 				if (key != null)
@@ -998,11 +1003,13 @@ public class Client extends RIONode {
 			return;
 		}
 		lockedFiles.add(filename);
+		Logger.verbose("Locking file: " + filename);
 
 		// Check if anyone has RW or RO status on this file
 		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
 				.get(filename);
 
+		
 		if (clientStatuses == null)
 			clientStatuses = new HashMap<Integer, CacheStatuses>();
 
@@ -1026,15 +1033,19 @@ public class Client extends RIONode {
 		}
 		if (rw != null) { // If someone has RW status:
 			sendRequest(rw, filename, Protocol.WF);
+			pendingPermissionRequests.put(filename, client);
+			return;
 			// If so, send the data back to the client waiting
 		}
-		pendingICs.put(filename, ro);
-		for (Integer i : ro) { // Send invalidate requests to everyone with RO
-								// status
-			sendRequest(i, filename, Protocol.IV);
-		}
-		// Else if no one has permissions on this file, send them a WD
-		sendFile(client, filename, Protocol.WD);
+		if (ro.size() != 0){
+			pendingICs.put(filename, ro);
+			for (Integer i : ro) { // Send invalidate requests to everyone with RO
+									// status unless that person is the requesting client
+				if (i != client)
+					sendRequest(i, filename, Protocol.IV);
+			}
+		} else // Else if no one has permissions on this file, send them a WD
+			sendFile(client, filename, Protocol.WD);
 	}
 
 	/**
@@ -1114,7 +1125,11 @@ public class Client extends RIONode {
 				int destAddr = pendingPermissionRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.WD);
 				removeLock(filename);
+				Logger.verbose("Lock removed on file: " + filename);
 				// TODO: Deal with queued file requests
+			}
+			else {
+				// pass for now
 			}
 		}
 	}
@@ -1136,6 +1151,11 @@ public class Client extends RIONode {
 			printError(ErrorCode.InvalidCommand, "iv " + msgString);
 		} else {
 			cacheStatus.put(msgString, CacheStatuses.Invalid);
+			try {
+				SendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
+			} catch (UnknownManagerException e) {
+				Logger.error(e);
+			}
 		}
 	}
 
@@ -1280,7 +1300,7 @@ public class Client extends RIONode {
 				printError(ErrorCode.UnknownManager, "wd");
 			}
 
-		} else {
+		} else { // Manager receives WD
 			// first write the file to save a local copy
 			writeFile(filename, contents, Protocol.PUT);
 
