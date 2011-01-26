@@ -295,16 +295,6 @@ public class Packet {
 	 * @return string representation of this Packet instance
 	 */
 	protected String toSynopticString(Node node) {
-		String payloadStr;
-		try {
-			payloadStr = node.packetBytesToString(payload);
-		} catch (java.lang.NullPointerException e) {
-			payloadStr = "";
-		}
- 
-		if (payloadStr == null) {
-			payloadStr = "";
-		}
-		return new String("src:" + src + " dest:" + dest + " proto:" + protocol + " " + payloadStr);
+		return new String("src:" + src + " dest:" + dest + " proto:" + protocol);
 	}
 }
