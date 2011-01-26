@@ -677,11 +677,12 @@ public class Client extends RIONode {
 			StringBuilder contents = new StringBuilder();
 			String inLine = "";
 			PersistentStorageReader reader = getReader(fileName);
-			// TODO: adding newlines when it shouldn't
+			contents.append(reader.readLine());
 			while ((inLine = reader.readLine()) != null) {
-				contents.append(inLine);
 				contents.append(System.getProperty("line.separator"));
+				contents.append(inLine);
 			}
+			
 			reader.close();
 			printVerbose("reading contents of file: " + fileName);
 			return contents.toString();
@@ -709,14 +710,16 @@ public class Client extends RIONode {
 		// send the file if it does
 		else {
 			// load the file into a reader
-			String sendMsg = fileName + delimiter;
+			StringBuilder contents = new StringBuilder(); 
+			contents.append(fileName + delimiter);
 			String inLine = "";
 			try {
 				PersistentStorageReader reader = getReader(fileName);
-				// TODO: adding newlines when it shouldn't
-				while (!((inLine = reader.readLine()) == null))
-					sendMsg = sendMsg + inLine
-							+ System.getProperty("line.separator");
+				contents.append(reader.readLine());
+				while ((inLine = reader.readLine()) != null) {
+					contents.append(System.getProperty("line.separator"));
+					contents.append(inLine);
+				}
 				reader.close();
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -725,7 +728,7 @@ public class Client extends RIONode {
 			}
 
 			// send the payload
-			byte[] payload = Utility.stringToByteArray(sendMsg);
+			byte[] payload = Utility.stringToByteArray(contents.toString());
 			RIOLayer.RIOSend(from, Protocol.DATA, payload);
 			printVerbose("sending contents of file: " + fileName + " to Node: "
 					+ from);
