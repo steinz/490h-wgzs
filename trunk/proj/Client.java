@@ -1161,6 +1161,7 @@ public class Client extends RIONode {
 			printError(ErrorCode.InvalidCommand, "iv " + msgString);
 		} else {
 			cacheStatus.put(msgString, CacheStatuses.Invalid);
+			printVerbose("marking invalid " + msgString);
 			try {
 				SendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
 			} catch (UnknownManagerException e) {
@@ -1192,6 +1193,7 @@ public class Client extends RIONode {
 		try {
 			String payload = filename + delimiter + getFile(filename);
 			SendToManager(Protocol.RD, Utility.stringToByteArray(payload));
+			printVerbose("sending rd to manager " + filename);
 		} catch (UnknownManagerException e) {
 			printError(ErrorCode.UnknownManager, "rf");
 		} catch (IOException e) {
@@ -1221,6 +1223,7 @@ public class Client extends RIONode {
 		try {
 			String payload = filename + delimiter + getFile(filename);
 			SendToManager(Protocol.WD, Utility.stringToByteArray(payload));
+			printVerbose("sending wd to manager " + filename);
 		} catch (UnknownManagerException e) {
 			printError(ErrorCode.UnknownManager, "wf");
 		} catch (IOException e) {
@@ -1306,6 +1309,7 @@ public class Client extends RIONode {
 			// send wc
 			try {
 				SendToManager(Protocol.WC, Utility.stringToByteArray(filename));
+				printVerbose("sending wc to manager for " + filename);
 			} catch (UnknownManagerException e) {
 				printError(ErrorCode.UnknownManager, "wd");
 			}
@@ -1355,6 +1359,7 @@ public class Client extends RIONode {
 			// send rc
 			try {
 				SendToManager(Protocol.RC, Utility.stringToByteArray(filename));
+				printVerbose("sending rc to manager for " + filename);
 			} catch (UnknownManagerException e) {
 				printError(ErrorCode.UnknownManager, "rd");
 			}
