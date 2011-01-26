@@ -1065,6 +1065,7 @@ public class Client extends RIONode {
 	 *            The filename
 	 */
 	private void receiveWC(int client, String fileName) {
+		printVerbose("Changing client: " + client + " to RW");
 		updateClientCacheStatus(CacheStatuses.ReadWrite, client, fileName);
 	}
 
@@ -1077,6 +1078,7 @@ public class Client extends RIONode {
 	 *            The filename
 	 */
 	private void receiveRC(int client, String fileName) {
+		printVerbose("Changing client: " + client + " to RO");
 		updateClientCacheStatus(CacheStatuses.ReadOnly, client, fileName);
 	}
 
@@ -1123,6 +1125,7 @@ public class Client extends RIONode {
 			// update the status of the client who sent the IC
 			Map<Integer, CacheStatuses> m = clientCacheStatus.get(filename);
 			m.put(from, CacheStatuses.Invalid);
+			printVerbose("Changing client: " + from + " to IV");
 			clientCacheStatus.put(filename, m);
 
 			pendingICs.get(filename).remove(from);
