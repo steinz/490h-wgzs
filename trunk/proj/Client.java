@@ -1002,7 +1002,7 @@ public class Client extends RIONode {
 			return;
 		}
 		lockedFiles.add(filename);
-		Logger.verbose("Locking file: " + filename);
+		printVerbose("Locking file: " + filename);
 
 		// Check if anyone has RW or RO status on this file
 		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
@@ -1090,7 +1090,7 @@ public class Client extends RIONode {
 		clientMap.put(client, val);
 		clientCacheStatus.put(fileName, clientMap);
 
-		Logger.verbose("Removing lock on file: " + fileName);
+		printVerbose("Removing lock on file: " + fileName);
 		removeLock(fileName);
 	}
 
@@ -1128,7 +1128,7 @@ public class Client extends RIONode {
 				// TODO: Deal with queued file requests
 			}
 			else {
-				Logger.verbose("Received IC but waiting for IC from at client (only first shown): " + pendingICs.get(filename).get(0));
+				printVerbose("Received IC but waiting for IC from at client (only first shown): " + pendingICs.get(filename).get(0));
 			}
 		}
 	}
