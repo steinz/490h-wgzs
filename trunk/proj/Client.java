@@ -910,32 +910,35 @@ public class Client extends RIONode {
 	 * begin manager-only cache coherency functions
 	 ************************************************/
 
-	private void receiveRQ(int client, String fileName) {
+	private void receiveRQ(int client, String filename) {
 		// Deal with locked files, and lock the file if it's not currently
-		if (lockedFiles.contains(fileName)) {
-			Queue<QueuedFileRequest> e = queuedFileRequests.get(fileName);
+		if (lockedFiles.contains(filename)) {
+			Queue<QueuedFileRequest> e = queuedFileRequests.get(filename);
+			if (e == null)
+				e = new PriorityQueue<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.RQ, Utility
-					.stringToByteArray(fileName)));
-			queuedFileRequests.put(fileName, e);
+					.stringToByteArray(filename)));
+			queuedFileRequests.put(filename, e);
 			return;
 		}
-		lockedFiles.add(fileName);
+		printVerbose("Locking file: " + filename);
+		lockedFiles.add(filename);
 
 		// Check if anyone has RW status on this file
 		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
-				.get(fileName);
+				.get(filename);
 
 		Integer key = null;
 		if (clientStatuses == null){
 			clientStatuses = new HashMap<Integer, CacheStatuses>();
-			clientCacheStatus.put(fileName, clientStatuses);
+			clientCacheStatus.put(filename, clientStatuses);
 			
 		}
 		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
 				if (key != null)
 					Logger.error(ErrorCode.MultipleOwners,
-							"Multiple owners on file: " + fileName);
+							"Multiple owners on file: " + filename);
 				key = entry.getKey();
 			}
 		}
@@ -943,10 +946,10 @@ public class Client extends RIONode {
 		// If no one owns a copy of this file, send them a copy and remove the
 		// lock
 		if (key == null) {
-			sendFile(client, fileName, Protocol.RD);
+			sendFile(client, filename, Protocol.RD);
 		} else {
-			sendRequest(key, fileName, Protocol.RF);
-			pendingPermissionRequests.put(fileName, client);
+			sendRequest(key, filename, Protocol.RF);
+			pendingPermissionRequests.put(filename, client);
 		}
 
 	}
@@ -996,6 +999,8 @@ public class Client extends RIONode {
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(filename)) {
 			Queue<QueuedFileRequest> e = queuedFileRequests.get(filename);
+			if (e == null)
+				e = new PriorityQueue<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.WQ, Utility
 					.stringToByteArray(filename)));
 			queuedFileRequests.put(filename, e);
