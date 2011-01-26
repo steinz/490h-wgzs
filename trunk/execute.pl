@@ -2,11 +2,14 @@
 
 # Simple script to start a Node Manager that uses a compiled lib.jar
 
+# Takes synoptic args, usually
+# -s -n=<Node> -f <failure level> [-c script]
+
 main();
 
 sub main {
     
-    $classpath = "proj/:jars/plume.jar:jars/lib.jar";
+    $classpath = "proj/:jars/plume.jar:jars/edited_lib.jar";
     
     $args = join " ", @ARGV;
 
