@@ -1,0 +1,5 @@
+-r ^Node (?<nodename>): promoted to manager$(?<TYPE=>)
+
+-m \\k<nodename>-\\k<FILE>
+
+-o output/serverlog
