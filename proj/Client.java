@@ -1009,7 +1009,6 @@ public class Client extends RIONode {
 		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
 				.get(filename);
 
-		
 		if (clientStatuses == null)
 			clientStatuses = new HashMap<Integer, CacheStatuses>();
 
@@ -1028,7 +1027,8 @@ public class Client extends RIONode {
 					Logger.error(ErrorCode.ReadWriteAndReadOnly,
 							"ReadOnly copies while other client has ownership: "
 									+ filename);
-				ro.add(entry.getKey());
+				if (entry.getKey() != client)
+					ro.add(entry.getKey());
 			}
 		}
 		if (rw != null) { // If someone has RW status:
@@ -1038,12 +1038,13 @@ public class Client extends RIONode {
 			// If so, send the data back to the client waiting
 		}
 		if (ro.size() != 0){
+			
 			pendingICs.put(filename, ro);
 			for (Integer i : ro) { // Send invalidate requests to everyone with RO
 									// status unless that person is the requesting client
-				if (i != client)
-					sendRequest(i, filename, Protocol.IV);
+				sendRequest(i, filename, Protocol.IV);
 			}
+			pendingPermissionRequests.put(filename, client);
 		} else // Else if no one has permissions on this file, send them a WD
 			sendFile(client, filename, Protocol.WD);
 	}
@@ -1129,7 +1130,7 @@ public class Client extends RIONode {
 				// TODO: Deal with queued file requests
 			}
 			else {
-				// pass for now
+				Logger.verbose("Received IC but waiting for IC from at client (only first shown): " + pendingICs.get(filename).get(0));
 			}
 		}
 	}
