@@ -89,7 +89,7 @@ public class Client extends RIONode {
 	/**
 	 * Status of cached files on disk. Keys are filenames.
 	 */
-	private Map<String, CacheStatuses> cacheStatus;
+	protected Map<String, CacheStatuses> clientCacheStatus;
 
 	/**
 	 * Map from filenames to the operation we want to do on them later
@@ -104,12 +104,12 @@ public class Client extends RIONode {
 	/**
 	 * Whether or not this node is the manager for project 2.
 	 */
-	private boolean isManager;
+	protected boolean isManager;
 
 	/**
 	 * The address of the manager node.
 	 */
-	private int managerAddr;
+	protected int managerAddr;
 
 	/*************************************************
 	 * begin manager only data structures
@@ -118,17 +118,17 @@ public class Client extends RIONode {
 	/**
 	 * List of files whose requests are currently being worked out.
 	 */
-	private Set<String> lockedFiles;
+	protected Set<String> lockedFiles;
 
 	/**
 	 * Status of cached files for all clients.
 	 */
-	private Map<String, Map<Integer, CacheStatuses>> managerCacheStatuses;
+	protected Map<String, Map<Integer, CacheStatuses>> managerCacheStatuses;
 
 	/**
 	 * List of nodes the manager is waiting for ICs from.
 	 */
-	private Map<String, List<Integer>> pendingICs;
+	protected Map<String, List<Integer>> pendingICs;
 
 	/**
 	 * Save requests on locked files
@@ -146,7 +146,7 @@ public class Client extends RIONode {
 
 	public Client() {
 		super();
-		this.cacheStatus = new HashMap<String, CacheStatuses>();
+		this.clientCacheStatus = new HashMap<String, CacheStatuses>();
 		this.clientPendingOperations = new HashMap<String, Intent>();
 		this.managerQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
 		this.pendingPermissionRequests = new HashMap<String, Integer>();
@@ -263,8 +263,8 @@ public class Client extends RIONode {
 		// TODO: lock filename locally until command completes (needed for all
 		// FS handlers)
 
-		if (cacheStatus.containsKey(filename)
-				&& cacheStatus.get(filename) != CacheStatuses.Invalid) {
+		if (clientCacheStatus.containsKey(filename)
+				&& clientCacheStatus.get(filename) != CacheStatuses.Invalid) {
 			// The file is in my cache as RW or RO so it already exists, throw
 			// an error
 			printError(ErrorCode.FileAlreadyExists, "create", filename);
@@ -292,8 +292,8 @@ public class Client extends RIONode {
 	public void deleteHandler(StringTokenizer tokens, String line) {
 		String filename = parseFilename(tokens, "delete");
 
-		if (cacheStatus.containsKey(filename)
-				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		if (clientCacheStatus.containsKey(filename)
+				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// I have ownership
 			deleteFile(filename);
 		} else {
@@ -318,8 +318,8 @@ public class Client extends RIONode {
 	public void getHandler(StringTokenizer tokens, String line) {
 		String filename = parseFilename(tokens, "get");
 
-		if (cacheStatus.containsKey(filename)
-				&& cacheStatus.get(filename) != CacheStatuses.Invalid) {
+		if (clientCacheStatus.containsKey(filename)
+				&& clientCacheStatus.get(filename) != CacheStatuses.Invalid) {
 			try {
 				getFile(filename);
 			} catch (IOException e) {
@@ -346,8 +346,8 @@ public class Client extends RIONode {
 		String filename = parseFilename(tokens, "put");
 		String content = parseAddContent(line, "put", filename);
 
-		if (cacheStatus.containsKey(filename)
-				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		if (clientCacheStatus.containsKey(filename)
+				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// I have ownership
 			writeFile(filename, content, Protocol.PUT);
 		} else {
@@ -375,8 +375,8 @@ public class Client extends RIONode {
 		// losing the extra space
 		String filename = parseFilename(tokens, "append");
 		String content = parseAddContent(line, "append", filename);
-		if (cacheStatus.containsKey(filename)
-				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		if (clientCacheStatus.containsKey(filename)
+				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// Have ownership
 			writeFile(filename, content, Protocol.APPEND);
 		} else {
@@ -924,14 +924,13 @@ public class Client extends RIONode {
 		default:
 			printError(ErrorCode.InvalidCommand, "receive");
 		}
-
 	}
 
 	/*************************************************
 	 * begin manager-only cache coherency functions
 	 ************************************************/
 
-	private void receiveRQ(int client, String filename) {
+	protected void receiveRQ(int client, String filename) {
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(filename)) {
 			Queue<QueuedFileRequest> e = managerQueuedFileRequests
@@ -1016,7 +1015,7 @@ public class Client extends RIONode {
 		}
 	}
 
-	private void receiveWQ(int client, String filename) {
+	protected void receiveWQ(int client, String filename) {
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(filename)) {
 			Queue<QueuedFileRequest> e = managerQueuedFileRequests
@@ -1086,7 +1085,7 @@ public class Client extends RIONode {
 	 * @param fileName
 	 *            The filename
 	 */
-	private void receiveWC(int client, String fileName) {
+	protected void receiveWC(int client, String fileName) {
 		printVerbose("Changing client: " + client + " to RW");
 		updateClientCacheStatus(CacheStatuses.ReadWrite, client, fileName);
 	}
@@ -1099,7 +1098,7 @@ public class Client extends RIONode {
 	 * @param fileName
 	 *            The filename
 	 */
-	private void receiveRC(int client, String fileName) {
+	protected void receiveRC(int client, String fileName) {
 		printVerbose("Changing client: " + client + " to RO");
 		updateClientCacheStatus(CacheStatuses.ReadOnly, client, fileName);
 	}
@@ -1134,7 +1133,7 @@ public class Client extends RIONode {
 	 *            Should be the file name. Throws an error if we were not
 	 *            waiting for an IC from this node for this file
 	 */
-	private void receiveIC(Integer from, String filename) {
+	protected void receiveIC(Integer from, String filename) {
 		// TODO: Maybe different messages for the first two vs. the last
 		// scenario
 		// (node is manager but not expecting IC from this node for this file)?
@@ -1178,12 +1177,12 @@ public class Client extends RIONode {
 	/**
 	 * Client receives IV as a notification to mark a cached file invalid
 	 */
-	private void receiveIV(String msgString) {
+	protected void receiveIV(String msgString) {
 		// If we're the manager and we received and IV, something bad happened
 		if (isManager) {
 			printError(ErrorCode.InvalidCommand, "iv " + msgString);
 		} else {
-			cacheStatus.put(msgString, CacheStatuses.Invalid);
+			clientCacheStatus.put(msgString, CacheStatuses.Invalid);
 			printVerbose("marking invalid " + msgString);
 			try {
 				SendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
@@ -1201,7 +1200,7 @@ public class Client extends RIONode {
 	 * 
 	 * @param msgString
 	 */
-	private void receiveRF(String msgString) {
+	protected void receiveRF(String msgString) {
 		if (isManager) {
 			printError(ErrorCode.InvalidCommand, "rf " + msgString);
 		}
@@ -1214,7 +1213,7 @@ public class Client extends RIONode {
 			String payload = null;
 			// Check if we even have a valid copy of the file
 			if (!Utility.fileExists(this, msgString)) {
-				CacheStatuses currentStatus = cacheStatus.get(msgString);
+				CacheStatuses currentStatus = clientCacheStatus.get(msgString);
 				if (currentStatus == CacheStatuses.ReadWrite) {
 					// I deleted this file
 					payload = filename + delimiter;
@@ -1230,9 +1229,8 @@ public class Client extends RIONode {
 			SendToManager(Protocol.RD, Utility.stringToByteArray(payload));
 			printVerbose("sending rd to manager " + filename);
 			// RW -> RO
-			cacheStatus.put(filename, CacheStatuses.ReadOnly);
-			printVerbose("RW -> RO for " + filename);
-		} catch (UnknownManagerException e) {
+			clientCacheStatus.put(filename, CacheStatuses.ReadOnly);
+			printVerbose("RW -> RO for " + filename);		} catch (UnknownManagerException e) {
 			printError(ErrorCode.UnknownManager, "rf");
 		} catch (IOException e) {
 			printError(ErrorCode.UnknownError, "rf");
@@ -1246,8 +1244,7 @@ public class Client extends RIONode {
 	 * 
 	 * @param msgString
 	 */
-	private void receiveWF(String msgString) {
-		
+	protected void receiveWF(String msgString) {
 		if (isManager) {
 			printError(ErrorCode.InvalidCommand, "wf " + msgString);
 		}
@@ -1259,7 +1256,7 @@ public class Client extends RIONode {
 			String payload = null;
 			// Check if we even have a valid copy of the file
 			if (!Utility.fileExists(this, msgString)) {
-				CacheStatuses currentStatus = cacheStatus.get(msgString);
+				CacheStatuses currentStatus = clientCacheStatus.get(msgString);
 				if (currentStatus == CacheStatuses.ReadWrite) {
 					// I deleted this file
 					payload = filename + delimiter;
@@ -1274,7 +1271,7 @@ public class Client extends RIONode {
 			SendToManager(Protocol.WD, Utility.stringToByteArray(payload));
 			printVerbose("sending wd to manager " + filename);
 			// lose ownership
-			cacheStatus.put(filename, CacheStatuses.Invalid);
+			clientCacheStatus.put(filename, CacheStatuses.Invalid);
 			printVerbose("lost ownership of " + filename);
 		} catch (UnknownManagerException e) {
 			printError(ErrorCode.UnknownManager, "wf");
@@ -1313,7 +1310,7 @@ public class Client extends RIONode {
 	 * @param msgString
 	 *            ex) test hello world <filename> <contents>
 	 */
-	private void receiveWD(int from, String msgString) {
+	protected void receiveWD(int from, String msgString) {
 
 		// parse packet
 		StringTokenizer tokens = new StringTokenizer(msgString);
@@ -1327,7 +1324,7 @@ public class Client extends RIONode {
 			// TODO: this breaks for creates (empty contents)
 
 			// has RW!
-			cacheStatus.put(filename, CacheStatuses.ReadWrite);
+			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 			printVerbose("got ReadWrite on " + filename);
 
 			// update in cache
@@ -1397,7 +1394,7 @@ public class Client extends RIONode {
 	/**
 	 * @param msgString
 	 */
-	private void receiveRD(int from, String msgString) {
+	protected void receiveRD(int from, String msgString) {
 		// parse packet
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
@@ -1408,7 +1405,7 @@ public class Client extends RIONode {
 
 		if (!isManager) {
 			// has RO
-			cacheStatus.put(filename, CacheStatuses.ReadOnly);
+			clientCacheStatus.put(filename, CacheStatuses.ReadOnly);
 			printVerbose("got ReadOnly on " + filename);
 
 			// update in cache
