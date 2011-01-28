@@ -27,6 +27,18 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	}
 
 	@Override
+	public void createHandler(StringTokenizer tokens, String line) {
+		String filename = line.split(" ")[1];
+		if (clientCacheStatus.containsKey(filename)
+				&& clientCacheStatus.get(filename) != CacheStatuses.Invalid) {
+			super.createHandler(tokens, line);
+			doOp();
+		} else {
+			super.createHandler(tokens, line);
+		}
+	}
+
+	@Override
 	public void deleteHandler(StringTokenizer tokens, String line) {
 		String filename = line.split(" ")[1];
 
@@ -91,6 +103,13 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	}
 
 	protected void doOp() {
+		/*
+		 * TODO: This needs to wait for a round for {R,W}C to get to the manager
+		 * (maybe wait a few to be safe)
+		 */
+		
+		
+
 		if (commandCount < 1) {
 			return;
 		}
