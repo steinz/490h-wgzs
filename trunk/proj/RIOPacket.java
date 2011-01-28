@@ -8,6 +8,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Packet;
@@ -145,10 +146,11 @@ public class RIOPacket {
 	 *            String representation of the transport packet
 	 * @return RIOPacket object created or null if the byte[] representation was
 	 *         corrupted
-	 * @throws IOException 
+	 * @throws IOException
 	 * @throws Exception
 	 */
-	public static RIOPacket unpack(byte[] packet) throws PacketPackException, IOException {
+	public static RIOPacket unpack(byte[] packet) throws PacketPackException,
+			IOException {
 		DataInputStream in = new DataInputStream(new ByteArrayInputStream(
 				packet));
 
@@ -175,7 +177,9 @@ public class RIOPacket {
 	}
 
 	public String toString() {
-		return "rio-proto:" + this.protocol + " rio-seqNum:" + this.seqNum
-				+ " rio-payload:" + Utility.byteArrayToString(this.payload);
+		// TODO: fix protocolToString call so all logs print strings instead of ints
+		return "rio-proto:" + Protocol.protocolToString(this.protocol)
+				+ " rio-seqNum:" + this.seqNum + " rio-payload:"
+				+ Utility.byteArrayToString(payload);
 	}
 }
