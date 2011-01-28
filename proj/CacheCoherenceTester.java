@@ -1,3 +1,5 @@
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.StringTokenizer;
 
@@ -107,8 +109,6 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		 * TODO: This needs to wait for a round for {R,W}C to get to the manager
 		 * (maybe wait a few to be safe)
 		 */
-		
-		
 
 		if (commandCount < 1) {
 			return;
@@ -116,25 +116,32 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 		commandCount--;
 
-		String filename = randomFileName();
-		String content = randomContent();
-
+		int pickUpTo = 5;
+		if (existingFiles.size() == 0) {
+			pickUpTo = 1;
+		}
+		
+		String filename;
 		String cmd = "";
-		switch (random.nextInt(5)) {
+		switch (random.nextInt(pickUpTo)) {
 		case 0:
+			filename = randomNewFilename();
 			cmd = "create " + filename;
+			existingFiles.add(filename);
 			break;
 		case 1:
-			cmd = "put " + filename + " " + content;
+			cmd = "put " + randomExistingFilename() + " " + randomContent();
 			break;
 		case 2:
-			cmd = "append " + filename + " " + content;
+			cmd = "append " + randomExistingFilename() + " " + randomContent();
 			break;
 		case 3:
-			cmd = "get " + filename;
+			cmd = "get " + randomExistingFilename();
 			break;
 		case 4:
+			filename = randomExistingFilename();
 			cmd = "delete " + filename;
+			existingFiles.remove(filename);
 			break;
 		}
 
@@ -146,10 +153,15 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		}
 	}
 
-	protected static final String[] filenames = { "f1", "f2", "f3" };
-
-	protected String randomFileName() {
-		return filenames[random.nextInt(filenames.length)];
+	protected int name = 0;
+	protected static List<String> existingFiles = new ArrayList<String>();
+	
+	protected String randomNewFilename() {
+		return "f" + name++;
+	}
+	
+	protected String randomExistingFilename() {
+		return existingFiles.get(random.nextInt(existingFiles.size()));
 	}
 
 	protected String randomContent() {
