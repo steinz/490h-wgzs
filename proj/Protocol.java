@@ -1,5 +1,6 @@
 /**
  * CSE 490h
+ * 
  * @author wayger, steinz
  */
 
@@ -10,8 +11,8 @@
  */
 public class Protocol {
 
-	// TODO: @Discuss Should these be an enum?
-
+	// TODO: LOW: Replace this class w/ an enum
+	
 	// Base RIO Types
 	public static final int DATA = 0;
 	public static final int ACK = 1;
@@ -72,29 +73,49 @@ public class Protocol {
 		// TODO: Update :(
 		switch (protocol) {
 		case DATA:
-			return "RIO Data Packet";
+			return "RIO_DATA";
 		case ACK:
-			return "RIO Acknowledgement Packet";
+			return "RIO_ACK";
 		case CREATE:
-			return "RIO Create Packet";
+			return "RIO_CREATE";
 		case PUT:
-			return "RIO Put Packet";
+			return "RIO_PUT";
 		case APPEND:
-			return "RIO Append Packet";
+			return "RIO_APPEND";
 		case DELETE:
-			return "RIO Delete Packet";
+			return "RIO_DELETE";
 		case GET:
-			return "RIO Get Packet";
+			return "RIO_GET";
 		case HANDSHAKE:
-			return "RIO Handshake";
+			return "RIO_HANDSHAKE";
 		case NOOP:
-			return "RIO Noop Packet";
+			return "RIO_NOOP";
 		case RIOTEST_PKT:
-			return "RIO Testing Packet";
+			return "RIO_TEST";
 		case ERROR:
-			return "RIO Error Packet";
+			return "RIO_ERROR";
+		case WQ:
+			return "RIO_WQ";
+		case WD:
+			return "RIO_WD";
+		case WF:
+			return "RIO_WF";
+		case WC:
+			return "RIO_WC";
+		case RQ:
+			return "RIO_RQ";
+		case RD:
+			return "RIO_RD";
+		case RF:
+			return "RIO_RF";
+		case RC:
+			return "RIO_RC";
+		case IV:
+			return "RIO_IV";
+		case IC:
+			return "RIO_IC";
 		default:
-			return "Unknown Protocol";
+			return "UNKNOWN";
 		}
 	}
 }

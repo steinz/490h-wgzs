@@ -115,4 +115,15 @@ public abstract class RIONode extends Node {
 		sb.append(": ");
 		return sb;
 	}
+	
+	@Override
+	public String packetBytesToString(byte[] bytes) {
+		// TODO: LOW: Handle ACKs in a better way
+		try {
+			return RIOPacket.unpack(bytes).toString();
+		} catch (Exception e) {
+			// ACKs don't unpack correctly, ignore them
+			return "";
+		}
+	}
 }

@@ -7,10 +7,10 @@
  * Put all error codes in here
  */
 public class ErrorCode {
-	// TODO: @Discuss Should these be an enum?
+	// TODO: LOW: Replace this class w/ an enum
 
 	public static final int UnknownError = -1;
-	
+
 	// file system errors
 	public static final int FileDoesNotExist = 10;
 	public static final int FileAlreadyExists = 11;
@@ -23,7 +23,7 @@ public class ErrorCode {
 	public static final int ReadWriteAndReadOnly = 42;
 	public static final int UnknownManager = 45;
 	public static final int MissingIntent = 46;
-	
+
 	// onCommand parsing errors
 	public static final int InvalidCommand = 900;
 	public static final int IncompleteCommand = 901;

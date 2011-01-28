@@ -44,21 +44,6 @@ public class Client extends RIONode {
 		Invalid, ReadWrite, ReadOnly
 	};
 
-	/**
-	 * Delimeter used in protocol payloads. Should be a single character.
-	 */
-	private static final String delimiter = " ";
-
-	/**
-	 * Status of cached files on disk. Keys are filenames.
-	 */
-	private Map<String, CacheStatuses> cacheStatus;
-
-	/**
-	 * 
-	 */
-	private Map<String, Intent> pendingOperations;
-
 	public static enum intentType {
 		CREATE, DELETE, PUT, APPEND
 	};
@@ -97,6 +82,26 @@ public class Client extends RIONode {
 	}
 
 	/**
+	 * Delimeter used in protocol payloads. Should be a single character.
+	 */
+	private static final String delimiter = " ";
+
+	/**
+	 * Status of cached files on disk. Keys are filenames.
+	 */
+	private Map<String, CacheStatuses> cacheStatus;
+
+	/**
+	 * Map from filenames to the operation we want to do on them later
+	 */
+	private Map<String, Intent> clientPendingOperations;
+
+	/**
+	 * Save requests on locked files
+	 */
+	private Map<String, Queue<QueuedFileRequest>> clientQueuedFileRequests;
+
+	/**
 	 * Whether or not this node is the manager for project 2.
 	 */
 	private boolean isManager;
@@ -118,14 +123,17 @@ public class Client extends RIONode {
 	/**
 	 * Status of cached files for all clients.
 	 */
-	private Map<String, Map<Integer, CacheStatuses>> clientCacheStatus;
+	private Map<String, Map<Integer, CacheStatuses>> managerCacheStatuses;
 
 	/**
 	 * List of nodes the manager is waiting for ICs from.
 	 */
 	private Map<String, List<Integer>> pendingICs;
 
-	private Map<String, Queue<QueuedFileRequest>> queuedFileRequests;
+	/**
+	 * Save requests on locked files
+	 */
+	private Map<String, Queue<QueuedFileRequest>> managerQueuedFileRequests;
 
 	/**
 	 * Status of who is waiting for permission for this file
@@ -139,8 +147,8 @@ public class Client extends RIONode {
 	public Client() {
 		super();
 		this.cacheStatus = new HashMap<String, CacheStatuses>();
-		this.pendingOperations = new HashMap<String, Intent>();
-		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
+		this.clientPendingOperations = new HashMap<String, Intent>();
+		this.managerQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
 		this.pendingPermissionRequests = new HashMap<String, Integer>();
 		this.isManager = false;
 		this.managerAddr = -1;
@@ -219,7 +227,7 @@ public class Client extends RIONode {
 		if (!isManager) {
 			this.isManager = true;
 			this.lockedFiles = new HashSet<String>();
-			this.clientCacheStatus = new HashMap<String, Map<Integer, CacheStatuses>>();
+			this.managerCacheStatuses = new HashMap<String, Map<Integer, CacheStatuses>>();
 			this.pendingICs = new HashMap<String, List<Integer>>();
 		}
 
@@ -252,6 +260,9 @@ public class Client extends RIONode {
 	public void createHandler(StringTokenizer tokens, String line) {
 		String filename = parseFilename(tokens, "create");
 
+		// TODO: lock filename locally until command completes (needed for all
+		// FS handlers)
+
 		if (cacheStatus.containsKey(filename)
 				&& cacheStatus.get(filename) != CacheStatuses.Invalid) {
 			// The file is in my cache as RW or RO so it already exists, throw
@@ -267,7 +278,8 @@ public class Client extends RIONode {
 				return;
 			}
 			// Remember that I want to create this file
-			pendingOperations.put(filename, new Intent(intentType.CREATE));
+			clientPendingOperations
+					.put(filename, new Intent(intentType.CREATE));
 		}
 	}
 
@@ -292,7 +304,8 @@ public class Client extends RIONode {
 				printError(ErrorCode.UnknownManager, "delete", filename);
 				return;
 			}
-			pendingOperations.put(filename, new Intent(intentType.DELETE));
+			clientPendingOperations
+					.put(filename, new Intent(intentType.DELETE));
 		}
 	}
 
@@ -346,8 +359,8 @@ public class Client extends RIONode {
 				printError(ErrorCode.UnknownManager, "put", filename);
 				return;
 			}
-			pendingOperations
-					.put(filename, new Intent(intentType.PUT, content));
+			clientPendingOperations.put(filename, new Intent(intentType.PUT,
+					content));
 		}
 	}
 
@@ -375,7 +388,7 @@ public class Client extends RIONode {
 				printError(ErrorCode.UnknownManager, "append", filename);
 				return;
 			}
-			pendingOperations.put(filename, new Intent(intentType.APPEND,
+			clientPendingOperations.put(filename, new Intent(intentType.APPEND,
 					content));
 		}
 	}
@@ -682,7 +695,7 @@ public class Client extends RIONode {
 				contents.append(System.getProperty("line.separator"));
 				contents.append(inLine);
 			}
-			
+
 			reader.close();
 			printVerbose("reading contents of file: " + fileName);
 			return contents.toString();
@@ -710,7 +723,7 @@ public class Client extends RIONode {
 		// send the file if it does
 		else {
 			// load the file into a reader
-			StringBuilder contents = new StringBuilder(); 
+			StringBuilder contents = new StringBuilder();
 			contents.append(fileName + delimiter);
 			String inLine = "";
 			try {
@@ -916,26 +929,26 @@ public class Client extends RIONode {
 	private void receiveRQ(int client, String filename) {
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(filename)) {
-			Queue<QueuedFileRequest> e = queuedFileRequests.get(filename);
+			Queue<QueuedFileRequest> e = managerQueuedFileRequests.get(filename);
 			if (e == null)
 				e = new PriorityQueue<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.RQ, Utility
 					.stringToByteArray(filename)));
-			queuedFileRequests.put(filename, e);
+			managerQueuedFileRequests.put(filename, e);
 			return;
 		}
 		printVerbose("Locking file: " + filename);
 		lockedFiles.add(filename);
 
 		// Check if anyone has RW status on this file
-		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
+		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
 				.get(filename);
 
 		Integer key = null;
-		if (clientStatuses == null){
+		if (clientStatuses == null) {
 			clientStatuses = new HashMap<Integer, CacheStatuses>();
-			clientCacheStatus.put(filename, clientStatuses);
-			
+			managerCacheStatuses.put(filename, clientStatuses);
+
 		}
 		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
@@ -985,10 +998,10 @@ public class Client extends RIONode {
 
 	private void removeLock(String filename) {
 		lockedFiles.remove(filename);
-		if (!queuedFileRequests.containsKey(filename))
-			queuedFileRequests.put(filename,
+		if (!managerQueuedFileRequests.containsKey(filename))
+			managerQueuedFileRequests.put(filename,
 					new PriorityQueue<QueuedFileRequest>());
-		Queue<QueuedFileRequest> outstandingRequests = queuedFileRequests
+		Queue<QueuedFileRequest> outstandingRequests = managerQueuedFileRequests
 				.get(filename);
 		QueuedFileRequest nextRequest = outstandingRequests.poll();
 		if (nextRequest != null) {
@@ -1001,19 +1014,19 @@ public class Client extends RIONode {
 		// TODO: log locks and unlocks (WQ, RQ, WC, RC)
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(filename)) {
-			Queue<QueuedFileRequest> e = queuedFileRequests.get(filename);
+			Queue<QueuedFileRequest> e = managerQueuedFileRequests.get(filename);
 			if (e == null)
 				e = new PriorityQueue<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.WQ, Utility
 					.stringToByteArray(filename)));
-			queuedFileRequests.put(filename, e);
+			managerQueuedFileRequests.put(filename, e);
 			return;
 		}
 		lockedFiles.add(filename);
 		printVerbose("Locking file: " + filename);
 
 		// Check if anyone has RW or RO status on this file
-		Map<Integer, CacheStatuses> clientStatuses = clientCacheStatus
+		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
 				.get(filename);
 
 		if (clientStatuses == null)
@@ -1044,15 +1057,18 @@ public class Client extends RIONode {
 			return;
 			// If so, send the data back to the client waiting
 		}
-		if (ro.size() != 0){
-			
+		if (ro.size() != 0) {
+
 			pendingICs.put(filename, ro);
-			for (Integer i : ro) { // Send invalidate requests to everyone with RO
-									// status unless that person is the requesting client
+			for (Integer i : ro) { // Send invalidate requests to everyone with
+									// RO
+									// status unless that person is the
+									// requesting client
 				sendRequest(i, filename, Protocol.IV);
 			}
 			pendingPermissionRequests.put(filename, client);
-		} else // Else if no one has permissions on this file, send them a WD
+		} else
+			// Else if no one has permissions on this file, send them a WD
 			sendFile(client, filename, Protocol.WD);
 	}
 
@@ -1090,15 +1106,15 @@ public class Client extends RIONode {
 			return;
 		}
 
-		if (!clientCacheStatus.containsKey(fileName))
-			clientCacheStatus.put(fileName,
+		if (!managerCacheStatuses.containsKey(fileName))
+			managerCacheStatuses.put(fileName,
 					new HashMap<Integer, CacheStatuses>());
 
 		// Update the client status and put it back in the cache status map
-		HashMap<Integer, CacheStatuses> clientMap = (HashMap<Integer, CacheStatuses>) clientCacheStatus
+		HashMap<Integer, CacheStatuses> clientMap = (HashMap<Integer, CacheStatuses>) managerCacheStatuses
 				.get(fileName);
 		clientMap.put(client, val);
-		clientCacheStatus.put(fileName, clientMap);
+		managerCacheStatuses.put(fileName, clientMap);
 
 		printVerbose("Removing lock on file: " + fileName);
 		removeLock(fileName);
@@ -1123,10 +1139,10 @@ public class Client extends RIONode {
 		} else {
 
 			// update the status of the client who sent the IC
-			Map<Integer, CacheStatuses> m = clientCacheStatus.get(filename);
+			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
 			m.put(from, CacheStatuses.Invalid);
 			printVerbose("Changing client: " + from + " to IV");
-			clientCacheStatus.put(filename, m);
+			managerCacheStatuses.put(filename, m);
 
 			pendingICs.get(filename).remove(from);
 			if (pendingICs.get(filename).isEmpty()) { // If the pending ICs are
@@ -1137,9 +1153,9 @@ public class Client extends RIONode {
 				int destAddr = pendingPermissionRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.WD);
 				// TODO: Deal with queued file requests
-			}
-			else {
-				printVerbose("Received IC but waiting for IC from at client (only first shown): " + pendingICs.get(filename).get(0));
+			} else {
+				printVerbose("Received IC but waiting for IC from at client (only first shown): "
+						+ pendingICs.get(filename).get(0));
 			}
 		}
 	}
@@ -1216,11 +1232,15 @@ public class Client extends RIONode {
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
 
+		// TODO: Check that I have ownership of the file (also for RF)
+
 		// lose ownership
 		cacheStatus.put(filename, CacheStatuses.Invalid);
 		printVerbose("lost ownership of " + filename);
 
 		try {
+			// TODO: I could have deleted this file...
+
 			String payload = filename + delimiter + getFile(filename);
 			SendToManager(Protocol.WD, Utility.stringToByteArray(payload));
 			printVerbose("sending wd to manager " + filename);
@@ -1285,8 +1305,8 @@ public class Client extends RIONode {
 			writeFile(filename, contents, Protocol.PUT);
 
 			// do what you originally intended with the file
-			if (pendingOperations.containsKey(filename)) {
-				Intent intent = pendingOperations.get(filename);
+			if (clientPendingOperations.containsKey(filename)) {
+				Intent intent = clientPendingOperations.get(filename);
 				switch (intent.type) {
 				case CREATE:
 					// TODO: this doesn't throw an error if the file already
@@ -1323,9 +1343,9 @@ public class Client extends RIONode {
 			sendFile(destAddr, filename, Protocol.WD);
 
 			// update the status of the client who sent the WD
-			Map<Integer, CacheStatuses> m = clientCacheStatus.get(filename);
+			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
 			m.put(from, CacheStatuses.Invalid);
-			clientCacheStatus.put(filename, m);
+			managerCacheStatuses.put(filename, m);
 
 		}
 	}
@@ -1372,9 +1392,9 @@ public class Client extends RIONode {
 			sendFile(destAddr, filename, Protocol.RD);
 
 			// update the status of the client who sent the WD
-			Map<Integer, CacheStatuses> m = clientCacheStatus.get(filename);
+			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
 			m.put(from, CacheStatuses.ReadOnly);
-			clientCacheStatus.put(filename, m);
+			managerCacheStatuses.put(filename, m);
 		}
 	}
 

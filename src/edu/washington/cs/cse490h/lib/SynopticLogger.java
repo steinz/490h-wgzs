@@ -65,8 +65,7 @@ public class SynopticLogger {
 		}
 		
 		try {
-			this.writer.write(timeStr + " " + eventStr);
-			this.writer.newLine();
+			this.writer.write(timeStr + " " + eventStr + "\n");
 		} catch (IOException e) {
 			System.out.println("Warning: unable to write to the synoptic log.");
 			e.printStackTrace();
