@@ -8,12 +8,12 @@
 -r ^(?<TIME>) node:(?<nodename>.+) COMMAND (?<TYPE>\\w*).*$
 
 # SEND: (ignore proto:1 - acks)
--r ^(?<TIME>) SEND src:(?<nodename>.+) dest:(?<dest>.+) proto:(?<protonum>\\w+) rio-proto:(?<proto>.+).*$(?<TYPE=>SEND-\\k<proto>)
+-r ^(?<TIME>) SEND src:(?<nodename>.+) dest:(?<dest>.+) proto:(?<protonum>\\w+) rio-proto:(?<proto>\\S+).*$(?<TYPE=>SEND-\\k<proto>)
 
 -r ^.*SEND.*$(?<TYPE=>SEND-ACK)
 
 # RECVD: (ignore proto:1 - acks)
--r ^(?<TIME>) RECVD src:(?<src>.+) dest:(?<nodename>.+) proto:(?<protonum>\\w+) rio-proto:(?<proto>.+).*$(?<TYPE=>RECVD-\\k<proto>)
+-r ^(?<TIME>) RECVD src:(?<src>.+) dest:(?<nodename>.+) proto:(?<protonum>\\w+) rio-proto:(?<proto>\\S+).*$(?<TYPE=>RECVD-\\k<proto>)
 
 -r ^.*RECVD.*$(?<TYPE=>RECVD-ACK)
 
@@ -37,7 +37,7 @@
 
 # Map each line to the partition named by the parsed
 # "nodename-filename" combination:
-#-m \\k<nodename>-\\k<FILE>
+-m \\k<nodename>-\\k<FILE>
 
 -s ^.*USER-EVENT.*$
 

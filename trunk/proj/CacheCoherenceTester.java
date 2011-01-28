@@ -10,7 +10,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Number of commands to perform
 	 */
-	protected static int commandCount = 100;
+	protected static int commandCount = 10;
 
 	@Override
 	public void start() {
