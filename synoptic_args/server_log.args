@@ -1,5 +1,47 @@
--r ^Node (?<nodename>): promoted to manager$(?<TYPE=>)
+-r ^Node (?<nodename>): promoted to manager$(?<TYPE=>PROMOTE MANAGER)
 
--m \\k<nodename>-\\k<FILE>
+-r ^Node (?<nodename>): manager is (?<target>.+)$(?<TYPE=>MANAGER)
+
+-r ^Node (?<nodename>): sending noop to (?<target>.+)$(?<TYPE=>SEND NOOP)
+
+-r ^Node (?<nodename>): sending ACK (?<seqnum>.+) to (?<target>.+)$(?<TYPE=> SEND ACK)
+
+-r ^Node (?<nodename>): received HANDSHAKE, mapping (?<sender>.+) to (?<uuid>.+)$(?<TYPE=> RECEIVED HANDSHAKE)
+
+-r ^Node (?<nodename>): (?<TYPE>requesting ownership) of (?<file>.+)$
+
+-r ^Node (?<nodename>): (?<TYPE>got packet) protocol (?<protocol>.+)$
+
+-r ^Node (?<nodename>): (?<TYPE>reading packet)$
+
+-r ^Node (?<nodename>): (?<TYPE>Locking file): (?<file>.+)$(?<TYPE=>LOCKING)
+
+-r ^Node (?<nodename>): (?<TYPE>Removing lock) on file: (?<file>.+)$
+
+-r ^Node (?<nodename>): attempting to (?<operation>.+) [Ff]ile: (?<file>.+)$(?<TYPE=>ATTEMPTING \\k<operation>)
+
+-r ^Node (?<nodename>): (?<TYPE>sending) (?<protocol>.+) to (?<dest>.+)$
+
+-r ^Node (?<nodename>): (?<TYPE>got) (?<status>.+) on (?<file>.+)$
+
+-r ^Node (?<nodename>): (?<TYPE>Changing client): (?<client>.+) to (?<status>.+)$
+
+-r ^Node (?<nodename>): (?<TYPE>lost ownership) of (?<file>.+)$
+
+-r ^Node (?<nodename>): (?<TYPE>reading) contents of file: (?<file>.+)$
+
+-r ^Node (?<nodename>): requesting (?<accesstype>.+) access for (?<file>.+)$(?<TYPE=>REQUESTING \\k<accesstype> ON \\k<file>)
+
+-r ^Node (?<nodename>): (?<oldstatus>.+) -> (?<newstatus>.+) for (?<file>.+)$(?<TYPE=>STATUSCHANGE)
+
+-r ^Node (?<nodename>): (?<TYPE>Error): (?<operation>.+) returned error code (?<errorcode>.+) on server (?<server>.+), file (?<file>.+) (?<error>.+)$
+
+-r ^Node (?<nodename>): (?<TYPE>resending) packet (?<seqnum>.+) protocol: (?<protocol>.+)$
+
+-r ^Node (?<nodename>): .*$(?<TYPE=>CATCHALL)
+
+-m \\k<FILE>
+
+-s ^NEW_COMMAND$
 
 -o output/serverlog
