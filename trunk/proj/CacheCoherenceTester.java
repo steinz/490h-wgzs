@@ -3,6 +3,11 @@ import java.util.List;
 import java.util.Random;
 import java.util.StringTokenizer;
 
+/**
+ * Wraps all methods that might end w/o performing a send to perform a random
+ * operation (and therefore send) once finished up to commandCount times (sends
+ * must be made to keep the Simulator alive)
+ */
 public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	protected static Random random = new Random(7);
@@ -104,10 +109,14 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		doOp();
 	}
 
+	/**
+	 * Does a random operation - currently only a valid operation, but we should
+	 * ideally be able to do invalid operations too to test errors
+	 */
 	protected void doOp() {
 		/*
 		 * TODO: This needs to wait for a round for {R,W}C to get to the manager
-		 * (maybe wait a few to be safe)
+		 * (maybe wait a few to be safe) using callbacks
 		 */
 
 		if (commandCount < 1) {
@@ -120,7 +129,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		if (existingFiles.size() == 0) {
 			pickUpTo = 1;
 		}
-		
+
 		String filename;
 		String cmd = "";
 		switch (random.nextInt(pickUpTo)) {
@@ -155,11 +164,11 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	protected int name = 0;
 	protected static List<String> existingFiles = new ArrayList<String>();
-	
+
 	protected String randomNewFilename() {
 		return "f" + name++;
 	}
-	
+
 	protected String randomExistingFilename() {
 		return existingFiles.get(random.nextInt(existingFiles.size()));
 	}

@@ -10,27 +10,28 @@
 \begin{document}
 
 \begin{center}
-{\large CSE 490h -- Project 1: Client-Server File Store Writeup} \\
+{\large CSE 490h -- Project 2: Cache Coherence Writeup} \\
 \textbf{Wayne Gerard - wayger} \\
 \textbf{Zachary Stein - steinz} \\
-January 24, 2011
+January 27, 2011
 \end{center}
 
 \textbf{Description:} \\
 
-For our implementation of single copy semantics for a small number of clients communicating with a server, we decided to have the server act as a manager, 
-keeping track of who has what access to any given file, assuming that all clients are invalid for all files at initialization.\\
+In this project we implemented write-back cache coherence with single copy semantics for use by a small number of clients sharing a single address space coordinated by a single manager. 
+The manger keeps track of the permissions for any given file in the system and assumes that the address space is empty at initialization time.
+Since the implementations of Transactions and PAXOS in future projects will provide fault tolerance and recovery, we assumed no errors for this project. \\
 
 \textbf{Implementation:} \\
 
-We used the standard Ivy cache coherence protocols, and created separate protocols for each cache coherency command (e.g. one for WQ, one for RQ). 
-To both follow the specification, and to make things easier, we decided to separate functionality into clients and servers. \\
+We used the standard Ivy cache coherence protocol, creating separate message types for each command (e.g. one for WQ, one for RQ).
+The manager is implemented on top of a regular client so that it can use the functionality implemented in the first project. \\
 
 \textbf{Clients:} \\
 
-When a client calls a read/write command, that client checks its current permissions on that file. If it lacks the appropriate permissions, then it asks the 
-manager for read and/or write permissions, and queues the action it was trying to take. This action is then taken after receiving the appropriate 
-permission from the manager, or not at all in the case of an error. \\
+When a client calls a read/write command, that client checks its cache to see if it has permissions on that file. If it lacks the permissions it needs to perform the desired operation, it asks the 
+manager for read and possibly write permissions, and queues the action it was trying to take. After receiving the appropriate 
+permission from the manager the action is completed. If an error occurs (e.g. the file requested does not exist) the operation is thrown out. \\
 
 \textbf{Managers:} \\ 
 
@@ -40,22 +41,24 @@ client has ownership of a file, it is assumed that the manager has the latest re
 
 \textbf{Outstanding issues:} \\
 
-Our deletion and creation mechanism(s) are not as smooth as they could be. \\
+Our deletion and creation mechanism(s) are not as smooth as they could be.
 
 First and foremost, we allow the client to delete files it has RW access to without informing the manager immediately. If another node requests
-access to this file, then the manager requests the client to send the data back, but the client does this by sending a blank file back to the 
-manager, which the manager assumes is an implicit delete.\\
+access to this file, then the manager requests the client to send the data back. The client does this by sending a blank file back to the 
+manager, which the manager assumes is an implicit delete. However, this is currently indistinguishable from an empty file. As a result, we are defining
+empty files to be essentially non-existent. This isn't particularly important except that it would make the API to our library a bit unnatural.
+We plan to fix this in the near future.
 
-In the event that node 2 deletes file x, and then node 0 requests file x, node 2 will send a 
+Our plan to fix this problem is summarized briefly as follows. In the event that node 2 deletes file x, and then node 0 requests file x, node 2 will send a 
 special command to the server indicating that it was deleted. The server will then return a “FILE DOES NOT EXIST” error to node 0, which node 0 should 
 take as an indication that file x does not exist anymore. However, currently node 0 will keep whatever cached copy it has. It will always receive 
-an error that the file does not exist if it asks the server for read and/or write permission, but will still have a cached copy of file x.\\
+an error that the file does not exist if it asks the server for read and/or write permission, but will still have a cached copy of file x.
 
-Creation is equally troublesome, and currently the manager has no way to distinguish between commands send by the client. If a client does not have 
+Creation is equally troublesome, as currently the manager has no way to distinguish between commands send by the client. If a client does not have 
 proper read/write access to a file, it just sends a generic WQ to the manager. The manager assumes the client would not try to append or put to a file that it did not intend to either create first
 or that existed somewhere else. In that vein, if the manager cannot find a local copy of the file
 it will assume that the client intended to create that file, and so it will create a local
-copy and then send an empty file back to the clients.
+copy and then send an empty file back to the client. As a result of this, appends and puts can succeed on non-existent files. This could also be fixed by an extra message type. \\
 
 \textbf{Additional steps:} \\
 
@@ -69,15 +72,39 @@ START 0
 START 1
 START 2
 time
-0 manageris 1 // establishing the manager
-1 manager
-2 manageris 1
+0 manager // establishing that 0 is the manager
+1 manageris 0 // inform all clients
+2 manageris 0
 0 noop 1 // handshaking
 2 noop 1
 time
 time
 time
-time (you should allow 3-4 rounds for handshaking to take place)
+time // allow 3-4 rounds for handshaking to take place to avoid dropping commands
 \end{verbatim}
+
+Alternatively, if no more than 4 nodes are desired, the PerfectInitializedClient can be used to bypass handshaking and manager establishment.
+Node 0 will always be the manager in this case. Note that you still have to start the nodes you would like to use. \\
+
+\textbf{State Machines:} \\
+
+(See Attached) \\
+
+TODO: Discussion \\
+
+\textbf{Synoptic:} \\
+
+We were successful in generating Synoptic traces of our Protocol running partitioned by node. Unfortunately, these graphs are tall and unwieldy since they
+maintain the arbitrary high-level operation order imposed by the specific script run as invariants in the final graph.
+
+We are still in the process of generating the ideal Synoptic graph of our protocol partitioned by high-level operation. The CacheCoherenceTester has been written to this end, but is incomplete.
+It works by performing many random high-level operations (create, delete, get, put, append) at random on random files. It currently works if no attempts are made to
+perform operations on files that don't exist, create files that do exist, and do other non-sensible things. The user defined Synoptic even it logs currently occurs at
+an improper time, making it impossible to partition the Synoptic log into the desired traces. This should be fixed soon using Callbacks.
+
+We also considered generating several random scripts, each containing a single high-level operation to be run, and partitioning by log-file generated. Unfortunately, this technique
+would fail to capture several important characteristics of our protocol since cache data structures would be cleared between each run and we currently have no way to recover them between rounds.
+The easiest fix for this would be for the server to assume it has the newest version of every file it knows about upon initialization and for the clients to invalidate all of the local files in their cache.
+However, the CacheCoherenceTester is likely to be more extensible and robust, so we will concentrate our time trying to get it working instead. \\
 
 \end{document}

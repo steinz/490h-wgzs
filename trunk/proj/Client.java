@@ -37,6 +37,8 @@ import edu.washington.cs.cse490h.lib.Utility;
  */
 public class Client extends RIONode {
 
+	// TODO: Separate the Client and Manager code into two node types
+	
 	/**
 	 * Possible cache statuses
 	 */
