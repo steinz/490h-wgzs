@@ -1078,6 +1078,8 @@ public class Client extends RIONode {
 			}
 			pendingPermissionRequests.put(filename, client);
 		} else
+			if (!Utility.fileExists(this, filename)) // assume this was a create if the file doesn't exist
+				createFile(filename);
 			// Else if no one has permissions on this file, send them a WD
 			sendFile(client, filename, Protocol.WD);
 	}
