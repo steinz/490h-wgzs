@@ -23,6 +23,7 @@ public class ErrorCode {
 	public static final int ReadWriteAndReadOnly = 42;
 	public static final int UnknownManager = 45;
 	public static final int MissingIntent = 46;
+	public static final int PrivilegeDisagreement = 47;
 
 	// onCommand parsing errors
 	public static final int InvalidCommand = 900;
@@ -53,6 +54,8 @@ public class ErrorCode {
 			return "45 UnknownManager";
 		case 46:
 			return "46 MissingIntent";
+		case 47:
+			return "47 PrivilegeDisagreement";
 		case 900:
 			return "900 InvalidCommand";
 		case 901:

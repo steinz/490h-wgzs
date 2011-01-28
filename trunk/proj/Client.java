@@ -609,6 +609,7 @@ public class Client extends RIONode {
 	public void createFile(int from, String fileName) {
 
 		printVerbose("attempting to CREATE file: " + fileName);
+		logSynopticEvent("CREATING FILE");
 
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
@@ -650,6 +651,7 @@ public class Client extends RIONode {
 	public void deleteFile(int from, String fileName) {
 
 		printVerbose("attempting to DELETE file: " + fileName);
+		logSynopticEvent("DELETING FILE");
 
 		// check if the file even exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -682,6 +684,7 @@ public class Client extends RIONode {
 	public String getFile(String fileName) throws IOException {
 
 		printVerbose("attempting to READ file: " + fileName);
+		logSynopticEvent("GETTING FILE");
 
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -715,6 +718,7 @@ public class Client extends RIONode {
 
 		printVerbose("attempting to READ/GET file: " + fileName + " for Node: "
 				+ from);
+		logSynopticEvent("GETTING FILE");
 
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -776,6 +780,7 @@ public class Client extends RIONode {
 
 		printVerbose("attempting to PUT/APPEND File: " + fileName
 				+ " with Contents: " + contents);
+		logSynopticEvent("WRITING FILE");
 
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -920,11 +925,6 @@ public class Client extends RIONode {
 			printError(ErrorCode.InvalidCommand, "receive");
 		}
 
-		// TODO: implement {W,R}{D,Q,F}
-		// Only server receives: {R,W}{Q,C}, IC
-		// Only client receives: {R,W}F, IV
-		// Both ways: {W,R}D
-
 	}
 
 	/*************************************************
@@ -1017,7 +1017,6 @@ public class Client extends RIONode {
 	}
 
 	private void receiveWQ(int client, String filename) {
-		// TODO: log locks and unlocks (WQ, RQ, WC, RC)
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(filename)) {
 			Queue<QueuedFileRequest> e = managerQueuedFileRequests
@@ -1210,14 +1209,29 @@ public class Client extends RIONode {
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
 
-		// RW -> RO
-		cacheStatus.put(filename, CacheStatuses.ReadOnly);
-		printVerbose("RW -> RO for " + filename);
 
 		try {
-			String payload = filename + delimiter + getFile(filename);
+			String payload = null;
+			// Check if we even have a valid copy of the file
+			if (!Utility.fileExists(this, msgString)) {
+				CacheStatuses currentStatus = cacheStatus.get(msgString);
+				if (currentStatus == CacheStatuses.ReadWrite) {
+					// I deleted this file
+					payload = filename + delimiter;
+				} else {
+					// they're wrong, or we have different ideas about our
+					// current permissions
+					printError(ErrorCode.PrivilegeDisagreement, "wf "
+							+ msgString);
+					return;
+				}
+			} else
+				payload = filename + delimiter + getFile(filename);
 			SendToManager(Protocol.RD, Utility.stringToByteArray(payload));
 			printVerbose("sending rd to manager " + filename);
+			// RW -> RO
+			cacheStatus.put(filename, CacheStatuses.ReadOnly);
+			printVerbose("RW -> RO for " + filename);
 		} catch (UnknownManagerException e) {
 			printError(ErrorCode.UnknownManager, "rf");
 		} catch (IOException e) {
@@ -1233,6 +1247,7 @@ public class Client extends RIONode {
 	 * @param msgString
 	 */
 	private void receiveWF(String msgString) {
+		
 		if (isManager) {
 			printError(ErrorCode.InvalidCommand, "wf " + msgString);
 		}
@@ -1240,18 +1255,27 @@ public class Client extends RIONode {
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
 
-		// TODO: Check that I have ownership of the file (also for RF)
-
-		// lose ownership
-		cacheStatus.put(filename, CacheStatuses.Invalid);
-		printVerbose("lost ownership of " + filename);
-
 		try {
-			// TODO: I could have deleted this file...
-
-			String payload = filename + delimiter + getFile(filename);
+			String payload = null;
+			// Check if we even have a valid copy of the file
+			if (!Utility.fileExists(this, msgString)) {
+				CacheStatuses currentStatus = cacheStatus.get(msgString);
+				if (currentStatus == CacheStatuses.ReadWrite) {
+					// I deleted this file
+					payload = filename + delimiter;
+				} else {
+					// they're wrong, or we have different ideas about our
+					// current permissions
+					printError(ErrorCode.PrivilegeDisagreement, "wf "
+							+ msgString);
+				}
+			} else
+				payload = filename + delimiter + getFile(filename);
 			SendToManager(Protocol.WD, Utility.stringToByteArray(payload));
 			printVerbose("sending wd to manager " + filename);
+			// lose ownership
+			cacheStatus.put(filename, CacheStatuses.Invalid);
+			printVerbose("lost ownership of " + filename);
 		} catch (UnknownManagerException e) {
 			printError(ErrorCode.UnknownManager, "wf");
 		} catch (IOException e) {
@@ -1343,18 +1367,30 @@ public class Client extends RIONode {
 			}
 
 		} else { // Manager receives WD
+			
+			// check if the payload is blank. If so, this is an indication that the file was deleted
+			if (contents == "" || contents == null){
+				deleteFile(filename);
+				
+				// send out a WD to anyone requesting this
+				int destAddr = pendingPermissionRequests.get(filename);
+				sendResponse(destAddr, filename, false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+				
+			}
+			else{
 			// first write the file to save a local copy
 			writeFile(filename, contents, Protocol.PUT);
 
 			// send out a WD to anyone requesting this
-			int destAddr = pendingPermissionRequests.get(filename);
-			sendFile(destAddr, filename, Protocol.WD);
+			Integer destAddr = pendingPermissionRequests.get(filename);
+			if (destAddr != null)
+				sendFile(destAddr, filename, Protocol.WD);
 
 			// update the status of the client who sent the WD
 			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
 			m.put(from, CacheStatuses.Invalid);
 			managerCacheStatuses.put(filename, m);
-
+			}
 		}
 	}
 
@@ -1392,15 +1428,30 @@ public class Client extends RIONode {
 				printError(ErrorCode.UnknownManager, "rd");
 			}
 		} else {
-			// first write the file to save a local copy
-			writeFile(filename, contents, Protocol.PUT);
+			// check if the payload is blank. If so, this is an indication that
+			// the file was deleted
+			if (contents == "" || contents == null) {
+				deleteFile(filename);
 
-			// send out a RD to anyone requesting this
-			int destAddr = pendingPermissionRequests.get(filename);
-			sendFile(destAddr, filename, Protocol.RD);
+				// Send out an invalid file request
+				int destAddr = pendingPermissionRequests.get(filename);
+				sendResponse(destAddr, filename, false,
+						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+				
 
+			} else {
+				// first write the file to save a local copy
+				writeFile(filename, contents, Protocol.PUT);
+
+				// send out a RD to anyone requesting this
+				int destAddr = pendingPermissionRequests.get(filename);
+				sendFile(destAddr, filename, Protocol.RD);
+
+				
+			}
 			// update the status of the client who sent the WD
-			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
+			Map<Integer, CacheStatuses> m = managerCacheStatuses
+					.get(filename);
 			m.put(from, CacheStatuses.ReadOnly);
 			managerCacheStatuses.put(filename, m);
 		}

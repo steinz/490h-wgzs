@@ -41,10 +41,7 @@ public class Protocol {
 	public static final int IC = 18;
 
 	// Error Type
-	/*
-	 * TODO: Actually send SUCCESS/ERROR packets on command completion / error
-	 * instead of DATA packets with message strings.
-	 */
+
 	public static final int SUCCESS = 125;
 	public static final int ERROR = 127;
 
