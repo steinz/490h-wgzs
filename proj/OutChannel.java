@@ -137,7 +137,7 @@ class OutChannel {
 			sb.append("resending packet ");
 			sb.append(riopkt.getSeqNum());
 			sb.append(" protocol: ");
-			sb.append(riopkt.getProtocol());
+			sb.append(Protocol.protocolToString(riopkt.getProtocol()));
 			Logger.verbose(sb.toString());
 
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
