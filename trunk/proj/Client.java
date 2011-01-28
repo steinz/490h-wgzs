@@ -926,6 +926,9 @@ public class Client extends RIONode {
 		case Protocol.RF:
 			receiveRF(msgString);
 			break;
+		case Protocol.ERROR:
+			receiveError(from, msgString);
+			break;
 		default:
 			printError(ErrorCode.InvalidCommand, "receive");
 		}
@@ -984,7 +987,8 @@ public class Client extends RIONode {
 		String sendMsg = "";
 
 		if (!Utility.fileExists(this, fileName)) {
-			sendResponse(client, Protocol.protocolToString(Protocol.ERROR), false, ErrorCode.lookup((ErrorCode.FileDoesNotExist)));
+			sendResponse(client, Protocol.protocolToString(Protocol.ERROR),
+					false, ErrorCode.lookup((ErrorCode.FileDoesNotExist)));
 		} else {
 			try {
 				sendMsg = fileName + delimiter + getFile(fileName);
@@ -995,7 +999,8 @@ public class Client extends RIONode {
 
 		byte[] payload = Utility.stringToByteArray(sendMsg);
 		RIOSend(client, protocol, payload);
-		printVerbose("sending " + Protocol.protocolToString(protocol) + " to " + client);
+		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
+				+ client);
 	}
 
 	private void sendRequest(int client, String fileName, int protocol) {
@@ -1077,7 +1082,7 @@ public class Client extends RIONode {
 				sendRequest(i, filename, Protocol.IV);
 			}
 			pendingPermissionRequests.put(filename, client);
-		} 
+		}
 		if (!managerCacheStatuses.containsKey(filename)) { // assume this
 															// was a
 															// create if
@@ -1121,7 +1126,7 @@ public class Client extends RIONode {
 	private void updateClientCacheStatus(CacheStatuses val, int client,
 			String fileName) {
 		if (!isManager) {
-			Logger.error(ErrorCode.InvalidCommand,
+			Logger.error(ErrorCode.NotManager,
 					"Receieved confirm but not manager");
 			return;
 		}
@@ -1207,7 +1212,7 @@ public class Client extends RIONode {
 		}
 	}
 
-	// TODO: Cleanup state after {R,W}{D,F} etc fails
+	// TODO: Cleanup state after {R,W}{Q,D,F} etc fails
 
 	/**
 	 * Only client receives RF as a request from the server to propagate their
@@ -1222,7 +1227,6 @@ public class Client extends RIONode {
 
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
-
 
 		try {
 			String payload = null;
@@ -1245,7 +1249,8 @@ public class Client extends RIONode {
 			printVerbose("sending rd to manager " + filename);
 			// RW -> RO
 			clientCacheStatus.put(filename, CacheStatuses.ReadOnly);
-			printVerbose("RW -> RO for " + filename);		} catch (UnknownManagerException e) {
+			printVerbose("RW -> RO for " + filename);
+		} catch (UnknownManagerException e) {
 			printError(ErrorCode.UnknownManager, "rf");
 		} catch (IOException e) {
 			printError(ErrorCode.UnknownError, "rf");
@@ -1336,7 +1341,10 @@ public class Client extends RIONode {
 		}
 
 		if (!isManager) {
-			// TODO: this breaks for creates (empty contents)
+			/*
+			 * TODO: HIGH: Can't currently distinguish between append on file
+			 * that doesn't exist and file that is empty
+			 */
 
 			// has RW!
 			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
@@ -1379,29 +1387,31 @@ public class Client extends RIONode {
 			}
 
 		} else { // Manager receives WD
-			
-			// check if the payload is blank. If so, this is an indication that the file was deleted
-			if (contents == "" || contents == null){
+
+			// check if the payload is blank. If so, this is an indication that
+			// the file was deleted
+			if (contents == "" || contents == null) {
 				deleteFile(filename);
-				
+
 				// send out a WD to anyone requesting this
 				int destAddr = pendingPermissionRequests.get(filename);
-				sendResponse(destAddr, filename, false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
-				
-			}
-			else{
-			// first write the file to save a local copy
-			writeFile(filename, contents, Protocol.PUT);
+				sendResponse(destAddr, filename, false,
+						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
 
-			// send out a WD to anyone requesting this
-			Integer destAddr = pendingPermissionRequests.get(filename);
-			if (destAddr != null)
-				sendFile(destAddr, filename, Protocol.WD);
+			} else {
+				// first write the file to save a local copy
+				writeFile(filename, contents, Protocol.PUT);
 
-			// update the status of the client who sent the WD
-			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
-			m.put(from, CacheStatuses.Invalid);
-			managerCacheStatuses.put(filename, m);
+				// send out a WD to anyone requesting this
+				Integer destAddr = pendingPermissionRequests.get(filename);
+				if (destAddr != null)
+					sendFile(destAddr, filename, Protocol.WD);
+
+				// update the status of the client who sent the WD
+				Map<Integer, CacheStatuses> m = managerCacheStatuses
+						.get(filename);
+				m.put(from, CacheStatuses.Invalid);
+				managerCacheStatuses.put(filename, m);
 			}
 		}
 	}
@@ -1449,7 +1459,6 @@ public class Client extends RIONode {
 				int destAddr = pendingPermissionRequests.get(filename);
 				sendResponse(destAddr, filename, false,
 						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
-				
 
 			} else {
 				// first write the file to save a local copy
@@ -1459,11 +1468,9 @@ public class Client extends RIONode {
 				int destAddr = pendingPermissionRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.RD);
 
-				
 			}
 			// update the status of the client who sent the WD
-			Map<Integer, CacheStatuses> m = managerCacheStatuses
-					.get(filename);
+			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
 			m.put(from, CacheStatuses.ReadOnly);
 			managerCacheStatuses.put(filename, m);
 		}
@@ -1472,6 +1479,12 @@ public class Client extends RIONode {
 	/*************************************************
 	 * end client and manager cache coherency functions
 	 ************************************************/
+
+	private void receiveError(Integer from, String msgString) {
+		// TODO:
+		Logger.error("Node " + this.addr + ": Error from " + from + ": "
+				+ msgString);
+	}
 
 	/**
 	 * Parses a received command to decide whether to put or append to file
