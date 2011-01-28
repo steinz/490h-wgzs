@@ -41,6 +41,7 @@ public class Protocol {
 	// Error Type
 	// TODO: Actually send ERROR packets on errors instead of DATA packets with
 	// error message strings.
+	public static final int SUCCESS = 125;
 	public static final int ERROR = 127;
 
 	public static final int MAX_PROTOCOL = 127;
@@ -114,6 +115,8 @@ public class Protocol {
 			return "RIO_IV";
 		case IC:
 			return "RIO_IC";
+		case SUCCESS:
+			return "RIO_SUCCESS";
 		default:
 			return "UNKNOWN";
 		}
