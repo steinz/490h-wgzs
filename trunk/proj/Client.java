@@ -265,9 +265,11 @@ public class Client extends RIONode {
 
 		if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) != CacheStatuses.Invalid) {
-			// The file is in my cache as RW or RO so it already exists, throw
-			// an error
-			printError(ErrorCode.FileAlreadyExists, "create", filename);
+			if (Utility.fileExists(this, filename)) {
+				printError(ErrorCode.FileAlreadyExists, "create", filename);
+			} else {
+				createFile(filename);
+			}
 		} else {
 			// Request ownership
 			try {
