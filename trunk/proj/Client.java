@@ -613,7 +613,8 @@ public class Client extends RIONode {
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileAlreadyExists, "create", addr, fileName);
-			sendResponse(from, "create", false, ErrorCode.lookup(ErrorCode.FileAlreadyExists));
+			sendResponse(from, "create", false,
+					ErrorCode.lookup(ErrorCode.FileAlreadyExists));
 			return;
 		}
 
@@ -654,7 +655,8 @@ public class Client extends RIONode {
 		if (!Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileDoesNotExist, "delete", addr, fileName);
 			if (from != this.addr)
-				sendResponse(from, "delete", false,  ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+				sendResponse(from, "delete", false,
+						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
 			return;
 		} else {
 			// delete file
@@ -717,7 +719,8 @@ public class Client extends RIONode {
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
-			sendResponse(from, "get", false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+			sendResponse(from, "get", false,
+					ErrorCode.lookup(ErrorCode.FileDoesNotExist));
 			return;
 		}
 		// send the file if it does
@@ -735,9 +738,9 @@ public class Client extends RIONode {
 				}
 				reader.close();
 			} catch (FileNotFoundException e) {
-				e.printStackTrace();
+				Logger.error(e);
 			} catch (IOException e) {
-				e.printStackTrace();
+				Logger.error(e);
 			}
 
 			// send the payload
@@ -780,7 +783,8 @@ public class Client extends RIONode {
 				printError(ErrorCode.FileDoesNotExist, "put", addr, fileName);
 			else
 				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
-			sendResponse(from, Protocol.protocolToString(protocol), false, ErrorCode.lookup(ErrorCode.FileAlreadyExists));
+			sendResponse(from, Protocol.protocolToString(protocol), false,
+					ErrorCode.lookup(ErrorCode.FileAlreadyExists));
 			return;
 		} else {
 			try {
@@ -801,10 +805,9 @@ public class Client extends RIONode {
 				if (protocol == Protocol.PUT)
 					deleteFile(this.addr, ".temp");
 			} catch (IOException e) {
-				sendResponse(from, Protocol.protocolToString(protocol), false, ErrorCode.lookup(ErrorCode.UnknownError));
-				// use printError?
-				System.err.println(e.getMessage());
-				e.printStackTrace();
+				sendResponse(from, Protocol.protocolToString(protocol), false,
+						ErrorCode.lookup(ErrorCode.UnknownError));
+				Logger.error(e);
 			}
 		}
 
@@ -841,8 +844,10 @@ public class Client extends RIONode {
 	 * success/failure responses returned from the server.
 	 */
 	public void receiveData(String cmdOrFileName, String contents) {
-		// TODO: eventually we'll probably want to stop using this for
-		// success/failure responses, moving each to their own protocol types
+		/*
+		 * TODO: Stop using this for success/failure responses, use it only for
+		 * get responses, move responses to their own protocol types
+		 */
 		String output = cmdOrFileName + " received with contents: " + contents;
 		printInfo(output);
 	}
@@ -929,7 +934,8 @@ public class Client extends RIONode {
 	private void receiveRQ(int client, String filename) {
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(filename)) {
-			Queue<QueuedFileRequest> e = managerQueuedFileRequests.get(filename);
+			Queue<QueuedFileRequest> e = managerQueuedFileRequests
+					.get(filename);
 			if (e == null)
 				e = new PriorityQueue<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.RQ, Utility
@@ -986,7 +992,7 @@ public class Client extends RIONode {
 
 		byte[] payload = Utility.stringToByteArray(sendMsg);
 		RIOSend(client, protocol, payload);
-		printVerbose("sending " + protocol + " to " + client);
+		printVerbose("sending " + Protocol.protocolToString(protocol) + " to " + client);
 	}
 
 	private void sendRequest(int client, String fileName, int protocol) {
@@ -1014,7 +1020,8 @@ public class Client extends RIONode {
 		// TODO: log locks and unlocks (WQ, RQ, WC, RC)
 		// Deal with locked files, and lock the file if it's not currently
 		if (lockedFiles.contains(filename)) {
-			Queue<QueuedFileRequest> e = managerQueuedFileRequests.get(filename);
+			Queue<QueuedFileRequest> e = managerQueuedFileRequests
+					.get(filename);
 			if (e == null)
 				e = new PriorityQueue<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.WQ, Utility
@@ -1134,7 +1141,8 @@ public class Client extends RIONode {
 		// (node is manager but not expecting IC from this node for this file)?
 		if (!pendingICs.containsKey(filename) || !isManager
 				|| !pendingICs.get(filename).contains(from)) {
-			sendResponse(from, Protocol.protocolToString(Protocol.ERROR), false, ErrorCode.lookup(ErrorCode.UnknownError));
+			sendResponse(from, Protocol.protocolToString(Protocol.ERROR),
+					false, ErrorCode.lookup(ErrorCode.UnknownError));
 			Logger.error(ErrorCode.NotManager, "IC: " + filename);
 		} else {
 
@@ -1439,13 +1447,13 @@ public class Client extends RIONode {
 	private void sendResponse(Integer destAddr, String protocol,
 			boolean successful, String error) {
 		if (destAddr != this.addr) {
-			
+
 			String sendMsg = protocol;
 			if (!successful)
 				sendMsg = error;
-			
+
 			byte[] payload = Utility.stringToByteArray(sendMsg);
-			if(successful) 
+			if (successful)
 				RIOLayer.RIOSend(destAddr, Protocol.SUCCESS, payload);
 			else
 				RIOLayer.RIOSend(destAddr, Protocol.ERROR, payload);

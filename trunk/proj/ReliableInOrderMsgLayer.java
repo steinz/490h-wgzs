@@ -100,8 +100,8 @@ public class ReliableInOrderMsgLayer {
 			if (riopkt.getUUID().equals(n.getID())
 					&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
 				sb = n.appendNodeAddress();
-				sb.append("got packet protocol ");
-				sb.append(riopkt.getProtocol());
+				sb.append("got packet protocol: ");
+				sb.append(Protocol.protocolToString(riopkt.getProtocol()));
 				Logger.verbose(sb.toString());
 
 				LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);

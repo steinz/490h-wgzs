@@ -41,9 +41,11 @@ public class Logger {
 		verbose(str, false);
 	}
 
-	// TODO: @Zach It would be neat if the logger could take methods instead of
-	// strings so that the strings would only be computed if logging was on.
-	// This would also clean up long logging block calls in code elsewhere.
+	/*
+	 * TODO: LOW: It would be neat if the logger could take methods instead of
+	 * strings so that the strings would only be computed if logging was on.
+	 * This would also clean up long logging block calls in code elsewhere.
+	 */
 
 	public static void verbose(String str, boolean highlight) {
 		if (printVerbose) {
