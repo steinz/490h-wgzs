@@ -1077,11 +1077,19 @@ public class Client extends RIONode {
 				sendRequest(i, filename, Protocol.IV);
 			}
 			pendingPermissionRequests.put(filename, client);
-		} else
-			if (!Utility.fileExists(this, filename)) // assume this was a create if the file doesn't exist
-				createFile(filename);
-			// Else if no one has permissions on this file, send them a WD
+		} 
+		if (!managerCacheStatuses.containsKey(filename)) { // assume this
+															// was a
+															// create if
+															// the file
+															// doesn't
+															// exist
+			createFile(filename);
 			sendFile(client, filename, Protocol.WD);
+		} else
+			sendResponse(client, Protocol.protocolToString(Protocol.ERROR),
+					false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+
 	}
 
 	/**
