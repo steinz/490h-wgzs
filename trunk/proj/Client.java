@@ -666,10 +666,13 @@ public class Client extends RIONode {
 			// delete file
 			try {
 				PersistentStorageWriter writer = getWriter(fileName, false);
-				writer.delete();
+				if (!writer.delete())
+					printError(ErrorCode.UnknownError, "Delete failed!");
 				writer.close();
+				if (Utility.fileExists(this, fileName))
+					printError(ErrorCode.UnknownError, "Delete failed!");
 			} catch (IOException e) {
-				Logger.error(e);
+				printError(ErrorCode.UnknownError, e.getMessage());
 			}
 		}
 
@@ -791,7 +794,7 @@ public class Client extends RIONode {
 			else
 				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
 			sendResponse(from, Protocol.protocolToString(protocol), false,
-					ErrorCode.lookup(ErrorCode.FileAlreadyExists));
+					ErrorCode.lookup(ErrorCode.FileDoesNotExist));
 			return;
 		} else {
 			try {
@@ -981,8 +984,7 @@ public class Client extends RIONode {
 		String sendMsg = "";
 
 		if (!Utility.fileExists(this, fileName)) {
-			createFile(fileName);
-			sendMsg = fileName;
+			sendResponse(client, Protocol.protocolToString(Protocol.ERROR), false, ErrorCode.lookup((ErrorCode.FileDoesNotExist)));
 		} else {
 			try {
 				sendMsg = fileName + delimiter + getFile(fileName);
@@ -1042,6 +1044,7 @@ public class Client extends RIONode {
 		Integer rw = null;
 		ArrayList<Integer> ro = new ArrayList<Integer>();
 
+		// check for nodes with permissions on this file currently
 		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
 				if (rw != null)

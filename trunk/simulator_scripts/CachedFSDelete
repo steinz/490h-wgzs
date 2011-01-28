@@ -1,0 +1,31 @@
+start 0
+start 1
+start 2
+time
+1 manager
+0 manageris 1
+2 manageris 1
+0 noop 1
+2 noop 1
+time
+time
+time
+0 create test
+time
+time
+time
+time
+time
+0 put test hello
+time
+0 delete test
+time
+time
+time
+2 get test
+time
+time
+time
+time
+time
+time
