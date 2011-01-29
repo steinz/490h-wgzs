@@ -8,7 +8,6 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.UUID;
 
 import edu.washington.cs.cse490h.lib.Packet;
