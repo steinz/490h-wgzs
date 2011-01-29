@@ -2,21 +2,21 @@ start 0
 start 1
 start 2
 time
-1 manager
-0 manageris 1
-2 manageris 1
+0 manager
+1 manageris 0
+2 manageris 0
 time
-0 noop 1
-2 noop 1
-time
-time
-time
-time
-0 create test
+1 noop 0
+2 noop 0
 time
 time
 time
-0 put test hello world
+time
+1 create test
+time
+time
+time
+1 put test hello world
 time
 2 get test
 time

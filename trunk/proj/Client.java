@@ -41,6 +41,11 @@ public class Client extends RIONode {
 	 * this is impossible w/ framework since we can't start two node types
 	 */
 
+	/*
+	 * TODO: LOW: Write invariant checkers to verify cache / file state /
+	 * locking invariants
+	 */
+
 	/**
 	 * Possible cache statuses
 	 * 
@@ -453,8 +458,8 @@ public class Client extends RIONode {
 	 */
 	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = parseServer(tokens, "noop");
-		RIOSend(addr, Protocol.NOOP, Utility.stringToByteArray(""));
-		printInfo("sending noop rpc to " + server);
+		RIOSend(server, Protocol.NOOP, Utility.stringToByteArray(""));
+		printInfo("sending noop to " + server);
 	}
 
 	/*************************************************
@@ -1038,6 +1043,21 @@ public class Client extends RIONode {
 
 		if (managerCacheStatuses.containsKey(filename)
 				&& managerCacheStatuses.get(filename).size() > 0) {
+			/*
+			 * TODO: HIGH: This assumption is bad:
+			 * 
+			 * 1 create test
+			 * 
+			 * 1 delete test
+			 * 
+			 * 0 create test
+			 * 
+			 * is a counterexample - 0 gets FAE from here. 1 gets RW via RPC
+			 * then deletes it just locally, so the manager still thinks 0 has
+			 * RW. I think we should fix this by always pushing deletes and
+			 * creates to the manager.
+			 */
+
 			// send error, file already exists
 			sendError(client, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
@@ -1106,6 +1126,9 @@ public class Client extends RIONode {
 					ro.add(entry.getKey());
 			}
 		}
+
+		// update permissions
+		clientStatuses.clear();
 
 		boolean ivSent = false;
 
