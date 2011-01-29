@@ -302,15 +302,7 @@ public class Client extends RIONode {
 			// I have ownership
 			deleteFile(filename);
 		} else {
-			try {
-				SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
-				printInfo("requesting ownership of " + filename);
-			} catch (UnknownManagerException e) {
-				printError(ErrorCode.UnknownManager, "delete", filename);
-				return;
-			}
-			clientPendingOperations
-					.put(filename, new Intent(intentType.DELETE));
+			deleteRPC(this.managerAddr, filename);
 		}
 	}
 
@@ -997,6 +989,9 @@ public class Client extends RIONode {
 		case Protocol.ERROR:
 			receiveError(from, msgString);
 			break;
+		case Protocol.SUCCESS:
+			receiveSuccessful(from, msgString);
+			break;
 		default:
 			printError(ErrorCode.InvalidCommand, "receive");
 		}
@@ -1256,11 +1251,14 @@ public class Client extends RIONode {
 														// waiting for a WD, so
 														// check for that and
 														// send
-				if (pendingCCPermissionRequests.containsKey(filename))
+				if (pendingCCPermissionRequests.containsKey(filename)){
 					destAddr = pendingCCPermissionRequests.get(filename);
-				else
+					sendFile(destAddr, filename, Protocol.WD);
+				}
+				else{
 					destAddr = pendingRPCDeleteRequests.get(filename);
-				sendFile(destAddr, filename, Protocol.WD);
+					sendSuccess(destAddr, Protocol.DELETE, filename);
+				}
 			} else {
 				printVerbose("Received IC but waiting for IC from at client (only first shown): "
 						+ pendingICs.get(filename).get(0));
@@ -1581,6 +1579,8 @@ public class Client extends RIONode {
 		
 		if (cmd.equals("CREATE")) {
 			createFile(filename);
+		} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))){
+			deleteFile(filename);
 		}
 	}
 
