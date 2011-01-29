@@ -27,7 +27,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Number of commands to perform
 	 */
-	protected static int commandCount = 100;
+	protected static int commandCount = 10;
 
 	protected static List<CacheCoherenceTester> clients = new ArrayList<CacheCoherenceTester>();
 
@@ -245,7 +245,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 			break;
 		}
 
-		Logger.info("Doing command: " + cmd);
+		Logger.info("Node " + this.addr + " doing command: " + cmd);
 		logSynopticEvent("COMMAND");
 		logSynopticEvent(cmdName);
 		onCommand(cmd);

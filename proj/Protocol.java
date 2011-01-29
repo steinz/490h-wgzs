@@ -53,6 +53,7 @@ public class Protocol {
 	 * @return true if the protocol is valid, false otherwise
 	 */
 	public static boolean isPktProtocolValid(int protocol) {
+		// TODO: Update
 		return ((19 > protocol && protocol > -1) || protocol == 125 || protocol == 127);
 	}
 
