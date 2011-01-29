@@ -16,13 +16,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.StringTokenizer;
 import java.util.NoSuchElementException;
-import java.util.TreeMap;
-
-import plume.OrderedPairIterator;
-
 import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
 import edu.washington.cs.cse490h.lib.Utility;
@@ -41,7 +36,10 @@ import edu.washington.cs.cse490h.lib.Utility;
  */
 public class Client extends RIONode {
 
-	// TODO: Separate the Client and Manager code into two node types
+	/*
+	 * TODO: LOW: Separate the Client and Manager code into two node types -
+	 * impossible w/ framework
+	 */
 
 	/**
 	 * Possible cache statuses
@@ -290,8 +288,11 @@ public class Client extends RIONode {
 					.put(filename, new Intent(intentType.CREATE));
 		}
 	}
-	
 
+	public void createRPC(int address, String filename) {
+		RIOSend(this.managerAddr, Protocol.CREATE,
+				Utility.stringToByteArray(filename));
+	}
 
 	/**
 	 * Get ownership of a file and delete it
@@ -1037,7 +1038,7 @@ public class Client extends RIONode {
 		if (lockedFiles.contains(filename)) {
 			Queue<QueuedFileRequest> e = managerQueuedFileRequests
 					.get(filename);
-			if (e == null) 
+			if (e == null)
 				e = new LinkedList<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.WQ, Utility
 					.stringToByteArray(filename)));
@@ -1161,9 +1162,12 @@ public class Client extends RIONode {
 	 *            waiting for an IC from this node for this file
 	 */
 	protected void receiveIC(Integer from, String filename) {
-		// TODO: Maybe different messages for the first two vs. the last
-		// scenario
-		// (node is manager but not expecting IC from this node for this file)?
+		/*
+		 * TODO: Maybe different messages for the first two vs. the last
+		 * scenario (node is manager but not expecting IC from this node for
+		 * this file)?
+		 */
+
 		if (!pendingICs.containsKey(filename) || !isManager
 				|| !pendingICs.get(filename).contains(from)) {
 			sendResponse(from, Protocol.protocolToString(Protocol.ERROR),
@@ -1185,7 +1189,6 @@ public class Client extends RIONode {
 														// send
 				int destAddr = pendingPermissionRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.WD);
-				// TODO: Deal with queued file requests
 			} else {
 				printVerbose("Received IC but waiting for IC from at client (only first shown): "
 						+ pendingICs.get(filename).get(0));
@@ -1209,6 +1212,7 @@ public class Client extends RIONode {
 		if (isManager) {
 			printError(ErrorCode.InvalidCommand, "iv " + msgString);
 		} else {
+			//TODO: put INVALID or delete entirely???
 			clientCacheStatus.put(msgString, CacheStatuses.Invalid);
 			printVerbose("marking invalid " + msgString);
 			try {

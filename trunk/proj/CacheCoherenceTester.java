@@ -184,10 +184,6 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	 */
 	// used as callback
 	public void doOp(Boolean onlyValidW) {
-		/*
-		 * TODO: This needs to wait for a round for {R,W}C to get to the manager
-		 * (maybe wait a few to be safe) using callbacks
-		 */
 
 		boolean onlyValid = onlyValidW.booleanValue();
 
