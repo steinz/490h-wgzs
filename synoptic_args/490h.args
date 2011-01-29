@@ -1,45 +1,42 @@
-# TIMESTEP:
--r ^(?<TIME>) node:(?<nodename>.+) TIMESTEP time:(?<time>.+)$(?<TYPE=>TIMESTEP)
-
-# TIMEOUT:
--r ^(?<TIME>) node:(?<nodename>.+) TIMEOUT fire-time:(?<time>.+) (?<funcName>.+)$(?<TYPE=>\\k<funcName>)
+# Assumes Node 0 is the manager
+# Currently ignores most errors
 
 # COMMAND:
 -r ^(?<TIME>) node:(?<nodename>.+) COMMAND (?<TYPE>\\w*).*$
 
-# SEND: (ignore proto:1 - acks)
+# SEND:
+-r ^(?<TIME>) SEND src:0 dest:(?<dest>.+) proto:(?<protonum>\\w+) rio-proto:(?<proto>\\S+).*$(?<TYPE=>MANAGER-SEND-\\k<proto>)
+
 -r ^(?<TIME>) SEND src:(?<nodename>.+) dest:(?<dest>.+) proto:(?<protonum>\\w+) rio-proto:(?<proto>\\S+).*$(?<TYPE=>SEND-\\k<proto>)
 
--r ^.*SEND.*$(?<TYPE=>SEND-ACK)
+# Ignore acks
+#-r ^.*SEND.*$(?<TYPE=>SEND-ACK)
 
 # RECVD: (ignore proto:1 - acks)
+-r ^(?<TIME>) RECVD src:(?<src>.+) dest:0 proto:(?<protonum>\\w+) rio-proto:(?<proto>\\S+).*$(?<TYPE=>MANAGER-RECVD-\\k<proto>)
+
 -r ^(?<TIME>) RECVD src:(?<src>.+) dest:(?<nodename>.+) proto:(?<protonum>\\w+) rio-proto:(?<proto>\\S+).*$(?<TYPE=>RECVD-\\k<proto>)
 
--r ^.*RECVD.*$(?<TYPE=>RECVD-ACK)
-
-# WRITE:
--r ^(?<TIME>) node:(?<nodename>.+) WRITE.*$(?<TYPE=>WRITE)
-
-# READ:
--r ^(?<TIME>) node:(?<nodename>.+) READ.*$(?<TYPE=>READ)
+# Ignore acks
+#-r ^.*RECVD.*$(?<TYPE=>RECVD-ACK)
 
 # DELAY:
--r ^(?<TIME>) DELAY src:(?<src>.+) dest:(?<nodename>.+) proto:(?<proto>.+) (?<payload>.*)$(?<TYPE=>DELAY)
+#-r ^(?<TIME>) DELAY src:(?<src>.+) dest:(?<nodename>.+) proto:(?<proto>.+) (?<payload>.*)$(?<TYPE=>DELAY)
 
 # DROP:
--r ^(?<TIME>) DROP src:(?<src>.+) dest:(?<nodename>.+) proto:(?<proto>.+) (?<payload>.*)$(?<TYPE=>DROP)
+#-r ^(?<TIME>) DROP src:(?<src>.+) dest:(?<nodename>.+) proto:(?<proto>.+) (?<payload>.*)$(?<TYPE=>DROP)
 
 # START/FAILURE/STOPPED/USER-EVENT:
--r ^(?<TIME>) node:(?<nodename>.+) START$(?<TYPE=>START)
--r ^(?<TIME>) node:(?<nodename>.+) FAILURE$(?<TYPE=>FAILURE)
--r ^(?<TIME>) node:(?<nodename>.+) STOPPED$(?<TYPE=>STOPPED)
+#-r ^(?<TIME>) node:(?<nodename>.+) START$(?<TYPE=>START)
+#-r ^(?<TIME>) node:(?<nodename>.+) STOPPED$(?<TYPE=>STOPPED)
+#-r ^(?<TIME>) node:(?<nodename>.+) FAILURE$(?<TYPE=>FAILURE)
+
+# Our FS logging, our high-level command logging
+-r ^(?<TIME>) node:0 USER-EVENT(?<EVENT_TYPE>)$(?<TYPE=>MANAGER-\\k<EVENT_TYPE>)
 -r ^(?<TIME>) node:(?<nodename>.+) USER-EVENT(?<TYPE>)$
 
-# Map each line to the partition named by the parsed
-# "nodename-filename" combination:
--m \\k<nodename>-\\k<FILE>
-
--s ^.*USER-EVENT.*$
+# Trace Splitting Line
+-s ^.*USER-EVENT NEW OPERATION.*$
 
 # Path prefix where to generate output:
 -o output/myproj

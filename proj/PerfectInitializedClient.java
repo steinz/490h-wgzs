@@ -1,3 +1,8 @@
+/**
+ * CSE 490h
+ * @author wayger, steinz
+ */
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -34,5 +39,8 @@ public class PerfectInitializedClient extends PerfectClient {
 			this.managerCacheStatuses = new HashMap<String, Map<Integer, CacheStatuses>>();
 			this.pendingICs = new HashMap<String, List<Integer>>();
 		}
+		
+		printVerbose("initialized with addr: " + this.addr + " uuid: "
+				+ this.ID);
 	}
 }
