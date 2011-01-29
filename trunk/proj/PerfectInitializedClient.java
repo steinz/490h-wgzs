@@ -35,7 +35,7 @@ public class PerfectInitializedClient extends PerfectClient {
 		this.managerAddr = 0;
 		if (this.addr == 0) {
 			this.isManager = true;
-			this.lockedFiles = new HashSet<String>();
+			this.managerLockedFiles = new HashSet<String>();
 			this.managerCacheStatuses = new HashMap<String, Map<Integer, CacheStatuses>>();
 			this.pendingICs = new HashMap<String, List<Integer>>();
 		}
