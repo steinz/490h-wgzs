@@ -1,3 +1,5 @@
+# Regexes for our custom server log
+
 -r ^Node (?<nodename>): promoted to manager$(?<TYPE=>PROMOTE MANAGER)
 
 -r ^Node (?<nodename>): manager is (?<target>.+)$(?<TYPE=>MANAGER)
@@ -40,7 +42,7 @@
 
 -r ^Node (?<nodename>): .*$(?<TYPE=>CATCHALL)
 
--m \\k<FILE>
+#-m \\k<FILE>
 
 -s ^NEW_COMMAND$
 
