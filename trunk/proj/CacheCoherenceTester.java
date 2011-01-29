@@ -27,18 +27,23 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Number of commands to perform
 	 */
-	protected static int commandCount = 50;
+	protected static int commandCount = 100;
 
 	protected static List<CacheCoherenceTester> clients = new ArrayList<CacheCoherenceTester>();
 
 	/**
-	 * Add yourself to the client list
+	 * Add yourself to the client list, setup manager data structures
 	 */
 	@Override
 	public void start() {
 		super.start();
 		if (this.addr != 0) {
 			clients.add(this);
+		} else {
+			String line = "manager";
+			StringTokenizer tokens = new StringTokenizer(line);
+			this.isManager = false; // Reset by managerHandler
+			managerHandler(tokens, line);
 		}
 	}
 
@@ -55,11 +60,11 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		}
 	}
 
-	/**************************************************************
+	/***************************************************************************
 	 * Begin wrapper for methods that can finish a high level op Starts a new op
-	 * after finishing this one The Handler logic checks need to match the
-	 * inherited checks
-	 **************************************************************/
+	 * after finishing this one The Handler logic checks need to match super's
+	 * checks However, we can ignore client locks since we do ops one at a time
+	 **************************************************************************/
 
 	@Override
 	public void createHandler(StringTokenizer tokens, String line) {
@@ -136,10 +141,16 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		super.receiveRD(from, msgString);
 		doOp();
 	}
-	
+
 	@Override
 	protected void receiveError(Integer from, String msgString) {
 		super.receiveError(from, msgString);
+		doOp();
+	}
+
+	@Override
+	protected void receiveSuccessful(int from, String msgString) {
+		super.receiveSuccessful(from, msgString);
 		doOp();
 	}
 
@@ -172,7 +183,8 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 			Logger.error(e);
 		}
 
-		client.addTimeout(new Callback(doOpMethod, client, new Object[] { arg }),
+		client.addTimeout(
+				new Callback(doOpMethod, client, new Object[] { arg }),
 				DO_OP_WAIT);
 	}
 

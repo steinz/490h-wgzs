@@ -37,7 +37,7 @@ public class PerfectInitializedClient extends PerfectClient {
 			this.isManager = true;
 			this.managerLockedFiles = new HashSet<String>();
 			this.managerCacheStatuses = new HashMap<String, Map<Integer, CacheStatuses>>();
-			this.pendingICs = new HashMap<String, List<Integer>>();
+			this.managerPendingICs = new HashMap<String, List<Integer>>();
 		}
 		
 		printVerbose("initialized with addr: " + this.addr + " uuid: "

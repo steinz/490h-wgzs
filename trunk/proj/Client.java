@@ -149,7 +149,7 @@ public class Client extends RIONode {
 	/**
 	 * List of nodes the manager is waiting for ICs from.
 	 */
-	protected Map<String, List<Integer>> pendingICs;
+	protected Map<String, List<Integer>> managerPendingICs;
 
 	/**
 	 * Save requests on locked files
@@ -159,12 +159,12 @@ public class Client extends RIONode {
 	/**
 	 * Status of who is waiting for permission for this file
 	 */
-	private Map<String, Integer> pendingCCPermissionRequests;
+	private Map<String, Integer> managerPendingCCPermissionRequests;
 
 	/**
 	 * Status of who is waiting to delete this file via RPC
 	 */
-	private Map<String, Integer> pendingRPCDeleteRequests;
+	private Map<String, Integer> managerPendingRPCDeleteRequests;
 
 	/*************************************************
 	 * end manager only data structures
@@ -175,8 +175,8 @@ public class Client extends RIONode {
 		// TODO: Maybe this should be in start, but I don't think it matters
 		this.clientCacheStatus = new HashMap<String, CacheStatuses>();
 		this.clientPendingOperations = new HashMap<String, Intent>();
-		this.managerQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
-		this.pendingCCPermissionRequests = new HashMap<String, Integer>();
+		this.clientLockedFiles = new HashSet<String>();
+		this.clientQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
 		this.isManager = false;
 		this.managerAddr = -1;
 		Logger.eraseLog(); // Wipe the server log
@@ -258,10 +258,10 @@ public class Client extends RIONode {
 			this.isManager = true;
 			this.managerLockedFiles = new HashSet<String>();
 			this.managerCacheStatuses = new HashMap<String, Map<Integer, CacheStatuses>>();
-			this.pendingICs = new HashMap<String, List<Integer>>();
+			this.managerPendingICs = new HashMap<String, List<Integer>>();
 			this.managerQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
-			this.pendingCCPermissionRequests = new HashMap<String, Integer>();
-			this.pendingRPCDeleteRequests = new HashMap<String, Integer>();
+			this.managerPendingCCPermissionRequests = new HashMap<String, Integer>();
+			this.managerPendingRPCDeleteRequests = new HashMap<String, Integer>();
 		}
 
 		printInfo("promoted to manager");
@@ -313,8 +313,7 @@ public class Client extends RIONode {
 		if (clientQueueLineIfLocked(filename, line)) {
 			return;
 		} else if (clientCacheStatus.containsKey(filename)
-				&& (clientCacheStatus.get(filename) == CacheStatuses.ReadOnly || clientCacheStatus
-						.get(filename) == CacheStatuses.ReadWrite)) {
+				&& (clientCacheStatus.get(filename) != CacheStatuses.Invalid)) {
 			// have permissions
 			createFile(filename);
 		} else {
@@ -352,8 +351,7 @@ public class Client extends RIONode {
 		if (clientQueueLineIfLocked(filename, line)) {
 			return;
 		} else if (clientCacheStatus.containsKey(filename)
-				&& (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite || clientCacheStatus
-						.get(filename) == CacheStatuses.ReadOnly)) {
+				&& (clientCacheStatus.get(filename) != CacheStatuses.Invalid)) {
 			// have permissions
 			try {
 				getFile(filename);
@@ -690,9 +688,8 @@ public class Client extends RIONode {
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileAlreadyExists, "create", addr, fileName);
-			sendError(from, Protocol.CREATE, fileName,
-					ErrorCode.FileAlreadyExists);
 			return;
+			// TODO: throw an exception instead
 		}
 
 		// create the file
@@ -702,6 +699,7 @@ public class Client extends RIONode {
 				writer.close();
 			} catch (IOException e) {
 				Logger.error(e);
+				// TODO: don't catch
 			}
 		}
 
@@ -749,6 +747,7 @@ public class Client extends RIONode {
 					printError(ErrorCode.UnknownError, "Delete failed!");
 			} catch (IOException e) {
 				printError(ErrorCode.UnknownError, e.getMessage());
+				// TODO: throw e
 			}
 		}
 
@@ -794,7 +793,10 @@ public class Client extends RIONode {
 	 * @param fileName
 	 *            the filename to send
 	 */
+	@Deprecated
 	public void getFile(String fileName, int from) {
+
+		Logger.error("Node " + this.addr + ": called deprecated getFile method");
 
 		printVerbose("attempting to READ/GET file: " + fileName + " for Node: "
 				+ from);
@@ -867,13 +869,12 @@ public class Client extends RIONode {
 				printError(ErrorCode.FileDoesNotExist, "put", addr, fileName);
 			else
 				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
-			sendError(from, protocol, fileName, ErrorCode.FileDoesNotExist);
 			return;
+			// TODO: throw an exception
 		} else {
 			try {
 				PersistentStorageWriter writer = null;
-				// create a new file writer, setting the append option
-				// appropriately
+				// create a new file writer w/ appropriate append setting
 				if (protocol == Protocol.APPEND) {
 					writer = getWriter(fileName, true);
 				} else {
@@ -890,10 +891,9 @@ public class Client extends RIONode {
 			} catch (IOException e) {
 				sendError(from, protocol, fileName, ErrorCode.UnknownError);
 				Logger.error(e);
+				// TODO: throw e
 			}
 		}
-
-		sendSuccess(from, protocol);
 	}
 
 	/**
@@ -916,6 +916,10 @@ public class Client extends RIONode {
 		PersistentStorageWriter temp = getWriter(".temp", false);
 		temp.write(fileName + "\n" + oldString);
 	}
+
+	/****************************************************
+	 * end FS methods
+	 ***************************************************/
 
 	// TODO: All FS methods should throw exceptions on failures
 	/*
@@ -1112,7 +1116,7 @@ public class Client extends RIONode {
 			ivSent = true;
 		}
 		if (ro.size() != 0) {
-			pendingICs.put(filename, ro);
+			managerPendingICs.put(filename, ro);
 			for (Integer i : ro) {
 				/*
 				 * Send invalidate requests to everyone with RO not including
@@ -1125,7 +1129,7 @@ public class Client extends RIONode {
 
 		if (ivSent) {
 			// track pending request
-			pendingRPCDeleteRequests.put(filename, from);
+			managerPendingRPCDeleteRequests.put(filename, from);
 			return;
 		} else {
 			// no one has permissions, so send success
@@ -1175,7 +1179,7 @@ public class Client extends RIONode {
 			sendFile(client, filename, Protocol.RD);
 		} else {
 			sendRequest(key, filename, Protocol.RF);
-			pendingCCPermissionRequests.put(filename, client);
+			managerPendingCCPermissionRequests.put(filename, client);
 		}
 
 	}
@@ -1268,20 +1272,20 @@ public class Client extends RIONode {
 		}
 		if (rw != null) { // If someone has RW status:
 			sendRequest(rw, filename, Protocol.WF);
-			pendingCCPermissionRequests.put(filename, client);
+			managerPendingCCPermissionRequests.put(filename, client);
 			return;
 			// If so, send the data back to the client waiting
 		}
 		if (ro.size() != 0) {
 
-			pendingICs.put(filename, ro);
+			managerPendingICs.put(filename, ro);
 			for (Integer i : ro) { // Send invalidate requests to everyone with
 									// RO
 									// status unless that person is the
 									// requesting client
 				sendRequest(i, filename, Protocol.IV);
 			}
-			pendingCCPermissionRequests.put(filename, client);
+			managerPendingCCPermissionRequests.put(filename, client);
 			return;
 		}
 		// else no one has any kind of access on this file, so send it to them
@@ -1353,8 +1357,8 @@ public class Client extends RIONode {
 		 */
 
 		int destAddr;
-		if (!pendingICs.containsKey(filename) || !isManager
-				|| !pendingICs.get(filename).contains(from)) {
+		if (!managerPendingICs.containsKey(filename) || !isManager
+				|| !managerPendingICs.get(filename).contains(from)) {
 			sendError(from, Protocol.ERROR, filename, ErrorCode.UnknownError);
 			Logger.error(ErrorCode.NotManager, "IC: " + filename);
 		} else {
@@ -1365,22 +1369,23 @@ public class Client extends RIONode {
 			printVerbose("Changing client: " + from + " to IV");
 			managerCacheStatuses.put(filename, m);
 
-			pendingICs.get(filename).remove(from);
-			if (pendingICs.get(filename).isEmpty()) { // If the pending ICs are
-														// now empty, someone's
-														// waiting for a WD, so
-														// check for that and
-														// send
-				if (pendingCCPermissionRequests.containsKey(filename)) {
-					destAddr = pendingCCPermissionRequests.get(filename);
+			managerPendingICs.get(filename).remove(from);
+			if (managerPendingICs.get(filename).isEmpty()) { // If the pending
+																// ICs are
+				// now empty, someone's
+				// waiting for a WD, so
+				// check for that and
+				// send
+				if (managerPendingCCPermissionRequests.containsKey(filename)) {
+					destAddr = managerPendingCCPermissionRequests.get(filename);
 					sendFile(destAddr, filename, Protocol.WD);
 				} else {
-					destAddr = pendingRPCDeleteRequests.get(filename);
+					destAddr = managerPendingRPCDeleteRequests.get(filename);
 					sendSuccess(destAddr, Protocol.DELETE, filename);
 				}
 			} else {
 				printVerbose("Received IC but waiting for IC from at client (only first shown): "
-						+ pendingICs.get(filename).get(0));
+						+ managerPendingICs.get(filename).get(0));
 			}
 		}
 	}
@@ -1572,7 +1577,7 @@ public class Client extends RIONode {
 				deleteFile(filename);
 
 				// send out a WD to anyone requesting this
-				int destAddr = pendingCCPermissionRequests.get(filename);
+				int destAddr = managerPendingCCPermissionRequests.get(filename);
 				sendError(destAddr, filename, ErrorCode.FileDoesNotExist);
 
 			} else {
@@ -1580,7 +1585,8 @@ public class Client extends RIONode {
 				writeFile(filename, contents, Protocol.PUT);
 
 				// send out a WD to anyone requesting this
-				Integer destAddr = pendingCCPermissionRequests.get(filename);
+				Integer destAddr = managerPendingCCPermissionRequests
+						.get(filename);
 				if (destAddr != null)
 					sendFile(destAddr, filename, Protocol.WD);
 
@@ -1633,7 +1639,7 @@ public class Client extends RIONode {
 				deleteFile(filename);
 
 				// Send out an invalid file request
-				int destAddr = pendingCCPermissionRequests.get(filename);
+				int destAddr = managerPendingCCPermissionRequests.get(filename);
 				sendError(destAddr, filename, ErrorCode.FileDoesNotExist);
 
 			} else {
@@ -1641,7 +1647,7 @@ public class Client extends RIONode {
 				writeFile(filename, contents, Protocol.PUT);
 
 				// send out a RD to anyone requesting this
-				int destAddr = pendingCCPermissionRequests.get(filename);
+				int destAddr = managerPendingCCPermissionRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.RD);
 
 			}
@@ -1729,7 +1735,7 @@ public class Client extends RIONode {
 			String msgString) {
 		Logger.error("Node " + this.addr
 				+ " called deprecated method decideParseOrAppend");
-		
+
 		// tokenize the string and parse out the contents and filename
 		StringTokenizer tokenizer = new StringTokenizer(msgString);
 		String fileName = tokenizer.nextToken();
