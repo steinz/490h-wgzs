@@ -656,7 +656,7 @@ public class Client extends RIONode {
 					.get(filename);
 
 			if (clientStatuses == null){
-				sendError(from, Protocol.DELETE, ErrorCode.FileDoesNotExist);
+				sendError(from, Protocol.DELETE, filename, ErrorCode.FileDoesNotExist);
 				return;
 			}
 
@@ -682,7 +682,9 @@ public class Client extends RIONode {
 				}
 			}
 			
-			// add to pending ICs
+			// add to pending RPC delete requests
+			if (pendingRPCDeleteRequests == null)
+				pendingRPCDeleteRequests = new HashMap<String, Integer>();
 			if (rw != null) { // If someone has RW status:
 
 				sendRequest(rw, filename, Protocol.IV);
@@ -791,7 +793,7 @@ public class Client extends RIONode {
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
-			sendError(from, Protocol.GET, ErrorCode.FileDoesNotExist);
+			sendError(from, Protocol.GET, fileName, ErrorCode.FileDoesNotExist);
 			return;
 		}
 		// send the file if it does
@@ -855,7 +857,7 @@ public class Client extends RIONode {
 				printError(ErrorCode.FileDoesNotExist, "put", addr, fileName);
 			else
 				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
-			sendError(from, protocol, ErrorCode.FileDoesNotExist);
+			sendError(from, protocol, fileName, ErrorCode.FileDoesNotExist);
 			return;
 		} else {
 			try {
@@ -876,7 +878,7 @@ public class Client extends RIONode {
 				if (protocol == Protocol.PUT)
 					deleteFile(this.addr, ".temp");
 			} catch (IOException e) {
-				sendError(from, protocol, ErrorCode.UnknownError);
+				sendError(from, protocol, fileName, ErrorCode.UnknownError);
 				Logger.error(e);
 			}
 		}
@@ -1005,10 +1007,10 @@ public class Client extends RIONode {
 
 		if (managerCacheStatuses.containsKey(filename)
 				&& managerCacheStatuses.get(filename).size() > 0) {
-			sendError(client, Protocol.ERROR, ErrorCode.FileAlreadyExists);
+			sendError(client, Protocol.ERROR, filename, ErrorCode.FileAlreadyExists);
 		} else {
 			createFile(filename);
-			// TODO: Need to update manager cahce status for this client
+			
 			managerCacheStatuses.put(filename, new HashMap<Integer, CacheStatuses>());
 			
 			sendSuccess(client, Protocol.CREATE, filename);
@@ -1068,7 +1070,7 @@ public class Client extends RIONode {
 		String sendMsg = "";
 
 		if (!Utility.fileExists(this, fileName)) {
-			sendError(client, Protocol.ERROR, ErrorCode.FileDoesNotExist);
+			sendError(client, Protocol.ERROR, fileName, ErrorCode.FileDoesNotExist);
 		} else {
 			try {
 				sendMsg = fileName + delimiter + getFile(fileName);
@@ -1124,7 +1126,7 @@ public class Client extends RIONode {
 				.get(filename);
 
 		if (clientStatuses == null){
-			sendError(client, Protocol.ERROR, ErrorCode.FileDoesNotExist);
+			sendError(client, Protocol.ERROR, filename, ErrorCode.FileDoesNotExist);
 			return;
 		}
 
@@ -1238,7 +1240,7 @@ public class Client extends RIONode {
 		int destAddr;
 		if (!pendingICs.containsKey(filename) || !isManager
 				|| !pendingICs.get(filename).contains(from)) {
-			sendError(from, Protocol.ERROR, ErrorCode.UnknownError);
+			sendError(from, Protocol.ERROR, filename, ErrorCode.UnknownError);
 			Logger.error(ErrorCode.NotManager, "IC: " + filename);
 		} else {
 
@@ -1576,9 +1578,11 @@ public class Client extends RIONode {
 			return;
 		}
 		
+		String filename = "";
 		String[] split = msgString.split(delimiter);
 		String cmd = split[0];
-		String filename = split[1];
+		if (split.length > 1)
+			filename = split[1];
 		
 		if (cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
 			createFile(filename);
@@ -1634,18 +1638,19 @@ public class Client extends RIONode {
 		RIOLayer.RIOSend(destAddr, Protocol.ERROR, payload);
 	}
 	
-	private void sendError(int from, int protocol, int errorcode) {
-		String msg = Protocol.protocolToString(protocol) + delimiter + ErrorCode.lookup(errorcode);
-		byte[] payload = Utility.stringToByteArray(msg);
-		RIOLayer.RIOSend(from, Protocol.ERROR, payload);
-		
-	}
-	
-	private void sendError(int from, int protocol, String fileName,
+	/**
+	 * Send Error method
+	 * @param destAddr Who to send the error code to
+	 * @param protocol The protocol that failed
+	 * @param filename The filename for the protocol that failed
+	 * @param errorcode The error code
+	 */
+	private void sendError(int destAddr, int protocol, String filename,
 			int errorcode) {
-		String msg = Protocol.protocolToString(protocol) + delimiter + fileName + delimiter + ErrorCode.lookup(errorcode);
+		String msg = filename + delimiter + Protocol.protocolToString(protocol) + 
+			delimiter + ErrorCode.lookup(errorcode);
 		byte[] payload = Utility.stringToByteArray(msg);
-		RIOLayer.RIOSend(from, Protocol.ERROR, payload);
+		RIOLayer.RIOSend(destAddr, Protocol.ERROR, payload);
 		
 	}
 }
