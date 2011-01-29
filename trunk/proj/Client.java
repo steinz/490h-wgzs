@@ -10,14 +10,18 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.StringTokenizer;
 import java.util.NoSuchElementException;
+import java.util.TreeMap;
+
+import plume.OrderedPairIterator;
 
 import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
@@ -38,7 +42,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 public class Client extends RIONode {
 
 	// TODO: Separate the Client and Manager code into two node types
-	
+
 	/**
 	 * Possible cache statuses
 	 */
@@ -286,6 +290,8 @@ public class Client extends RIONode {
 					.put(filename, new Intent(intentType.CREATE));
 		}
 	}
+	
+
 
 	/**
 	 * Get ownership of a file and delete it
@@ -613,7 +619,7 @@ public class Client extends RIONode {
 	public void createFile(int from, String fileName) {
 
 		printVerbose("attempting to CREATE file: " + fileName);
-		logSynopticEvent("CREATING FILE");
+		logSynopticEvent("CREATING-FILE");
 
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
@@ -655,7 +661,7 @@ public class Client extends RIONode {
 	public void deleteFile(int from, String fileName) {
 
 		printVerbose("attempting to DELETE file: " + fileName);
-		logSynopticEvent("DELETING FILE");
+		logSynopticEvent("DELETING-FILE");
 
 		// check if the file even exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -691,7 +697,7 @@ public class Client extends RIONode {
 	public String getFile(String fileName) throws IOException {
 
 		printVerbose("attempting to READ file: " + fileName);
-		logSynopticEvent("GETTING FILE");
+		logSynopticEvent("GETTING-FILE");
 
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -725,7 +731,7 @@ public class Client extends RIONode {
 
 		printVerbose("attempting to READ/GET file: " + fileName + " for Node: "
 				+ from);
-		logSynopticEvent("GETTING FILE");
+		logSynopticEvent("GETTING-FILE");
 
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -787,7 +793,7 @@ public class Client extends RIONode {
 
 		printVerbose("attempting to PUT/APPEND File: " + fileName
 				+ " with Contents: " + contents);
-		logSynopticEvent("WRITING FILE");
+		logSynopticEvent("WRITING-FILE");
 
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
@@ -946,7 +952,7 @@ public class Client extends RIONode {
 			Queue<QueuedFileRequest> e = managerQueuedFileRequests
 					.get(filename);
 			if (e == null)
-				e = new PriorityQueue<QueuedFileRequest>();
+				e = new LinkedList<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.RQ, Utility
 					.stringToByteArray(filename)));
 			managerQueuedFileRequests.put(filename, e);
@@ -1016,7 +1022,7 @@ public class Client extends RIONode {
 		lockedFiles.remove(filename);
 		if (!managerQueuedFileRequests.containsKey(filename))
 			managerQueuedFileRequests.put(filename,
-					new PriorityQueue<QueuedFileRequest>());
+					new LinkedList<QueuedFileRequest>());
 		Queue<QueuedFileRequest> outstandingRequests = managerQueuedFileRequests
 				.get(filename);
 		QueuedFileRequest nextRequest = outstandingRequests.poll();
@@ -1031,8 +1037,8 @@ public class Client extends RIONode {
 		if (lockedFiles.contains(filename)) {
 			Queue<QueuedFileRequest> e = managerQueuedFileRequests
 					.get(filename);
-			if (e == null)
-				e = new PriorityQueue<QueuedFileRequest>();
+			if (e == null) 
+				e = new LinkedList<QueuedFileRequest>();
 			e.add(new QueuedFileRequest(client, Protocol.WQ, Utility
 					.stringToByteArray(filename)));
 			managerQueuedFileRequests.put(filename, e);
@@ -1085,12 +1091,11 @@ public class Client extends RIONode {
 			}
 			pendingPermissionRequests.put(filename, client);
 		}
-		if (!managerCacheStatuses.containsKey(filename)) { // assume this
-															// was a
-															// create if
-															// the file
-															// doesn't
-															// exist
+
+		// TODO: You created this above if it didn't exist, so this doesn't get
+		// called...
+		if (!managerCacheStatuses.containsKey(filename)) {
+			// assume this was a create if the file doesn't exist
 			createFile(filename);
 			sendFile(client, filename, Protocol.WD);
 		} else
@@ -1482,7 +1487,7 @@ public class Client extends RIONode {
 	 * end client and manager cache coherency functions
 	 ************************************************/
 
-	private void receiveError(Integer from, String msgString) {
+	protected void receiveError(Integer from, String msgString) {
 		// TODO:
 		Logger.error("Node " + this.addr + ": Error from " + from + ": "
 				+ msgString);

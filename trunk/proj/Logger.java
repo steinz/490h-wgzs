@@ -1,3 +1,8 @@
+/**
+ * CSE 490h
+ * @author wayger, steinz
+ */
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;

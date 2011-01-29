@@ -1,3 +1,7 @@
+/**
+ * CSE 490h
+ * @author wayger, steinz
+ */
 
 public class PacketPackException extends Exception {
 

@@ -1,8 +1,10 @@
+/**
+ * CSE 490h
+ * @author wayger, steinz
+ */
 
 /**
- * stub
- * @author wayger, zstein
- *
+ * TODO: describe
  */
 public class QueuedFileRequest {
 	
