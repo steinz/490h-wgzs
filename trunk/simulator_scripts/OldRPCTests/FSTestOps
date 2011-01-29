@@ -1,0 +1,30 @@
+# start nodes
+
+start 0
+start 1
+time
+
+0 noop 1
+time
+time
+time
+
+# test each op
+
+0 create 1 test
+time
+
+0 put 1 test hello
+time
+
+0 get 1 test
+time
+
+0 append 1 test  world
+time
+
+0 get 1 test
+time
+
+0 delete 1 test
+time
