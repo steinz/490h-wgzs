@@ -626,7 +626,6 @@ public class Client extends RIONode {
 			}
 		}
 
-		sendSuccess(from, Protocol.CREATE);
 	}
 
 	/**
@@ -635,7 +634,11 @@ public class Client extends RIONode {
 	 * @param fileName
 	 */
 	public void deleteFile(String fileName) {
-		deleteFile(this.addr, fileName);
+		try{
+			deleteFile(this.addr, fileName);
+		} catch(FileNotFoundException e) {
+			printError(ErrorCode.FileDoesNotExist, "delete", this.addr, fileName);
+		}
 	}
 
 	public void deleteRPC(int addr, String filename) {
@@ -681,12 +684,12 @@ public class Client extends RIONode {
 			
 			// add to pending ICs
 			if (rw != null) { // If someone has RW status:
+
 				sendRequest(rw, filename, Protocol.IV);
 				pendingRPCDeleteRequests.put(filename, from);
 				return;
 			}
 			if (ro.size() != 0) {
-
 				pendingICs.put(filename, ro);
 				for (Integer i : ro) { // Send invalidate requests to everyone with
 										// RO
@@ -714,7 +717,7 @@ public class Client extends RIONode {
 	 * @param fileName
 	 *            the file name to delete
 	 */
-	public void deleteFile(int from, String fileName) {
+	public void deleteFile(int from, String fileName) throws FileNotFoundException{
 
 		printVerbose("attempting to DELETE file: " + fileName);
 		logSynopticEvent("DELETING-FILE");
@@ -722,9 +725,7 @@ public class Client extends RIONode {
 		// check if the file even exists
 		if (!Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileDoesNotExist, "delete", addr, fileName);
-			if (from != this.addr)
-				sendError(from, Protocol.DELETE, ErrorCode.FileDoesNotExist);
-			return;
+			throw new FileNotFoundException();
 		} else {
 			// delete file
 			try {
@@ -739,7 +740,6 @@ public class Client extends RIONode {
 			}
 		}
 
-		sendSuccess(from, Protocol.DELETE);
 	}
 
 	/**
@@ -943,7 +943,7 @@ public class Client extends RIONode {
 			receiveCreate(from, msgString);
 			break;
 		case Protocol.DELETE:
-			deleteFile(from, msgString);
+			receiveDelete(from, msgString);
 			break;
 		case Protocol.GET:
 			getFile(msgString, from);
@@ -1008,6 +1008,9 @@ public class Client extends RIONode {
 			sendError(client, Protocol.ERROR, ErrorCode.FileAlreadyExists);
 		} else {
 			createFile(filename);
+			// TODO: Need to update manager cahce status for this client
+			managerCacheStatuses.put(filename, new HashMap<Integer, CacheStatuses>());
+			
 			sendSuccess(client, Protocol.CREATE, filename);
 		}
 	}
@@ -1577,7 +1580,7 @@ public class Client extends RIONode {
 		String cmd = split[0];
 		String filename = split[1];
 		
-		if (cmd.equals("CREATE")) {
+		if (cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
 			createFile(filename);
 		} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))){
 			deleteFile(filename);
@@ -1610,14 +1613,18 @@ public class Client extends RIONode {
 	private void sendSuccess(Integer destAddr, int protocol)
 	{
 		String msg = Protocol.protocolToString(protocol);
-		byte[] payload = Utility.stringToByteArray(msg);
-		RIOLayer.RIOSend(destAddr, Protocol.SUCCESS, payload);
+		sendSuccess(destAddr, msg);
 	}
 	
 	private void sendSuccess(Integer destAddr, int protocol, String message)
 	{
 		String msg = Protocol.protocolToString(protocol) + delimiter + message;
-		byte[] payload = Utility.stringToByteArray(msg);
+		sendSuccess(destAddr, msg);
+	}
+	
+	private void sendSuccess(Integer destAddr, String message)
+	{
+		byte[] payload = Utility.stringToByteArray(message);
 		RIOLayer.RIOSend(destAddr, Protocol.SUCCESS, payload);
 	}
 	
