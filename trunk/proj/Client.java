@@ -268,30 +268,19 @@ public class Client extends RIONode {
 		// FS handlers)
 
 		if (clientCacheStatus.containsKey(filename)
-				&& clientCacheStatus.get(filename) != CacheStatuses.Invalid) {
-			if (Utility.fileExists(this, filename)) {
-				printError(ErrorCode.FileAlreadyExists, "create", filename);
-			} else {
-				createFile(filename);
-			}
+				&& (clientCacheStatus.get(filename) == CacheStatuses.ReadOnly || clientCacheStatus
+						.get(filename) == CacheStatuses.ReadWrite)) {
+			createFile(filename);
 		} else {
-			// Request ownership
-			try {
-				SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
-				printInfo("requesting ownership of " + filename);
-			} catch (UnknownManagerException e) {
-				printError(ErrorCode.UnknownManager, "create", filename);
-				return;
-			}
-			// Remember that I want to create this file
-			clientPendingOperations
-					.put(filename, new Intent(intentType.CREATE));
+			createRPC(this.managerAddr, filename);
 		}
 	}
 
+	/**
+	 * Perform a create RPC to the given address
+	 */
 	public void createRPC(int address, String filename) {
-		RIOSend(this.managerAddr, Protocol.CREATE,
-				Utility.stringToByteArray(filename));
+		RIOSend(address, Protocol.CREATE, Utility.stringToByteArray(filename));
 	}
 
 	/**
@@ -889,7 +878,7 @@ public class Client extends RIONode {
 		switch (protocol) {
 
 		case Protocol.CREATE:
-			createFile(from, msgString);
+			receiveCreate(from, msgString);
 			break;
 		case Protocol.DELETE:
 			deleteFile(from, msgString);
@@ -940,6 +929,22 @@ public class Client extends RIONode {
 			break;
 		default:
 			printError(ErrorCode.InvalidCommand, "receive");
+		}
+	}
+
+	protected void receiveCreate(int client, String filename) {
+		if (!isManager) {
+			printError(ErrorCode.NotManager, "create");
+			return;
+		}
+
+		if (managerCacheStatuses.containsKey(filename)
+				&& managerCacheStatuses.get(filename).size() > 0) {
+			sendResponse(client, Protocol.protocolToString(Protocol.ERROR),
+					false, ErrorCode.lookup(ErrorCode.FileAlreadyExists));
+		} else {
+			createFile(filename);
+			sendResponse(client, "CREATED" + delimiter + filename, true, "");
 		}
 	}
 
@@ -1212,7 +1217,7 @@ public class Client extends RIONode {
 		if (isManager) {
 			printError(ErrorCode.InvalidCommand, "iv " + msgString);
 		} else {
-			//TODO: put INVALID or delete entirely???
+			// TODO: put INVALID or delete entirely???
 			clientCacheStatus.put(msgString, CacheStatuses.Invalid);
 			printVerbose("marking invalid " + msgString);
 			try {
@@ -1497,6 +1502,22 @@ public class Client extends RIONode {
 				+ msgString);
 	}
 
+	protected void receiveSuccessful(int from, String msgString) {
+		if (isManager) {
+			// TODO: figure out error code
+			printError(ErrorCode.UnknownError, "successful");
+			return;
+		}
+		
+		String[] split = msgString.split(delimiter);
+		String cmd = split[0];
+		String filename = split[1];
+		
+		if (cmd.equals("CREATE")) {
+			createFile(filename);
+		}
+	}
+
 	/**
 	 * Parses a received command to decide whether to put or append to file
 	 * 
@@ -1533,6 +1554,9 @@ public class Client extends RIONode {
 	 */
 	private void sendResponse(Integer destAddr, String protocol,
 			boolean successful, String error) {
+
+		// TODO: Fix args - for receiveCreate protocol is actually filename
+
 		if (destAddr != this.addr) {
 
 			String sendMsg = protocol;
