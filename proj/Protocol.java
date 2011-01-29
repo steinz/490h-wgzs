@@ -109,7 +109,7 @@ public class Protocol {
 		case ERROR:
 			return "RIO_ERROR";
 		default:
-			return "UNKNOWN";
+			return "RIO_UNKNOWN";
 		}
 	}
 }
