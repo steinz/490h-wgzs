@@ -62,6 +62,8 @@ copy and then send an empty file back to the client. As a result of this, append
 
 \textbf{Additional steps:} \\
 
+One thing that is necessary before each run is to clean the local storage system for each node. Without cleaning the local storage system, the user will likely encounter errors related to file existence. For convenience, we have written a script "clean.sh" that should be run before using CacheCoherenceTester. We do not consider this to be an error, since it is assumed that there are no faults, the client and server should have no shared state between runs. \\
+
 While the user doesn’t need to explicitly make WQ, RQ, etc. requests in order to use our cache coherent client, there is an additional setup step 
 that the user needs to take before using our implementation. In addition to our previous fault tolerance mechanism of handshaking, it is also necessary 
 to explicitly define who the server/manager is for each node. This is done by calling up the command $<NODE>$ manageris $<SERVER>$. So, for example, for three 
@@ -90,7 +92,9 @@ Node 0 will always be the manager in this case. Note that you still have to star
 
 (See Attached) \\
 
-TODO: Discussion \\
+\textbf{Discussion:}\\
+
+(TODO: )
 
 \textbf{Synoptic:} \\
 

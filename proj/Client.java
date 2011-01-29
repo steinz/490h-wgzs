@@ -142,7 +142,12 @@ public class Client extends RIONode {
 	/**
 	 * Status of who is waiting for permission for this file
 	 */
-	private Map<String, Integer> pendingPermissionRequests;
+	private Map<String, Integer> pendingCCPermissionRequests;
+	
+	/**
+	 * Status of who is waiting to delete this file via RPC
+	 */
+	private Map<String, Integer> pendingRPCDeleteRequests;
 
 	/*************************************************
 	 * end manager only data structures
@@ -153,7 +158,7 @@ public class Client extends RIONode {
 		this.clientCacheStatus = new HashMap<String, CacheStatuses>();
 		this.clientPendingOperations = new HashMap<String, Intent>();
 		this.managerQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
-		this.pendingPermissionRequests = new HashMap<String, Integer>();
+		this.pendingCCPermissionRequests = new HashMap<String, Integer>();
 		this.isManager = false;
 		this.managerAddr = -1;
 		Logger.eraseLog(); // Wipe the server log
@@ -641,6 +646,74 @@ public class Client extends RIONode {
 		deleteFile(this.addr, fileName);
 	}
 
+	public void deleteRPC(int addr, String filename) {
+		RIOSend(addr, Protocol.DELETE, Utility.stringToByteArray(filename));
+	}
+	
+	public void receiveDelete(int from, String filename){
+		if (isManager){
+			
+			// first delete the file
+			deleteFile(filename);
+			
+			// Check if anyone has RW or RO status on this file
+			Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
+					.get(filename);
+
+			if (clientStatuses == null){
+				sendResponse(from, Protocol.protocolToString(Protocol.ERROR),
+						false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+				return;
+			}
+
+			Integer rw = null;
+			ArrayList<Integer> ro = new ArrayList<Integer>();
+			
+			// send out IVs for this file as well
+			// check for nodes with permissions on this file currently
+			for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
+				if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
+					if (rw != null)
+						Logger.error(ErrorCode.MultipleOwners,
+								"Multiple owners on file: " + filename);
+					rw = entry.getKey();
+				}
+				if (entry.getValue().equals(CacheStatuses.ReadOnly)) {
+					if (rw != null)
+						Logger.error(ErrorCode.ReadWriteAndReadOnly,
+								"ReadOnly copies while other client has ownership: "
+										+ filename);
+					if (entry.getKey() != from)
+						ro.add(entry.getKey());
+				}
+			}
+			
+			// add to pending ICs
+			if (rw != null) { // If someone has RW status:
+				sendRequest(rw, filename, Protocol.IV);
+				pendingRPCDeleteRequests.put(filename, from);
+				return;
+			}
+			if (ro.size() != 0) {
+
+				pendingICs.put(filename, ro);
+				for (Integer i : ro) { // Send invalidate requests to everyone with
+										// RO
+										// status unless that person is the
+										// requesting client
+					sendRequest(i, filename, Protocol.IV);
+				}
+				pendingRPCDeleteRequests.put(filename, from);
+				return;
+			}
+			// else no one has permissions, so just success
+			sendSuccess(from, Protocol.DELETE,  filename);
+			
+		}else
+			printError(ErrorCode.NotManager, ErrorCode.lookup(ErrorCode.NotManager));
+	}
+	
+	
 	/**
 	 * Deletes a file from the local file system. Fails and prints an error if
 	 * the file does not exist
@@ -992,7 +1065,7 @@ public class Client extends RIONode {
 			sendFile(client, filename, Protocol.RD);
 		} else {
 			sendRequest(key, filename, Protocol.RF);
-			pendingPermissionRequests.put(filename, client);
+			pendingCCPermissionRequests.put(filename, client);
 		}
 
 	}
@@ -1057,8 +1130,11 @@ public class Client extends RIONode {
 		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
 				.get(filename);
 
-		if (clientStatuses == null)
-			clientStatuses = new HashMap<Integer, CacheStatuses>();
+		if (clientStatuses == null){
+			sendResponse(client, Protocol.protocolToString(Protocol.ERROR),
+					false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+			return;
+		}
 
 		Integer rw = null;
 		ArrayList<Integer> ro = new ArrayList<Integer>();
@@ -1082,7 +1158,7 @@ public class Client extends RIONode {
 		}
 		if (rw != null) { // If someone has RW status:
 			sendRequest(rw, filename, Protocol.WF);
-			pendingPermissionRequests.put(filename, client);
+			pendingCCPermissionRequests.put(filename, client);
 			return;
 			// If so, send the data back to the client waiting
 		}
@@ -1095,18 +1171,12 @@ public class Client extends RIONode {
 									// requesting client
 				sendRequest(i, filename, Protocol.IV);
 			}
-			pendingPermissionRequests.put(filename, client);
+			pendingCCPermissionRequests.put(filename, client);
+			return;
 		}
-
-		// TODO: You created this above if it didn't exist, so this doesn't get
-		// called...
-		if (!managerCacheStatuses.containsKey(filename)) {
-			// assume this was a create if the file doesn't exist
-			createFile(filename);
-			sendFile(client, filename, Protocol.WD);
-		} else
-			sendResponse(client, Protocol.protocolToString(Protocol.ERROR),
-					false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+		// else no one has any kind of access on this file, so send it to them
+		sendFile(client, filename, Protocol.WD);
+		
 
 	}
 
@@ -1173,6 +1243,7 @@ public class Client extends RIONode {
 		 * this file)?
 		 */
 
+		int destAddr;
 		if (!pendingICs.containsKey(filename) || !isManager
 				|| !pendingICs.get(filename).contains(from)) {
 			sendResponse(from, Protocol.protocolToString(Protocol.ERROR),
@@ -1192,7 +1263,10 @@ public class Client extends RIONode {
 														// waiting for a WD, so
 														// check for that and
 														// send
-				int destAddr = pendingPermissionRequests.get(filename);
+				if (pendingCCPermissionRequests.containsKey(filename))
+					destAddr = pendingCCPermissionRequests.get(filename);
+				else
+					destAddr = pendingRPCDeleteRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.WD);
 			} else {
 				printVerbose("Received IC but waiting for IC from at client (only first shown): "
@@ -1410,7 +1484,7 @@ public class Client extends RIONode {
 				deleteFile(filename);
 
 				// send out a WD to anyone requesting this
-				int destAddr = pendingPermissionRequests.get(filename);
+				int destAddr = pendingCCPermissionRequests.get(filename);
 				sendResponse(destAddr, filename, false,
 						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
 
@@ -1419,7 +1493,7 @@ public class Client extends RIONode {
 				writeFile(filename, contents, Protocol.PUT);
 
 				// send out a WD to anyone requesting this
-				Integer destAddr = pendingPermissionRequests.get(filename);
+				Integer destAddr = pendingCCPermissionRequests.get(filename);
 				if (destAddr != null)
 					sendFile(destAddr, filename, Protocol.WD);
 
@@ -1472,7 +1546,7 @@ public class Client extends RIONode {
 				deleteFile(filename);
 
 				// Send out an invalid file request
-				int destAddr = pendingPermissionRequests.get(filename);
+				int destAddr = pendingCCPermissionRequests.get(filename);
 				sendResponse(destAddr, filename, false,
 						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
 
@@ -1481,7 +1555,7 @@ public class Client extends RIONode {
 				writeFile(filename, contents, Protocol.PUT);
 
 				// send out a RD to anyone requesting this
-				int destAddr = pendingPermissionRequests.get(filename);
+				int destAddr = pendingCCPermissionRequests.get(filename);
 				sendFile(destAddr, filename, Protocol.RD);
 
 			}
@@ -1571,5 +1645,19 @@ public class Client extends RIONode {
 			printVerbose("sending response: " + protocol + " status: "
 					+ (successful ? "successful" : "not successful"));
 		}
+	}
+	
+	private void sendSuccess(Integer destAddr, int protocol)
+	{
+		String msg = Protocol.protocolToString(protocol);
+		byte[] payload = Utility.stringToByteArray(msg);
+		RIOLayer.RIOSend(destAddr, Protocol.SUCCESS, payload);
+	}
+	
+	private void sendSuccess(Integer destAddr, int protocol, String message)
+	{
+		String msg = Protocol.protocolToString(protocol) + delimiter + message;
+		byte[] payload = Utility.stringToByteArray(msg);
+		RIOLayer.RIOSend(destAddr, Protocol.SUCCESS, payload);
 	}
 }
