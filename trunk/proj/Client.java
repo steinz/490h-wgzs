@@ -619,8 +619,8 @@ public class Client extends RIONode {
 		// check if the file exists
 		if (Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileAlreadyExists, "create", addr, fileName);
-			sendResponse(from, "create", false,
-					ErrorCode.lookup(ErrorCode.FileAlreadyExists));
+			sendError(from, Protocol.CREATE, fileName, 
+					ErrorCode.FileAlreadyExists);
 			return;
 		}
 
@@ -634,7 +634,7 @@ public class Client extends RIONode {
 			}
 		}
 
-		sendResponse(from, "create", true, "");
+		sendSuccess(from, Protocol.CREATE);
 	}
 
 	/**
@@ -661,8 +661,7 @@ public class Client extends RIONode {
 					.get(filename);
 
 			if (clientStatuses == null){
-				sendResponse(from, Protocol.protocolToString(Protocol.ERROR),
-						false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+				sendError(from, Protocol.DELETE, ErrorCode.FileDoesNotExist);
 				return;
 			}
 
@@ -714,6 +713,8 @@ public class Client extends RIONode {
 	}
 	
 	
+
+
 	/**
 	 * Deletes a file from the local file system. Fails and prints an error if
 	 * the file does not exist
@@ -730,8 +731,7 @@ public class Client extends RIONode {
 		if (!Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileDoesNotExist, "delete", addr, fileName);
 			if (from != this.addr)
-				sendResponse(from, "delete", false,
-						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+				sendError(from, Protocol.DELETE, ErrorCode.FileDoesNotExist);
 			return;
 		} else {
 			// delete file
@@ -747,7 +747,7 @@ public class Client extends RIONode {
 			}
 		}
 
-		sendResponse(from, "delete", true, "");
+		sendSuccess(from, Protocol.DELETE);
 	}
 
 	/**
@@ -799,8 +799,7 @@ public class Client extends RIONode {
 		// check if the file exists
 		if (!Utility.fileExists(this, fileName)) {
 			printError(ErrorCode.FileDoesNotExist, "get", addr, fileName);
-			sendResponse(from, "get", false,
-					ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+			sendError(from, Protocol.GET, ErrorCode.FileDoesNotExist);
 			return;
 		}
 		// send the file if it does
@@ -864,8 +863,7 @@ public class Client extends RIONode {
 				printError(ErrorCode.FileDoesNotExist, "put", addr, fileName);
 			else
 				printError(ErrorCode.FileDoesNotExist, "append", addr, fileName);
-			sendResponse(from, Protocol.protocolToString(protocol), false,
-					ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+			sendError(from, protocol, ErrorCode.FileDoesNotExist);
 			return;
 		} else {
 			try {
@@ -886,13 +884,12 @@ public class Client extends RIONode {
 				if (protocol == Protocol.PUT)
 					deleteFile(this.addr, ".temp");
 			} catch (IOException e) {
-				sendResponse(from, Protocol.protocolToString(protocol), false,
-						ErrorCode.lookup(ErrorCode.UnknownError));
+				sendError(from, protocol, ErrorCode.UnknownError);
 				Logger.error(e);
 			}
 		}
 
-		sendResponse(from, Protocol.protocolToString(protocol), true, "");
+		sendSuccess(from, protocol);
 	}
 
 	/**
@@ -1013,11 +1010,10 @@ public class Client extends RIONode {
 
 		if (managerCacheStatuses.containsKey(filename)
 				&& managerCacheStatuses.get(filename).size() > 0) {
-			sendResponse(client, Protocol.protocolToString(Protocol.ERROR),
-					false, ErrorCode.lookup(ErrorCode.FileAlreadyExists));
+			sendError(client, Protocol.ERROR, ErrorCode.FileAlreadyExists);
 		} else {
 			createFile(filename);
-			sendResponse(client, "CREATED" + delimiter + filename, true, "");
+			sendSuccess(client, Protocol.CREATE, filename);
 		}
 	}
 
@@ -1074,8 +1070,7 @@ public class Client extends RIONode {
 		String sendMsg = "";
 
 		if (!Utility.fileExists(this, fileName)) {
-			sendResponse(client, Protocol.protocolToString(Protocol.ERROR),
-					false, ErrorCode.lookup((ErrorCode.FileDoesNotExist)));
+			sendError(client, Protocol.ERROR, ErrorCode.FileDoesNotExist);
 		} else {
 			try {
 				sendMsg = fileName + delimiter + getFile(fileName);
@@ -1131,8 +1126,7 @@ public class Client extends RIONode {
 				.get(filename);
 
 		if (clientStatuses == null){
-			sendResponse(client, Protocol.protocolToString(Protocol.ERROR),
-					false, ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+			sendError(client, Protocol.ERROR, ErrorCode.FileDoesNotExist);
 			return;
 		}
 
@@ -1246,8 +1240,7 @@ public class Client extends RIONode {
 		int destAddr;
 		if (!pendingICs.containsKey(filename) || !isManager
 				|| !pendingICs.get(filename).contains(from)) {
-			sendResponse(from, Protocol.protocolToString(Protocol.ERROR),
-					false, ErrorCode.lookup(ErrorCode.UnknownError));
+			sendError(from, Protocol.ERROR, ErrorCode.UnknownError);
 			Logger.error(ErrorCode.NotManager, "IC: " + filename);
 		} else {
 
@@ -1485,8 +1478,7 @@ public class Client extends RIONode {
 
 				// send out a WD to anyone requesting this
 				int destAddr = pendingCCPermissionRequests.get(filename);
-				sendResponse(destAddr, filename, false,
-						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+				sendError(destAddr, filename, ErrorCode.FileDoesNotExist);
 
 			} else {
 				// first write the file to save a local copy
@@ -1547,8 +1539,7 @@ public class Client extends RIONode {
 
 				// Send out an invalid file request
 				int destAddr = pendingCCPermissionRequests.get(filename);
-				sendResponse(destAddr, filename, false,
-						ErrorCode.lookup(ErrorCode.FileDoesNotExist));
+				sendError(destAddr, filename, ErrorCode.FileDoesNotExist);
 
 			} else {
 				// first write the file to save a local copy
@@ -1565,6 +1556,7 @@ public class Client extends RIONode {
 			managerCacheStatuses.put(filename, m);
 		}
 	}
+
 
 	/*************************************************
 	 * end client and manager cache coherency functions
@@ -1614,38 +1606,6 @@ public class Client extends RIONode {
 			writeFile(from, fileName, contents, protocol);
 		}
 	}
-
-	/**
-	 * Sends a response if destAddr >= 0 (otherwise assumes that a response is
-	 * not meant to be sent)
-	 * 
-	 * @param destAddr
-	 *            Who to send the response to
-	 * @param protocol
-	 *            The protocol
-	 * @param successful
-	 *            Whether the operation was successful
-	 */
-	private void sendResponse(Integer destAddr, String protocol,
-			boolean successful, String error) {
-
-		// TODO: Fix args - for receiveCreate protocol is actually filename
-
-		if (destAddr != this.addr) {
-
-			String sendMsg = protocol;
-			if (!successful)
-				sendMsg = error;
-
-			byte[] payload = Utility.stringToByteArray(sendMsg);
-			if (successful)
-				RIOLayer.RIOSend(destAddr, Protocol.SUCCESS, payload);
-			else
-				RIOLayer.RIOSend(destAddr, Protocol.ERROR, payload);
-			printVerbose("sending response: " + protocol + " status: "
-					+ (successful ? "successful" : "not successful"));
-		}
-	}
 	
 	private void sendSuccess(Integer destAddr, int protocol)
 	{
@@ -1659,5 +1619,26 @@ public class Client extends RIONode {
 		String msg = Protocol.protocolToString(protocol) + delimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		RIOLayer.RIOSend(destAddr, Protocol.SUCCESS, payload);
+	}
+	
+	private void sendError(int destAddr, String filename, int errorcode) {
+		String msg = filename+ delimiter + ErrorCode.lookup(errorcode);
+		byte[] payload = Utility.stringToByteArray(msg);
+		RIOLayer.RIOSend(destAddr, Protocol.ERROR, payload);
+	}
+	
+	private void sendError(int from, int protocol, int errorcode) {
+		String msg = Protocol.protocolToString(protocol) + delimiter + ErrorCode.lookup(errorcode);
+		byte[] payload = Utility.stringToByteArray(msg);
+		RIOLayer.RIOSend(from, Protocol.ERROR, payload);
+		
+	}
+	
+	private void sendError(int from, int protocol, String fileName,
+			int errorcode) {
+		String msg = Protocol.protocolToString(protocol) + delimiter + fileName + delimiter + ErrorCode.lookup(errorcode);
+		byte[] payload = Utility.stringToByteArray(msg);
+		RIOLayer.RIOSend(from, Protocol.ERROR, payload);
+		
 	}
 }
