@@ -47,6 +47,10 @@ public class Client extends RIONode {
 	 */
 
 	/*
+	 * TODO: LOW/EC: Let clients exchange files w/o sending them to the manager
+	 */
+
+	/*
 	 * TODO: EC: Batch requests
 	 */
 
@@ -163,6 +167,14 @@ public class Client extends RIONode {
 	 */
 	protected Set<String> managerLockedFiles;
 
+	/*
+	 * TODO: HIGH: I think this would be cleaner if it was two Maps:
+	 * 
+	 * Map<String, Integer> managerCacheRW;
+	 * 
+	 * Map<String, List<Integer>> managerCacheRO;
+	 */
+
 	/**
 	 * Status of cached files for all clients.
 	 */
@@ -187,6 +199,11 @@ public class Client extends RIONode {
 	 * Status of who is waiting to delete this file via RPC
 	 */
 	private Map<String, Integer> managerPendingRPCDeleteRequests;
+
+	/**
+	 * Status of who is waiting to create this file via RPC
+	 */
+	private Map<String, Integer> managerPendingRPCCreateRequests;
 
 	/*************************************************
 	 * end manager only data structures
@@ -272,6 +289,7 @@ public class Client extends RIONode {
 			this.managerQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
 			this.managerPendingCCPermissionRequests = new HashMap<String, Integer>();
 			this.managerPendingRPCDeleteRequests = new HashMap<String, Integer>();
+			this.managerPendingRPCCreateRequests = new HashMap<String, Integer>();
 		} else {
 			printInfo("already manager");
 		}
@@ -922,10 +940,31 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		// TODO: HIGH: Check if locked?
+		// TODO: HIGH: Check if locked
 
 		if (managerCacheStatuses.containsKey(filename)
 				&& managerCacheStatuses.get(filename).size() > 0) {
+
+			// Find out if anyone has RW
+			Integer rw = null;
+			Map<Integer, CacheStatuses> cacheStatuses = managerCacheStatuses
+					.get(filename);
+			for (Entry<Integer, CacheStatuses> entry : cacheStatuses.entrySet()) {
+				if (entry.getValue() == CacheStatuses.ReadWrite) {
+					rw = entry.getKey();
+				}
+			}
+
+			if (rw == null) {
+				// everyone has RO, so file must exist
+				sendError(client, Protocol.ERROR, filename,
+						ErrorCode.FileAlreadyExists);
+			} else {
+				// owner could have deleted the file, WF them
+				sendRequest(rw, filename, Protocol.WF);
+				managerPendingRPCCreateRequests.put(filename, client);
+			}
+
 			/*
 			 * TODO: HIGH: This assumption is bad:
 			 * 
@@ -943,9 +982,6 @@ public class Client extends RIONode {
 			 * There is proably a similar bug w/ receiveDelete
 			 */
 
-			// send error, file already exists
-			sendError(client, Protocol.ERROR, filename,
-					ErrorCode.FileAlreadyExists);
 		} else {
 			// local create
 			createFile(filename);
@@ -980,7 +1016,7 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		// TODO: Check if locked?
+		// TODO: Check if locked
 
 		// Check if anyone has RW or RO status on this file
 		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
@@ -998,6 +1034,8 @@ public class Client extends RIONode {
 
 		Integer rw = null;
 		ArrayList<Integer> ro = new ArrayList<Integer>();
+
+		// TODO: clean this up
 
 		// send out IVs for this file as well
 		// check for nodes with permissions on this file currently
@@ -1051,7 +1089,7 @@ public class Client extends RIONode {
 			// no one has permissions, so send success
 			sendSuccess(from, Protocol.DELETE, filename);
 
-			// TODO: give RW to from
+			// TODO: HIGH: give RW to from
 		}
 	}
 
@@ -1398,22 +1436,51 @@ public class Client extends RIONode {
 	 * 
 	 * @throws UnknownManagerException
 	 * @throws IOException
+	 * @throws PrivilegeLevelDisagreementException
 	 */
 	protected void receiveF(String msgString, String RForWF,
 			int responseProtocol, boolean keepRO)
-			throws UnknownManagerException, IOException {
+			throws UnknownManagerException, IOException,
+			PrivilegeLevelDisagreementException {
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
 
 		String payload = null;
 
 		if (!Utility.fileExists(this, msgString)) {
-			// TODO: Client could have crashed here, recover
+			if (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+				// Client has RW but no file on disk, file was deleted
 
-			// Privilege level disagreement w/ manager
-			printError(ErrorCode.PrivilegeDisagreement, RForWF + delimiter
-					+ msgString);
-			return;
+				/*
+				 * TODO: HIGH: Tell the manager somehow. Could send a DELETE,
+				 * but then I'll get a success message back that will cause me
+				 * to give myself RW again which is wrong here, so I think we
+				 * need a new message type.
+				 * 
+				 * I could also send a WD, but there is no way to communicate to
+				 * the manager that I deleted the file other than sending the
+				 * empty string, which is kind of a bug (see TODOs in
+				 * receive{R,W}D about how I think these implicit creates
+				 * shouldn't happen).
+				 * 
+				 * So what we need is a WD_DELETED packet that just has a
+				 * filename.
+				 * 
+				 * In response to that message, the server should finish
+				 * servicing the create in managerPendingRPCCreateRequests by
+				 * sending the requester a Success if I had deleted the file, or
+				 * an Error if I haven't
+				 */
+
+				// Invalidate file
+
+				return;
+			} else {
+				// Privilege level disagreement w/ manager
+				throw new PrivilegeLevelDisagreementException(
+						"Manager expecting RW but I have "
+								+ clientCacheStatus.get(filename));
+			}
 		} else {
 			// read file contents
 			payload = filename + delimiter + getFile(filename);
@@ -1443,9 +1510,11 @@ public class Client extends RIONode {
 	 * @throws NotClientException
 	 * @throws IOException
 	 * @throws UnknownManagerException
+	 * @throws PrivilegeLevelDisagreementException
 	 */
 	protected void receiveRF(String msgString) throws NotClientException,
-			UnknownManagerException, IOException {
+			UnknownManagerException, IOException,
+			PrivilegeLevelDisagreementException {
 		if (isManager) {
 			throw new NotClientException();
 		}
@@ -1460,9 +1529,11 @@ public class Client extends RIONode {
 	 * @throws NotClientException
 	 * @throws IOException
 	 * @throws UnknownManagerException
+	 * @throws PrivilegeLevelDisagreementException
 	 */
 	protected void receiveWF(String msgString) throws NotClientException,
-			UnknownManagerException, IOException {
+			UnknownManagerException, IOException,
+			PrivilegeLevelDisagreementException {
 		if (isManager) {
 			throw new NotClientException();
 		}
@@ -1561,6 +1632,10 @@ public class Client extends RIONode {
 			// check if the payload is blank. If so, this is an indication that
 			// the file was deleted
 			if (contents == "" || contents == null) {
+				/*
+				 * TODO: This shouldn be replaced w/ something explicit
+				 */
+
 				deleteFile(filename);
 
 				// send out a WD to anyone requesting this
@@ -1625,8 +1700,7 @@ public class Client extends RIONode {
 			// the file was deleted
 			if (contents == "" || contents == null) {
 				/*
-				 * TODO: This shouldn't be needed anymore - this packet should
-				 * also probably have a filename or something in it in all cases
+				 * TODO: This shouldn be replaced w/ something explicit
 				 */
 
 				deleteFile(filename);
