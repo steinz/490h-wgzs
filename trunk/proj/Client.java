@@ -1177,15 +1177,14 @@ public class Client extends RIONode {
 		}
 	}
 
-
-	protected void sendFile(int client, String filename, int protocol)
+	/**
+	 * Helper that sends the contents of filename to to with protocol protocol
+	 * 
+	 * @throws IOException
+	 */
+	protected void sendFile(int to, String filename, int protocol)
 			throws IOException {
-		String sendMsg = "";
-
-		/*
-		 * TODO: Is int client always a client in this context, or can it be the
-		 * manager (when called in response to a {R,W}F)?
-		 */
+		StringBuilder sendMsg = new StringBuilder();
 
 		if (!Utility.fileExists(this, filename)) {
 			/*
@@ -1197,32 +1196,37 @@ public class Client extends RIONode {
 			 * We could also add a DELETED CacheStatus type to keep from having
 			 * to go to disk here.
 			 */
-			sendError(client, Protocol.ERROR, filename,
-					ErrorCode.FileDoesNotExist);
+			sendError(to, Protocol.ERROR, filename, ErrorCode.FileDoesNotExist);
 		} else {
-			sendMsg = filename + delimiter + getFile(filename);
+			sendMsg.append(filename);
+			sendMsg.append(delimiter);
+			sendMsg.append(getFile(filename));
 		}
 
-		byte[] payload = Utility.stringToByteArray(sendMsg);
-		RIOSend(client, protocol, payload);
+		byte[] payload = Utility.stringToByteArray(sendMsg.toString());
 		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
-				+ client);
-
-		// TODO: HIGH: Update permissions on filename for client
+				+ to);
+		RIOSend(to, protocol, payload);
 	}
+
+	/**
+	 * Helper that sends a request for the provided filename to the provided
+	 * client using the provided protocol
+	 */
 
 	protected void sendRequest(int client, String filename, int protocol) {
-		String sendMsg = filename;
-		byte[] payload = Utility.stringToByteArray(sendMsg);
-		RIOSend(client, protocol, payload);
+		byte[] payload = Utility.stringToByteArray(filename);
 		printVerbose("sending " + protocol + " to " + client);
+		RIOSend(client, protocol, payload);
 	}
 
+	/**
+	 * Unlocks filename and checks if there is another request to service
+	 */
 	protected void managerUnlockFile(String filename) {
+		printVerbose("manager unlocking file: " + filename);
 		managerLockedFiles.remove(filename);
-		if (!managerQueuedFileRequests.containsKey(filename))
-			managerQueuedFileRequests.put(filename,
-					new LinkedList<QueuedFileRequest>());
+
 		Queue<QueuedFileRequest> outstandingRequests = managerQueuedFileRequests
 				.get(filename);
 		QueuedFileRequest nextRequest = outstandingRequests.poll();
@@ -1240,7 +1244,7 @@ public class Client extends RIONode {
 
 		receiveQ(client, filename, Protocol.RQ, Protocol.RD, Protocol.RF, true);
 	}
-	
+
 	protected void receiveWQ(int client, String filename)
 			throws NotManagerException, IOException {
 		if (!isManager) {
@@ -1265,8 +1269,8 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		printVerbose("Changing client: " + client + " to RW");
-		updateClientCacheStatus(CacheStatuses.ReadWrite, client, filename);
+		updateManagerCacheStatus(CacheStatuses.ReadWrite, client, filename);
+		managerUnlockFile(filename);
 	}
 
 	/**
@@ -1285,10 +1289,11 @@ public class Client extends RIONode {
 		}
 
 		printVerbose("Changing client: " + client + " to RO");
-		updateClientCacheStatus(CacheStatuses.ReadOnly, client, filename);
+		updateManagerCacheStatus(CacheStatuses.ReadOnly, client, filename);
+		managerUnlockFile(filename);
 	}
 
-	protected void updateClientCacheStatus(CacheStatuses val, int client,
+	protected void updateManagerCacheStatus(CacheStatuses val, int client,
 			String filename) throws NotManagerException {
 		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
 				.get(filename);
@@ -1297,11 +1302,9 @@ public class Client extends RIONode {
 			managerCacheStatuses.put(filename, clientStatuses);
 		}
 
+		// TODO: verify val prints string not int
+		printVerbose("changing client: " + client + " to " + val);
 		clientStatuses.put(client, val);
-
-		// TODO: this is a weird place to do this
-		printVerbose("Removing lock on file: " + filename);
-		managerUnlockFile(filename);
 	}
 
 	/**
@@ -1750,18 +1753,16 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * Unlock the indicated file and service and queued requests on it.
+	 * Unlock the filename and service and queued requests on it.
 	 */
 	protected void clientUnlockFile(String filename) {
 		printVerbose("client unlocking file: " + filename);
 		clientLockedFiles.remove(filename);
 
-		if (clientQueuedCommands.containsKey(filename)) {
-			Queue<String> queuedRequests = clientQueuedCommands.get(filename);
-			if (queuedRequests.size() > 0) {
-				String request = queuedRequests.poll();
-				onCommand(request);
-			}
+		Queue<String> queuedRequests = clientQueuedCommands.get(filename);
+		String request = queuedRequests.poll();
+		if (request != null) {
+			onCommand(request);
 		}
 	}
 
