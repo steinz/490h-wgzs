@@ -54,6 +54,11 @@ public class Client extends RIONode {
 	 * TODO: EC: Only send file diffs for big files
 	 */
 
+	/*
+	 * TODO: EC: Don't send ACKs for messages that always get responses - for
+	 * ex, let WD be WQ's ACK
+	 */
+
 	/**
 	 * Possible cache statuses
 	 */
@@ -386,7 +391,8 @@ public class Client extends RIONode {
 		} else if (clientCacheStatus.containsKey(filename)) {
 			// have permissions
 			String content = getFile(filename);
-			printInfo("Got file, content is: " + content);
+			printInfo("Got file, contents below:");
+			printInfo(content);
 		} else {
 			// lock and get permissions
 			clientLockFile(filename);
@@ -704,6 +710,8 @@ public class Client extends RIONode {
 	 */
 	public String getFile(String filename) throws IOException {
 
+		// TODO: HIGH: This currently returns null for empty files
+
 		printVerbose("getting file: " + filename);
 		logSynopticEvent("GETTING-FILE");
 
@@ -713,15 +721,17 @@ public class Client extends RIONode {
 		} else {
 			// read and return the file if it does
 			StringBuilder contents = new StringBuilder();
-			String inLine = "";
 			PersistentStorageReader reader = getReader(filename);
 
-			// TODO: Make sure this works w/ empty files
-			contents.append(reader.readLine());
+			/*
+			 * TODO: This is the same suck as in writeTempFile. See commet
+			 * there, refactor writeTempFile to use getFile, and fix the suck
+			 * (probably need to use read instead of readLine...).
+			 */
+			String inLine;
 			while ((inLine = reader.readLine()) != null) {
-				// TODO: Test this on file ending w/ and w/o newline
-				contents.append(System.getProperty("line.separator"));
 				contents.append(inLine);
+				contents.append(System.getProperty("line.separator"));
 			}
 
 			reader.close();
@@ -785,13 +795,14 @@ public class Client extends RIONode {
 
 		PersistentStorageReader oldFileReader = getReader(filename);
 
-		// TODO: Make sure this works w/ empty files
-		oldContent.append(oldFileReader.readLine());
-
+		/*
+		 * TODO: This sucks. I'm going to assume all files end w/ newlines for
+		 * now. The readline(), while loop method was writing "null" to files.
+		 */
 		String inLine;
 		while ((inLine = oldFileReader.readLine()) != null) {
-			oldContent.append(System.getProperty("line.separator"));
 			oldContent.append(inLine);
+			oldContent.append(System.getProperty("line.separator"));
 		}
 
 		oldFileReader.close();

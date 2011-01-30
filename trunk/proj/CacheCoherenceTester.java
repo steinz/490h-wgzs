@@ -58,7 +58,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 			super.onCommand(line);
 		}
 	}
-
+	
 	/***************************************************************************
 	 * Begin wrapper for methods that can finish a high level op. Start a new op
 	 * after finishing this one. The Handler logic checks need to match super's
