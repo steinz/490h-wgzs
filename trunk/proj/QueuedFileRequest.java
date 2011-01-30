@@ -17,12 +17,4 @@ public class QueuedFileRequest {
 			protocol = prot;
 			msg = buf;
 	}
-		
-	// TODO: Separate into two classes?
-	
-	String command;
-	
-	public QueuedFileRequest(String command) {
-		this.command = command;
-	}
 }
