@@ -12,8 +12,6 @@ public class QueuedFileRequest {
 	int protocol;
 	byte[] msg;
 	
-	String command;
-	
 	public QueuedFileRequest(int addr, int prot, byte[] buf) {
 			from = addr;
 			protocol = prot;
@@ -21,6 +19,8 @@ public class QueuedFileRequest {
 	}
 		
 	// TODO: Separate into two classes?
+	
+	String command;
 	
 	public QueuedFileRequest(String command) {
 		this.command = command;
