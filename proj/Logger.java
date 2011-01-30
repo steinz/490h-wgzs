@@ -99,7 +99,7 @@ public class Logger {
 
 	public static void error(Exception e) {
 		if (printError) {
-			errorPrintln(e.getMessage());
+			errorPrintln(e.toString());
 			StackTraceElement[] trace = e.getStackTrace();
 			for (StackTraceElement st : trace) {
 				errorPrintln(st.toString());
