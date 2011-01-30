@@ -71,10 +71,10 @@ public class Client extends RIONode {
 	};
 
 	/**
-	 * Commands the client can perform
+	 * Operation types the client can remember in a PendingClientOperation
 	 */
 	public static enum ClientOperation {
-		CREATE, DELETE, PUT, APPEND
+		PUT, APPEND
 	};
 
 	/**
@@ -150,9 +150,9 @@ public class Client extends RIONode {
 	protected Set<String> clientLockedFiles;
 
 	/**
-	 * Save requests on client side locked files
+	 * Saves commands on client side locked files
 	 */
-	protected Map<String, Queue<QueuedFileRequest>> clientQueuedFileRequests;
+	protected Map<String, Queue<String>> clientQueuedCommands;
 
 	/*************************************************
 	 * end client data structures
@@ -216,7 +216,7 @@ public class Client extends RIONode {
 		this.clientCacheStatus = new HashMap<String, CacheStatuses>();
 		this.clientPendingOperations = new HashMap<String, PendingClientOperation>();
 		this.clientLockedFiles = new HashSet<String>();
-		this.clientQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
+		this.clientQueuedCommands = new HashMap<String, Queue<String>>();
 		this.isManager = false;
 		this.managerAddr = -1;
 		Logger.eraseLog(); // Wipe the server log
@@ -303,8 +303,6 @@ public class Client extends RIONode {
 		printInfo("manager is " + this.managerAddr);
 	}
 
-	// TODO: log local file unlocks
-
 	/**
 	 * Check if the client has locked the filename. Queue the passed in action
 	 * if the file is locked and return true. Otherwise return false.
@@ -313,14 +311,13 @@ public class Client extends RIONode {
 		if (clientLockedFiles.contains(filename)) {
 			printVerbose("Queueing command on locked file: " + line);
 
-			Queue<QueuedFileRequest> requests = clientQueuedFileRequests
-					.get(filename);
+			Queue<String> requests = clientQueuedCommands.get(filename);
 			if (requests == null) {
-				requests = new LinkedList<QueuedFileRequest>();
+				requests = new LinkedList<String>();
 			}
-			requests.add(new QueuedFileRequest(line));
+			requests.add(line);
 
-			clientQueuedFileRequests.put(filename, requests);
+			clientQueuedCommands.put(filename, requests);
 			return true;
 		} else {
 			return false;
@@ -331,7 +328,7 @@ public class Client extends RIONode {
 	 * Lock the provided filename and print a message
 	 */
 	protected void clientLockFile(String filename) {
-		printVerbose("locking file: " + filename);
+		printVerbose("client locking file: " + filename);
 		clientLockedFiles.add(filename);
 	}
 
@@ -728,8 +725,6 @@ public class Client extends RIONode {
 	 */
 	public String getFile(String filename) throws IOException {
 
-		// TODO: HIGH: This currently returns null for empty files
-
 		printVerbose("getting file: " + filename);
 		logSynopticEvent("GETTING-FILE");
 
@@ -1016,7 +1011,7 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		// TODO: Check if locked
+		// TODO: HIGH: Check if locked
 
 		// Check if anyone has RW or RO status on this file
 		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
@@ -1095,60 +1090,93 @@ public class Client extends RIONode {
 
 	// TODO: Zach: Code review of Manager only functions from here down
 
-	protected void receiveRQ(int client, String filename)
-			throws NotManagerException, IOException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-
-		// Deal with locked files, and lock the file if it's not currently
+	protected boolean managerQueueRequestIfLocked(int client, int protocol,
+			String filename) {
 		if (managerLockedFiles.contains(filename)) {
-			Queue<QueuedFileRequest> e = managerQueuedFileRequests
+			Queue<QueuedFileRequest> requests = managerQueuedFileRequests
 					.get(filename);
-			if (e == null) {
-				e = new LinkedList<QueuedFileRequest>();
-				managerQueuedFileRequests.put(filename, e);
+			if (requests == null) {
+				requests = new LinkedList<QueuedFileRequest>();
+				managerQueuedFileRequests.put(filename, requests);
 			}
-			e.add(new QueuedFileRequest(client, Protocol.RQ, Utility
+			requests.add(new QueuedFileRequest(client, protocol, Utility
 					.stringToByteArray(filename)));
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	protected void managerLockFile(String filename) {
+		managerLockedFiles.add(filename);
+		printVerbose("manager locking file: " + filename);
+	}
+
+	protected void receiveQ(int client, String filename, int receivedProtocol,
+			int responseProtocol, int forwardingProtocol, boolean preserveROs)
+			throws IOException, NotManagerException {
+		// check if locked
+		if (managerQueueRequestIfLocked(client, receivedProtocol, filename)) {
 			return;
 		}
 
-		printVerbose("Locking file: " + filename);
-		managerLockedFiles.add(filename);
+		// lock
+		managerLockFile(filename);
 
 		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
 				.get(filename);
 
-		// Check if the file exists in the system
+		// check if the file exists in the system
 		if (clientStatuses == null || clientStatuses.size() == 0) {
 			sendError(client, Protocol.ERROR, filename,
 					ErrorCode.FileDoesNotExist);
 			return;
 		}
 
-		// Check if anyone has RW status on this file
-		Integer key = null;
+		// address of node w/ rw or null
+		Integer rw = null;
+		// list of nodes w/ ro
+		List<Integer> ros = new ArrayList<Integer>();
 
+		// populate rw and ros
 		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
-				if (key != null)
-					Logger.error(ErrorCode.MultipleOwners,
-							"Multiple owners on file: " + filename);
-				key = entry.getKey();
+				if (rw != null) {
+					printError("multiple owners " + "(" + rw + " and "
+							+ entry.getKey() + ") detected on file: "
+							+ filename);
+				}
+				rw = entry.getKey();
+			} else if (entry.getValue().equals(CacheStatuses.ReadOnly)
+					&& entry.getKey() != client) {
+				// ros will not containg the requester (if has RO wants RW)
+				ros.add(entry.getKey());
 			}
 		}
 
-		if (key == null) { // no one has RW
-			// TODO: Convince ourselve manager has most recent version
-			sendFile(client, filename, Protocol.RD);
-			// unlock and RO will be given by RC
-		} else {
-			sendRequest(key, filename, Protocol.RF);
-			managerPendingCCPermissionRequests.put(filename, client);
+		if (rw != null && ros.size() > 0) {
+			printError("simultaneous RW (" + rw + ") and ROs ("
+					+ ros.toString() + ") detected on file: " + filename);
 		}
 
+		if (rw != null) { // someone has RW
+			// Get updates
+			sendRequest(rw, filename, forwardingProtocol);
+			managerPendingCCPermissionRequests.put(filename, client);
+		} else if (!preserveROs && ros.size() > 0) { // someone(s) have RO
+			managerPendingICs.put(filename, ros);
+			for (int i : ros) {
+				// Invalidate all ROs
+				sendRequest(i, filename, Protocol.IV);
+			}
+			managerPendingCCPermissionRequests.put(filename, client);
+		} else { // no one has RW or RO
+			// send file to requester
+			sendFile(client, filename, responseProtocol);
+			// unlock and privelages updated by C message handlers
+		}
 	}
+
 
 	protected void sendFile(int client, String filename, int protocol)
 			throws IOException {
@@ -1164,7 +1192,10 @@ public class Client extends RIONode {
 			 * TODO: HIGH: Bad assumption - breaks when called from WD after
 			 * delete (I think?) - if I'm right, this should check if it has RW
 			 * - if it does, it should send something on to let the requester
-			 * know it deleted the file (maybe a Protocol.DELETE)
+			 * know it deleted the file - probably new WD_DELETED message type.
+			 * 
+			 * We could also add a DELETED CacheStatus type to keep from having
+			 * to go to disk here.
 			 */
 			sendError(client, Protocol.ERROR, filename,
 					ErrorCode.FileDoesNotExist);
@@ -1187,7 +1218,7 @@ public class Client extends RIONode {
 		printVerbose("sending " + protocol + " to " + client);
 	}
 
-	protected void removeLock(String filename) {
+	protected void managerUnlockFile(String filename) {
 		managerLockedFiles.remove(filename);
 		if (!managerQueuedFileRequests.containsKey(filename))
 			managerQueuedFileRequests.put(filename,
@@ -1201,79 +1232,22 @@ public class Client extends RIONode {
 		}
 	}
 
+	protected void receiveRQ(int client, String filename)
+			throws NotManagerException, IOException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+
+		receiveQ(client, filename, Protocol.RQ, Protocol.RD, Protocol.RF, true);
+	}
+	
 	protected void receiveWQ(int client, String filename)
 			throws NotManagerException, IOException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
 
-		// Deal with locked files, and lock the file if it's not currently
-		if (managerLockedFiles.contains(filename)) {
-			Queue<QueuedFileRequest> e = managerQueuedFileRequests
-					.get(filename);
-			if (e == null) {
-				e = new LinkedList<QueuedFileRequest>();
-				managerQueuedFileRequests.put(filename, e);
-			}
-			e.add(new QueuedFileRequest(client, Protocol.WQ, Utility
-					.stringToByteArray(filename)));
-			return;
-		}
-		managerLockedFiles.add(filename);
-		printVerbose("Locking file: " + filename);
-
-		// Check if anyone has RW or RO status on this file
-		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
-				.get(filename);
-
-		if (clientStatuses == null) {
-			sendError(client, Protocol.ERROR, filename,
-					ErrorCode.FileDoesNotExist);
-			return;
-		}
-
-		Integer rw = null;
-		ArrayList<Integer> ro = new ArrayList<Integer>();
-
-		// check for nodes with permissions on this file currently
-		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
-			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
-				if (rw != null)
-					Logger.error(ErrorCode.MultipleOwners,
-							"Multiple owners on file: " + filename);
-				rw = entry.getKey();
-			}
-			if (entry.getValue().equals(CacheStatuses.ReadOnly)) {
-				if (rw != null)
-					Logger.error(ErrorCode.ReadWriteAndReadOnly,
-							"ReadOnly copies while other client has ownership: "
-									+ filename);
-				if (entry.getKey() != client)
-					ro.add(entry.getKey());
-			}
-		}
-
-		if (rw != null) { // If someone has RW status:
-			// Request the changes from the owner
-			sendRequest(rw, filename, Protocol.WF);
-			// Remember to send the changes to the requester
-			managerPendingCCPermissionRequests.put(filename, client);
-		} else if (ro.size() != 0) {
-
-			managerPendingICs.put(filename, ro);
-			for (Integer i : ro) {
-				/*
-				 * Send invalidate requests to everyone with RO status unless
-				 * that person is the requesting client
-				 */
-				sendRequest(i, filename, Protocol.IV);
-			}
-			managerPendingCCPermissionRequests.put(filename, client);
-		} else {
-			// else no one has any access on this file, so send it to requester
-			sendFile(client, filename, Protocol.WD);
-			// unlock and RW will be given by WC
-		}
+		receiveQ(client, filename, Protocol.WQ, Protocol.WD, Protocol.WF, false);
 	}
 
 	/**
@@ -1327,7 +1301,7 @@ public class Client extends RIONode {
 
 		// TODO: this is a weird place to do this
 		printVerbose("Removing lock on file: " + filename);
-		removeLock(filename);
+		managerUnlockFile(filename);
 	}
 
 	/**
@@ -1584,13 +1558,8 @@ public class Client extends RIONode {
 		}
 
 		if (!isManager) {
-			/*
-			 * TODO: HIGH: Can't currently distinguish between append on file
-			 * that doesn't exist and file that is empty - this should be fixed
-			 * now, TEST IT
-			 */
-
 			// has RW!
+			// TODO: Make/use a helper for this
 			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 			printVerbose("got ReadWrite on " + filename);
 
@@ -1605,22 +1574,19 @@ public class Client extends RIONode {
 				PendingClientOperation intent = clientPendingOperations
 						.get(filename);
 				switch (intent.operation) {
-				case CREATE:
-					// TODO: this doesn't throw an error if the file already
-					// exists right now - it should
-					break;
-				case DELETE:
-					deleteFile(filename);
-					break;
 				case PUT:
 					writeFile(filename, intent.content, false);
 					break;
 				case APPEND:
 					writeFile(filename, intent.content, true);
 					break;
+				default:
+					printError("unhandled intent operation recalled on file: "
+							+ filename);
+					break;
 				}
 			} else {
-				printError(ErrorCode.MissingIntent, "wd");
+				printError("missing intent on file: " + filename);
 			}
 
 			// send wc
@@ -1633,7 +1599,8 @@ public class Client extends RIONode {
 			// the file was deleted
 			if (contents == "" || contents == null) {
 				/*
-				 * TODO: This shouldn be replaced w/ something explicit
+				 * TODO: HIGH: This shouldn be replaced w/ something explicit -
+				 * WD_DELETED handler probably
 				 */
 
 				deleteFile(filename);
@@ -1700,7 +1667,8 @@ public class Client extends RIONode {
 			// the file was deleted
 			if (contents == "" || contents == null) {
 				/*
-				 * TODO: This shouldn be replaced w/ something explicit
+				 * TODO: HIGH: This shouldn be replaced w/ something explicit -
+				 * WD_DELETED handler probably
 				 */
 
 				deleteFile(filename);
@@ -1742,7 +1710,6 @@ public class Client extends RIONode {
 
 		printError(msgString);
 
-		// TODO: Unlock file if RPC failed
 		String filename = msgString.split("")[0];
 		clientUnlockFile(filename);
 
@@ -1786,13 +1753,14 @@ public class Client extends RIONode {
 	 * Unlock the indicated file and service and queued requests on it.
 	 */
 	protected void clientUnlockFile(String filename) {
+		printVerbose("client unlocking file: " + filename);
 		clientLockedFiles.remove(filename);
-		if (clientQueuedFileRequests.containsKey(filename)) {
-			Queue<QueuedFileRequest> queuedRequests = clientQueuedFileRequests
-					.get(filename);
+
+		if (clientQueuedCommands.containsKey(filename)) {
+			Queue<String> queuedRequests = clientQueuedCommands.get(filename);
 			if (queuedRequests.size() > 0) {
-				QueuedFileRequest request = queuedRequests.poll();
-				onCommand(request.command);
+				String request = queuedRequests.poll();
+				onCommand(request);
 			}
 		}
 	}
