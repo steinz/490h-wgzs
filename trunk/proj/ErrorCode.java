@@ -7,6 +7,7 @@
  * Put all error codes in here
  */
 public class ErrorCode {
+	// TODO: Remove unused codes. Exceptions have largely replace this.
 	// TODO: LOW: Replace this class w/ an enum
 
 	public static final int UnknownError = -1;

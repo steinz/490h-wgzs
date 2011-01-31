@@ -19,9 +19,16 @@ import edu.washington.cs.cse490h.lib.Callback;
  */
 public class CacheCoherenceTester extends PerfectInitializedClient {
 
+	/*
+	 * TODO: LOW: Unit tests could be nice to have for this (w/ different
+	 * seeds?) The framework might also be helpful for testing transactions for
+	 * project 3.
+	 */
+
 	/**
-	 * Static random number generator. TODO: Remove seed once class has been
-	 * tested.
+	 * Static random number generator.
+	 * 
+	 * TODO: Remove seed once class has been tested.
 	 */
 	protected static Random random = new Random(7);
 
@@ -275,7 +282,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		printInfo("doing command: " + cmd);
 
 		// a fake root for Synoptic
-		//logSynopticEvent("COMMAND");
+		// logSynopticEvent("COMMAND");
 		// first child should always be command name
 		logSynopticEvent(cmdName);
 
