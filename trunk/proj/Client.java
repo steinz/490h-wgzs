@@ -329,6 +329,7 @@ public class Client extends RIONode {
 	 */
 	protected void clientLockFile(String filename) {
 		printVerbose("client locking file: " + filename);
+		logSynopticEvent("CLIENT-LOCK");
 		clientLockedFiles.add(filename);
 	}
 
@@ -1097,16 +1098,26 @@ public class Client extends RIONode {
 			managerPendingRPCDeleteRequests.put(filename, from);
 			managerLockFile(filename);
 		} else {
-			// delete the file locally
-			deleteFile(filename);
-
-			// update permissions
-			clientStatuses.clear();
-			printVerbose("marking file " + filename + " as unowned");
-
-			// no one had permissions, so send success
-			sendSuccess(from, Protocol.DELETE, filename);
+			deleteExistingFile(filename, from);
 		}
+	}
+
+	/**
+	 * receiveDelete helper called when the file is in the system.
+	 * 
+	 * @throws IOException
+	 */
+	public void deleteExistingFile(String filename, int from)
+			throws IOException {
+		// delete the file locally
+		deleteFile(filename);
+
+		// update permissions
+		printVerbose("marking file " + filename + " as unowned");
+		managerCacheStatuses.get(filename).clear();
+
+		// no one had permissions, so send success
+		sendSuccess(from, Protocol.DELETE, filename);
 	}
 
 	// TODO: Zach: Code review of Manager only functions from here down
@@ -1133,8 +1144,9 @@ public class Client extends RIONode {
 	}
 
 	protected void managerLockFile(String filename) {
-		managerLockedFiles.add(filename);
 		printVerbose("manager locking file: " + filename);
+		logSynopticEvent("MANAGER-LOCK");
+		managerLockedFiles.add(filename);
 	}
 
 	protected void receiveQ(int client, String filename, int receivedProtocol,
@@ -1236,7 +1248,8 @@ public class Client extends RIONode {
 
 	protected void sendRequest(int client, String filename, int protocol) {
 		byte[] payload = Utility.stringToByteArray(filename);
-		printVerbose("sending " + protocol + " to " + client);
+		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
+				+ client);
 		RIOSend(client, protocol, payload);
 	}
 
@@ -1245,14 +1258,17 @@ public class Client extends RIONode {
 	 */
 	protected void managerUnlockFile(String filename) {
 		printVerbose("manager unlocking file: " + filename);
+		logSynopticEvent("MANAGER-UNLOCK");
 		managerLockedFiles.remove(filename);
 
 		Queue<QueuedFileRequest> outstandingRequests = managerQueuedFileRequests
 				.get(filename);
-		QueuedFileRequest nextRequest = outstandingRequests.poll();
-		if (nextRequest != null) {
-			onRIOReceive(nextRequest.from, nextRequest.protocol,
-					nextRequest.msg);
+		if (outstandingRequests != null) {
+			QueuedFileRequest nextRequest = outstandingRequests.poll();
+			if (nextRequest != null) {
+				onRIOReceive(nextRequest.from, nextRequest.protocol,
+						nextRequest.msg);
+			}
 		}
 	}
 
@@ -1379,10 +1395,11 @@ public class Client extends RIONode {
 				managerPendingICs.remove(filename);
 
 				if (managerPendingCCPermissionRequests.containsKey(filename)) {
-					destAddr = managerPendingCCPermissionRequests.get(filename);
+					destAddr = managerPendingCCPermissionRequests
+							.remove(filename);
 					managerSendFile(destAddr, filename, Protocol.WD);
 				} else {
-					destAddr = managerPendingRPCDeleteRequests.get(filename);
+					destAddr = managerPendingRPCDeleteRequests.remove(filename);
 					sendSuccess(destAddr, Protocol.DELETE, filename);
 				}
 			} else {
@@ -1425,7 +1442,7 @@ public class Client extends RIONode {
 		clientCacheStatus.remove(msgString);
 		printVerbose("marking invalid " + msgString);
 
-		printVerbose("sending IC to manager for file: " + msgString);
+		printVerbose("sending ic to manager for file: " + msgString);
 		SendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
 	}
 
@@ -1539,12 +1556,14 @@ public class Client extends RIONode {
 	 * 
 	 * @throws NotManagerException
 	 * @throws IOException
+	 * @throws MissingPendingRequestException
 	 ************************************************/
 
 	// TODO: Zach: Code review receive{W,R}D
 
 	protected void receiveWD_DELETE(int from, String filename)
-			throws NotManagerException, IOException {
+			throws NotManagerException, IOException,
+			MissingPendingRequestException {
 		if (!isManager) {
 			throw new NotManagerException(
 					"WD_DELETE should only be received by the manager");
@@ -1559,14 +1578,15 @@ public class Client extends RIONode {
 		// look for pending requests
 
 		// check for a create
-		Integer requester = managerPendingRPCCreateRequests.get(filename);
+		Integer requester = managerPendingRPCCreateRequests.remove(filename);
 		if (requester != null) {
 			// create the file which was deleted by the owner
 			createNewFile(filename, requester);
+			managerUnlockFile(filename);
 			return;
 		}
 
-		requester = managerPendingRPCDeleteRequests.get(filename);
+		requester = managerPendingRPCDeleteRequests.remove(filename);
 		if (requester != null) {
 			// file was previously deleted by owner
 			sendError(requester, Protocol.DELETE, filename,
@@ -1574,15 +1594,15 @@ public class Client extends RIONode {
 			return;
 		}
 
-		requester = managerPendingCCPermissionRequests.get(filename);
+		requester = managerPendingCCPermissionRequests.remove(filename);
 		if (requester != null) {
 			// file was deleted by owner
 			sendError(requester, filename, ErrorCode.FileDoesNotExist);
+			return;
 		}
 
 		// TODO: create an exception for this
-		printError("Received WD_DELETE on file: " + filename
-				+ " but found no pending RPC");
+		throw new MissingPendingRequestException("file: " + filename);
 	}
 
 	/**
@@ -1590,9 +1610,12 @@ public class Client extends RIONode {
 	 *            <filename> <contents> for ex) test hello world
 	 * @throws IOException
 	 * @throws UnknownManagerException
+	 * @throws IllegalConcurrentRequestException
+	 * @throws MissingPendingRequestException
 	 */
 	protected void receiveWD(int from, String msgString) throws IOException,
-			UnknownManagerException {
+			UnknownManagerException, IllegalConcurrentRequestException,
+			MissingPendingRequestException {
 
 		// parse packet
 		StringTokenizer tokens = new StringTokenizer(msgString);
@@ -1634,20 +1657,56 @@ public class Client extends RIONode {
 				printError("missing intent on file: " + filename);
 			}
 
+			// unlock for local use
+			clientUnlockFile(filename);
+
 			// send wc
 			printVerbose("sending wc to manager for " + filename);
 			SendToManager(Protocol.WC, Utility.stringToByteArray(filename));
 
 		} else { // Manager receives WD
 
+			/*
+			 * TODO: LOW: No need to do this for deletes or creates (although
+			 * for creates it might give us a newer file version, which might be
+			 * nice)
+			 */
 			// first write the file to save a local copy
 			writeFile(filename, contents, false);
 
-			// send out a WD to anyone requesting this
-			Integer destAddr = managerPendingCCPermissionRequests.get(filename);
+			// look for pending request
+			boolean foundPendingRequest = false;
+
+			// check creates
+			Integer destAddr = managerPendingRPCCreateRequests.remove(filename);
 			if (destAddr != null) {
-				// TODO: HIGH: I feel like something is broken if this is null
+				foundPendingRequest = true;
+				sendError(destAddr, Protocol.CREATE, filename,
+						ErrorCode.FileAlreadyExists);
+			}
+
+			// check deletes
+			destAddr = managerPendingRPCDeleteRequests.remove(filename);
+			if (destAddr != null) {
+				if (foundPendingRequest) {
+					throw new IllegalConcurrentRequestException();
+				}
+				foundPendingRequest = true;
+				deleteExistingFile(filename, destAddr);
+			}
+
+			// check CC
+			destAddr = managerPendingCCPermissionRequests.remove(filename);
+			if (destAddr != null) {
+				if (foundPendingRequest) {
+					throw new IllegalConcurrentRequestException();
+				}
+				foundPendingRequest = true;
 				managerSendFile(destAddr, filename, Protocol.WD);
+			}
+
+			if (!foundPendingRequest) {
+				throw new MissingPendingRequestException("file: " + filename);
 			}
 
 			// update the status of the client who sent the WD
@@ -1685,6 +1744,9 @@ public class Client extends RIONode {
 			// print GET result
 			printInfo(contents);
 
+			// unlock the file for local use
+			clientUnlockFile(filename);
+
 			// send rc
 			printVerbose("sending rc to manager for " + filename);
 			SendToManager(Protocol.RC, Utility.stringToByteArray(filename));
@@ -1693,8 +1755,12 @@ public class Client extends RIONode {
 			// first write the file to save a local copy
 			writeFile(filename, contents, false);
 
-			// send out a RD to anyone requesting this
-			int destAddr = managerPendingCCPermissionRequests.get(filename);
+			/*
+			 * send out a RD to anyone requesting this - unlike for WD, this
+			 * shouldn't be a create or delete (which require RW, so send W{F,D}
+			 * messages instead)
+			 */
+			int destAddr = managerPendingCCPermissionRequests.remove(filename);
 			managerSendFile(destAddr, filename, Protocol.RD);
 
 			// update the status of the client who sent the WD
@@ -1747,11 +1813,22 @@ public class Client extends RIONode {
 			String filename = split[1];
 
 			if (cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
-				createFile(filename);
+				if (!Utility.fileExists(this, filename)) {
+					createFile(filename);
+				} else {
+					/*
+					 * file could have been deleted by someone else, and now I'm
+					 * creating, but I could still have an old copy on disk
+					 */
+					writeFile(filename, "", false);
+				}
 				clientUnlockFile(filename);
 				clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
-				deleteFile(filename);
+				if (Utility.fileExists(this, filename)) {
+					// migh not exist here
+					deleteFile(filename);
+				}
 				clientUnlockFile(filename);
 				clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 			} else {
@@ -1768,6 +1845,7 @@ public class Client extends RIONode {
 	 */
 	protected void clientUnlockFile(String filename) {
 		printVerbose("client unlocking file: " + filename);
+		logSynopticEvent("CLIENT-UNLOCK");
 		clientLockedFiles.remove(filename);
 
 		// TODO: LOW: I think this needs a monad

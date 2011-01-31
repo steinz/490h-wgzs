@@ -58,7 +58,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 			super.onCommand(line);
 		}
 	}
-	
+
 	/***************************************************************************
 	 * Begin wrapper for methods that can finish a high level op. Start a new op
 	 * after finishing this one. The Handler logic checks need to match super's
@@ -135,30 +135,41 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	@Override
 	protected void receiveWD(int from, String msgString) throws IOException,
-			UnknownManagerException {
+			UnknownManagerException, IllegalConcurrentRequestException,
+			MissingPendingRequestException {
 		super.receiveWD(from, msgString);
-		doOp();
+		if (!isManager) {
+			doOp();
+		}
 	}
 
 	@Override
 	protected void receiveRD(int from, String msgString) throws IOException,
 			UnknownManagerException {
 		super.receiveRD(from, msgString);
-		doOp();
+		if (!isManager) {
+			doOp();
+		}
 	}
+
+	// TODO: Are receive{Error, Successful} client only?
 
 	@Override
 	protected void receiveError(Integer from, String msgString)
 			throws NotClientException {
 		super.receiveError(from, msgString);
-		doOp();
+		if (!isManager) {
+			doOp();
+		}
 	}
 
 	@Override
 	protected void receiveSuccessful(int from, String msgString)
 			throws Exception {
 		super.receiveSuccessful(from, msgString);
-		doOp();
+		if (!isManager) {
+			doOp();
+		}
 	}
 
 	/**************************************************************
@@ -174,6 +185,8 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	 * robust
 	 */
 	protected void doOp() {
+		Logger.verbose("REGISTERING NEW OPERATION " + commandCount);
+
 		Method doOpMethod = null;
 		boolean arg = true;
 		CacheCoherenceTester client = clients.get(random
@@ -213,7 +226,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 		// print something to the log for Synoptic to divide traces on w/ -s
 		logSynopticEvent("NEW OPERATION");
-		Logger.verbose("NEW OPERATION");
+		Logger.verbose("NEW OPERATION " + commandCount);
 
 		// decrement commands left counter
 		commandCount--;
@@ -327,6 +340,6 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	 * content
 	 */
 	protected String randomContent() {
-		return random.nextInt(1000) + " ";
+		return random.nextInt(1000) + "";
 	}
 }
