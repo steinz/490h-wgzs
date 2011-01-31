@@ -28,7 +28,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Number of commands to perform
 	 */
-	protected static int commandCount = 100;
+	protected static int commandCount = 1000;
 
 	/**
 	 * A list of the non-manager clients in the swarm

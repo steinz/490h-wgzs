@@ -675,6 +675,11 @@ public class Client extends RIONode {
 	 * begin FS methods
 	 ************************************************/
 
+	/*
+	 * TODO: LOW: Log a different Synoptic event when temp files are written /
+	 * deleted
+	 */
+
 	/**
 	 * Creates a file on the local filesystem
 	 * 
@@ -752,6 +757,11 @@ public class Client extends RIONode {
 			return contents.toString();
 		}
 	}
+
+	/*
+	 * TODO: Investigate the cause of the PUT<->DELETE loop near the bottom of
+	 * the PUT command chain in CCTester2ClientsCorrectness
+	 */
 
 	/**
 	 * Writes a file to the local filesystem. Fails if the file does not exist
@@ -1601,7 +1611,6 @@ public class Client extends RIONode {
 			return;
 		}
 
-		// TODO: create an exception for this
 		throw new MissingPendingRequestException("file: " + filename);
 	}
 
