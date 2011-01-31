@@ -168,7 +168,7 @@ public class Client extends RIONode {
 	protected Set<String> managerLockedFiles;
 
 	/*
-	 * TODO: HIGH: I think this would be cleaner if it was two Maps:
+	 * TODO: This might be cleaner if it was two Maps:
 	 * 
 	 * Map<String, Integer> managerCacheRW;
 	 * 
@@ -263,13 +263,10 @@ public class Client extends RIONode {
 	 **************************************************************************/
 
 	/*
-	 * TODO: Log sends. We kind of entirely re-wrote logging at this point...
-	 * but I didn't like theirs enough to not do it... /*
-	 */
-
-	/**
-	 * Prints expected numbers for in and out channels. Likely to change as new
-	 * problems arise.
+	 * TODO: Verify that we log all sends
+	 * 
+	 * /** Prints expected numbers for in and out channels. Likely to change as
+	 * new problems arise.
 	 */
 	public void debugHandler(StringTokenizer tokens, String line) {
 		RIOLayer.printSeqStateDebug();
@@ -840,8 +837,6 @@ public class Client extends RIONode {
 	 * end FS methods
 	 ***************************************************/
 
-	// TODO: Organize everything below here
-
 	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
 	 * 
@@ -978,25 +973,6 @@ public class Client extends RIONode {
 				managerLockFile(filename);
 			}
 
-			/*
-			 * TODO: HIGH: This assumption was bad (WF should fix):
-			 * 
-			 * 1 create test
-			 * 
-			 * 1 delete test
-			 * 
-			 * 0 create test
-			 * 
-			 * is a counterexample - 0 gets FAE from here. 1 gets RW via RPC
-			 * then deletes it just locally, so the manager still thinks 0 has
-			 * RW, so the manager needs to poll the owner to get the file's real
-			 * status.
-			 * 
-			 * TEST FIXED
-			 * 
-			 * There is proably a similar bug w/ receiveDelete.
-			 */
-
 		} else { // file not in system
 			createNewFile(filename, client);
 		}
@@ -1028,8 +1004,6 @@ public class Client extends RIONode {
 	 * @throws NotManagerException
 	 * @throws IOException
 	 * @throws PrivilegeLevelDisagreementException
-	 * 
-	 *             TODO: Zach, code review this, keep in mind receiveClient bug
 	 */
 	protected void receiveDelete(int from, String filename)
 			throws NotManagerException, IOException,
@@ -1130,8 +1104,6 @@ public class Client extends RIONode {
 		sendSuccess(from, Protocol.DELETE, filename);
 	}
 
-	// TODO: Zach: Code review of Manager only functions from here down
-
 	/**
 	 * Queues the given request if the file is locked and returns true. Returns
 	 * false if the file isn't locked.
@@ -1218,7 +1190,10 @@ public class Client extends RIONode {
 			}
 			managerPendingCCPermissionRequests.put(filename, client);
 		} else { // no one has RW or RO
-			// TODO: Should this be an error?
+			/*
+			 * TODO: Should this be an error - I think it currently sends
+			 * whatever is on disk?
+			 */
 
 			// send file to requester
 			managerSendFile(client, filename, responseProtocol);
@@ -1563,13 +1538,7 @@ public class Client extends RIONode {
 
 	/*************************************************
 	 * begin client and manager cache coherency functions
-	 * 
-	 * @throws NotManagerException
-	 * @throws IOException
-	 * @throws MissingPendingRequestException
 	 ************************************************/
-
-	// TODO: Zach: Code review receive{W,R}D
 
 	protected void receiveWD_DELETE(int from, String filename)
 			throws NotManagerException, IOException,
@@ -1636,9 +1605,9 @@ public class Client extends RIONode {
 
 		if (!isManager) {
 			// has RW!
-			// TODO: Make/use a helper for this
-			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
+			// TODO: Make/use a helper for this that takes care of the logging
 			printVerbose("got ReadWrite on " + filename);
+			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 
 			// update in cache
 			if (!Utility.fileExists(this, filename)) {
