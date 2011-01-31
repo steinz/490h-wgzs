@@ -923,6 +923,8 @@ public class Client extends RIONode {
 	 * begin manager-only cache coherency functions
 	 ************************************************/
 
+	// TODO: HIGH: Do receive{Create, Delete} need to lock the file?
+
 	/**
 	 * Create RPC
 	 * 
@@ -935,7 +937,9 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		// TODO: HIGH: Check if locked
+		if (managerQueueRequestIfLocked(client, Protocol.CREATE, filename)) {
+			return;
+		}
 
 		if (managerCacheStatuses.containsKey(filename)
 				&& managerCacheStatuses.get(filename).size() > 0) {
@@ -1002,16 +1006,20 @@ public class Client extends RIONode {
 	 * 
 	 * @throws NotManagerException
 	 * @throws IOException
+	 * @throws PrivilegeLevelDisagreementException
 	 * 
 	 *             TODO: Zach, code review this, keep in mind receiveClient bug
 	 */
-	public void receiveDelete(int from, String filename)
-			throws NotManagerException, IOException {
+	protected void receiveDelete(int from, String filename)
+			throws NotManagerException, IOException,
+			PrivilegeLevelDisagreementException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
 
-		// TODO: HIGH: Check if locked
+		if (managerQueueRequestIfLocked(from, Protocol.DELETE, filename)) {
+			return;
+		}
 
 		// Check if anyone has RW or RO status on this file
 		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
@@ -1023,9 +1031,6 @@ public class Client extends RIONode {
 					ErrorCode.FileDoesNotExist);
 			return;
 		}
-
-		// delete the file locally
-		deleteFile(filename);
 
 		Integer rw = null;
 		ArrayList<Integer> ro = new ArrayList<Integer>();
@@ -1052,24 +1057,25 @@ public class Client extends RIONode {
 			}
 		}
 
-		// update permissions
-		clientStatuses.clear();
-		printVerbose("marking file " + filename + " as unowned");
-
 		boolean ivSent = false;
 
 		// add to pending ICs
 		if (rw != null && rw != from) {
-			// Some other than the requester has RW status
+			// Someone other than the requester has RW status
 			sendRequest(rw, filename, Protocol.IV);
 			ivSent = true;
+		} else if (rw != null && rw == from) {
+			// Requester should have RW
+			throw new PrivilegeLevelDisagreementException(
+					"Got delete request from client with RW");
 		}
+
 		if (ro.size() != 0) {
 			managerPendingICs.put(filename, ro);
 			for (Integer i : ro) {
 				/*
-				 * Send invalidate requests to everyone with RO not including
-				 * the requester
+				 * Send invalidate requests to everyone with RO (doesn't include
+				 * the requester)
 				 */
 				sendRequest(i, filename, Protocol.IV);
 			}
@@ -1081,15 +1087,24 @@ public class Client extends RIONode {
 			managerPendingRPCDeleteRequests.put(filename, from);
 			return;
 		} else {
+			// delete the file locally
+			deleteFile(filename);
+
+			// update permissions
+			clientStatuses.clear();
+			printVerbose("marking file " + filename + " as unowned");
+
 			// no one has permissions, so send success
 			sendSuccess(from, Protocol.DELETE, filename);
-
-			// TODO: HIGH: give RW to from
 		}
 	}
 
 	// TODO: Zach: Code review of Manager only functions from here down
 
+	/**
+	 * Queues the given request if the file is locked and returns true. Returns
+	 * false if the file isn't locked.
+	 */
 	protected boolean managerQueueRequestIfLocked(int client, int protocol,
 			String filename) {
 		if (managerLockedFiles.contains(filename)) {
@@ -1524,7 +1539,7 @@ public class Client extends RIONode {
 	 * 
 	 * @throws UnknownManagerException
 	 */
-	public void SendToManager(int protocol, byte[] payload)
+	protected void SendToManager(int protocol, byte[] payload)
 			throws UnknownManagerException {
 		if (this.managerAddr == -1) {
 			throw new UnknownManagerException();
