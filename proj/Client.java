@@ -926,8 +926,6 @@ public class Client extends RIONode {
 	 * begin manager-only cache coherency functions
 	 ************************************************/
 
-	// TODO: HIGH: Do receive{Create, Delete} need to lock the file?
-
 	/**
 	 * Create RPC
 	 * 
@@ -965,6 +963,7 @@ public class Client extends RIONode {
 				// owner could have deleted the file, WF them
 				sendRequest(rw, filename, Protocol.WF);
 				managerPendingRPCCreateRequests.put(filename, client);
+				managerLockFile(filename);
 			}
 
 			/*
@@ -995,21 +994,15 @@ public class Client extends RIONode {
 	 * receiveCreate helper called when filename is not in the system
 	 * 
 	 * @throws IOException
+	 * @throws NotManagerException
 	 */
 	protected void createNewFile(String filename, int client)
-			throws IOException {
+			throws IOException, NotManagerException {
 		// local create
 		createFile(filename);
 
 		// give RW to the requester for filename
-		// TODO: HIGH: I think there is / should be a helper for this
-		Map<Integer, CacheStatuses> cache = managerCacheStatuses.get(filename);
-		if (cache == null) {
-			cache = new HashMap<Integer, CacheStatuses>();
-			managerCacheStatuses.put(filename, cache);
-		}
-		printVerbose("marking file " + filename + " RW for node " + client);
-		cache.put(client, CacheStatuses.ReadWrite);
+		managerUpdateCacheStatus(CacheStatuses.ReadWrite, client, filename);
 
 		// send success to requester
 		printVerbose("sending " + Protocol.protocolToString(Protocol.SUCCESS)
@@ -1051,9 +1044,11 @@ public class Client extends RIONode {
 		Integer rw = null;
 		ArrayList<Integer> ro = new ArrayList<Integer>();
 
-		// TODO: clean this up
+		/*
+		 * TODO: clean this up, comment what's going on - could model after
+		 * receiveQ's loop / factor that loop out into a helper
+		 */
 
-		// send out IVs for this file as well
 		// check for nodes with permissions on this file currently
 		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
@@ -1099,7 +1094,7 @@ public class Client extends RIONode {
 		if (waitingForResponses) {
 			// track pending request
 			managerPendingRPCDeleteRequests.put(filename, from);
-			return;
+			managerLockFile(filename);
 		} else {
 			// delete the file locally
 			deleteFile(filename);
@@ -1219,19 +1214,8 @@ public class Client extends RIONode {
 		StringBuilder sendMsg = new StringBuilder();
 
 		if (!Utility.fileExists(this, filename)) {
-			/*
-			 * TODO: LOW: Add a DELETED CacheStatus type to keep from having to
-			 * go to disk here.
-			 */
-			if (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-				// Have RW but file not on disk, so I deleted the file
-				RIOSend(this.managerAddr, Protocol.WD_DELETE, Utility
-						.stringToByteArray(filename));
-			} else {
-				// I don't have the file
-				sendError(to, Protocol.ERROR, filename,
-						ErrorCode.FileDoesNotExist);
-			}
+			// Manager doesn't have the file
+			sendError(to, Protocol.ERROR, filename, ErrorCode.FileDoesNotExist);
 		} else {
 			sendMsg.append(filename);
 			sendMsg.append(delimiter);
@@ -1304,7 +1288,7 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		updateManagerCacheStatus(CacheStatuses.ReadWrite, client, filename);
+		managerUpdateCacheStatus(CacheStatuses.ReadWrite, client, filename);
 		managerUnlockFile(filename);
 	}
 
@@ -1324,11 +1308,11 @@ public class Client extends RIONode {
 		}
 
 		printVerbose("Changing client: " + client + " to RO");
-		updateManagerCacheStatus(CacheStatuses.ReadOnly, client, filename);
+		managerUpdateCacheStatus(CacheStatuses.ReadOnly, client, filename);
 		managerUnlockFile(filename);
 	}
 
-	protected void updateManagerCacheStatus(CacheStatuses val, int client,
+	protected void managerUpdateCacheStatus(CacheStatuses val, int client,
 			String filename) throws NotManagerException {
 		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
 				.get(filename);
@@ -1655,38 +1639,19 @@ public class Client extends RIONode {
 
 		} else { // Manager receives WD
 
-			// check if the payload is blank. If so, this is an indication that
-			// the file was deleted
-			if (contents == "" || contents == null) {
-				/*
-				 * TODO: HIGH: This shouldn be replaced w/ something explicit -
-				 * WD_DELETED handler probably
-				 */
+			// first write the file to save a local copy
+			writeFile(filename, contents, false);
 
-				deleteFile(filename);
-
-				// send out a WD to anyone requesting this
-				int destAddr = managerPendingCCPermissionRequests.get(filename);
-				sendError(destAddr, filename, ErrorCode.FileDoesNotExist);
-
-			} else {
-				// first write the file to save a local copy
-				writeFile(filename, contents, false);
-
-				// send out a WD to anyone requesting this
-				Integer destAddr = managerPendingCCPermissionRequests
-						.get(filename);
-				if (destAddr != null) {
-					// TODO: HIGH: when would this ever be null?
-					managerSendFile(destAddr, filename, Protocol.WD);
-				}
-
-				// update the status of the client who sent the WD
-				Map<Integer, CacheStatuses> m = managerCacheStatuses
-						.get(filename);
-				m.remove(from);
-				managerCacheStatuses.put(filename, m);
+			// send out a WD to anyone requesting this
+			Integer destAddr = managerPendingCCPermissionRequests.get(filename);
+			if (destAddr != null) {
+				// TODO: HIGH: I feel like something is broken if this is null
+				managerSendFile(destAddr, filename, Protocol.WD);
 			}
+
+			// update the status of the client who sent the WD
+			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
+			m.remove(from);
 		}
 	}
 
@@ -1723,33 +1688,21 @@ public class Client extends RIONode {
 			printVerbose("sending rc to manager for " + filename);
 			SendToManager(Protocol.RC, Utility.stringToByteArray(filename));
 		} else {
-			// check if the payload is blank. If so, this is an indication that
-			// the file was deleted
-			if (contents == "" || contents == null) {
-				/*
-				 * TODO: HIGH: This shouldn be replaced w/ something explicit -
-				 * WD_DELETED handler probably
-				 */
 
-				deleteFile(filename);
+			// first write the file to save a local copy
+			writeFile(filename, contents, false);
 
-				// Send out an invalid file request
-				int destAddr = managerPendingCCPermissionRequests.get(filename);
-				sendError(destAddr, filename, ErrorCode.FileDoesNotExist);
+			// send out a RD to anyone requesting this
+			int destAddr = managerPendingCCPermissionRequests.get(filename);
+			managerSendFile(destAddr, filename, Protocol.RD);
 
-			} else {
-				// first write the file to save a local copy
-				writeFile(filename, contents, false);
-
-				// send out a RD to anyone requesting this
-				int destAddr = managerPendingCCPermissionRequests.get(filename);
-				managerSendFile(destAddr, filename, Protocol.RD);
-
-			}
 			// update the status of the client who sent the WD
 			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
 			m.put(from, CacheStatuses.ReadOnly);
-			managerCacheStatuses.put(filename, m);
+			/*
+			 * TODO: HIGH: Wayne, no need to put the map back into
+			 * managerCacheStatuses, we just mutate the contained map
+			 */
 		}
 	}
 
