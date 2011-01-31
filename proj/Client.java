@@ -905,6 +905,9 @@ public class Client extends RIONode {
 			case Protocol.RF:
 				receiveRF(msgString);
 				break;
+			case Protocol.WD_DELETE:
+				receiveWD_DELETE(from, msgString);
+				break;
 			case Protocol.ERROR:
 				receiveError(from, msgString);
 				break;
@@ -965,7 +968,7 @@ public class Client extends RIONode {
 			}
 
 			/*
-			 * TODO: HIGH: This assumption is bad:
+			 * TODO: HIGH: This assumption was bad (WF should fix):
 			 * 
 			 * 1 create test
 			 * 
@@ -978,27 +981,40 @@ public class Client extends RIONode {
 			 * RW, so the manager needs to poll the owner to get the file's real
 			 * status.
 			 * 
-			 * There is proably a similar bug w/ receiveDelete
+			 * TEST FIXED
+			 * 
+			 * There is proably a similar bug w/ receiveDelete.
 			 */
 
-		} else {
-			// local create
-			createFile(filename);
-
-			// give RW to the requester for filename
-			// TODO: HIGH: I think there is / should be a helper for this
-			Map<Integer, CacheStatuses> cache = managerCacheStatuses
-					.get(filename);
-			if (cache == null) {
-				cache = new HashMap<Integer, CacheStatuses>();
-				managerCacheStatuses.put(filename, cache);
-			}
-			cache.put(client, CacheStatuses.ReadWrite);
-			printVerbose("marking file " + filename + " RW for node " + client);
-
-			// send success to requester
-			sendSuccess(client, Protocol.CREATE, filename);
+		} else { // file not in system
+			createNewFile(filename, client);
 		}
+	}
+
+	/**
+	 * receiveCreate helper called when filename is not in the system
+	 * 
+	 * @throws IOException
+	 */
+	protected void createNewFile(String filename, int client)
+			throws IOException {
+		// local create
+		createFile(filename);
+
+		// give RW to the requester for filename
+		// TODO: HIGH: I think there is / should be a helper for this
+		Map<Integer, CacheStatuses> cache = managerCacheStatuses.get(filename);
+		if (cache == null) {
+			cache = new HashMap<Integer, CacheStatuses>();
+			managerCacheStatuses.put(filename, cache);
+		}
+		printVerbose("marking file " + filename + " RW for node " + client);
+		cache.put(client, CacheStatuses.ReadWrite);
+
+		// send success to requester
+		printVerbose("sending " + Protocol.protocolToString(Protocol.SUCCESS)
+				+ " to " + client);
+		sendSuccess(client, Protocol.CREATE, filename);
 	}
 
 	/**
@@ -1025,7 +1041,7 @@ public class Client extends RIONode {
 		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
 				.get(filename);
 
-		if (clientStatuses == null) {
+		if (clientStatuses == null || clientStatuses.size() < 1) {
 			// File doesn't exist, send an error to the requester
 			sendError(from, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
@@ -1057,20 +1073,18 @@ public class Client extends RIONode {
 			}
 		}
 
-		boolean ivSent = false;
+		boolean waitingForResponses = false;
 
 		// add to pending ICs
-		if (rw != null && rw != from) {
-			// Someone other than the requester has RW status
-			sendRequest(rw, filename, Protocol.IV);
-			ivSent = true;
-		} else if (rw != null && rw == from) {
+		if (rw != null && rw == from) {
 			// Requester should have RW
 			throw new PrivilegeLevelDisagreementException(
 					"Got delete request from client with RW");
-		}
-
-		if (ro.size() != 0) {
+		} else if (rw != null && rw != from) {
+			// Someone other than the requester has RW status, get updates
+			sendRequest(rw, filename, Protocol.WF);
+			waitingForResponses = true;
+		} else if (ro.size() != 0) {
 			managerPendingICs.put(filename, ro);
 			for (Integer i : ro) {
 				/*
@@ -1079,10 +1093,10 @@ public class Client extends RIONode {
 				 */
 				sendRequest(i, filename, Protocol.IV);
 			}
-			ivSent = true;
+			waitingForResponses = true;
 		}
 
-		if (ivSent) {
+		if (waitingForResponses) {
 			// track pending request
 			managerPendingRPCDeleteRequests.put(filename, from);
 			return;
@@ -1094,7 +1108,7 @@ public class Client extends RIONode {
 			clientStatuses.clear();
 			printVerbose("marking file " + filename + " as unowned");
 
-			// no one has permissions, so send success
+			// no one had permissions, so send success
 			sendSuccess(from, Protocol.DELETE, filename);
 		}
 	}
@@ -1186,32 +1200,38 @@ public class Client extends RIONode {
 			}
 			managerPendingCCPermissionRequests.put(filename, client);
 		} else { // no one has RW or RO
+			// TODO: Should this be an error?
+
 			// send file to requester
-			sendFile(client, filename, responseProtocol);
+			managerSendFile(client, filename, responseProtocol);
 			// unlock and privelages updated by C message handlers
 		}
 	}
 
 	/**
-	 * Helper that sends the contents of filename to to with protocol protocol
+	 * Helper that sends the contents of filename to to with protocol protocol.
+	 * Should only be used by the manager.
 	 * 
 	 * @throws IOException
 	 */
-	protected void sendFile(int to, String filename, int protocol)
+	protected void managerSendFile(int to, String filename, int protocol)
 			throws IOException {
 		StringBuilder sendMsg = new StringBuilder();
 
 		if (!Utility.fileExists(this, filename)) {
 			/*
-			 * TODO: HIGH: Bad assumption - breaks when called from WD after
-			 * delete (I think?) - if I'm right, this should check if it has RW
-			 * - if it does, it should send something on to let the requester
-			 * know it deleted the file - probably new WD_DELETED message type.
-			 * 
-			 * We could also add a DELETED CacheStatus type to keep from having
-			 * to go to disk here.
+			 * TODO: LOW: Add a DELETED CacheStatus type to keep from having to
+			 * go to disk here.
 			 */
-			sendError(to, Protocol.ERROR, filename, ErrorCode.FileDoesNotExist);
+			if (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+				// Have RW but file not on disk, so I deleted the file
+				RIOSend(this.managerAddr, Protocol.WD_DELETE, Utility
+						.stringToByteArray(filename));
+			} else {
+				// I don't have the file
+				sendError(to, Protocol.ERROR, filename,
+						ErrorCode.FileDoesNotExist);
+			}
 		} else {
 			sendMsg.append(filename);
 			sendMsg.append(delimiter);
@@ -1375,7 +1395,7 @@ public class Client extends RIONode {
 
 				if (managerPendingCCPermissionRequests.containsKey(filename)) {
 					destAddr = managerPendingCCPermissionRequests.get(filename);
-					sendFile(destAddr, filename, Protocol.WD);
+					managerSendFile(destAddr, filename, Protocol.WD);
 				} else {
 					destAddr = managerPendingRPCDeleteRequests.get(filename);
 					sendSuccess(destAddr, Protocol.DELETE, filename);
@@ -1420,6 +1440,7 @@ public class Client extends RIONode {
 		clientCacheStatus.remove(msgString);
 		printVerbose("marking invalid " + msgString);
 
+		printVerbose("sending IC to manager for file: " + msgString);
 		SendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
 	}
 
@@ -1442,46 +1463,23 @@ public class Client extends RIONode {
 		if (!Utility.fileExists(this, msgString)) {
 			if (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 				// Client has RW but no file on disk, file was deleted
-
-				/*
-				 * TODO: HIGH: Tell the manager somehow. Could send a DELETE,
-				 * but then I'll get a success message back that will cause me
-				 * to give myself RW again which is wrong here, so I think we
-				 * need a new message type.
-				 * 
-				 * I could also send a WD, but there is no way to communicate to
-				 * the manager that I deleted the file other than sending the
-				 * empty string, which is kind of a bug (see TODOs in
-				 * receive{R,W}D about how I think these implicit creates
-				 * shouldn't happen).
-				 * 
-				 * So what we need is a WD_DELETED packet that just has a
-				 * filename.
-				 * 
-				 * In response to that message, the server should finish
-				 * servicing the create in managerPendingRPCCreateRequests by
-				 * sending the requester a Success if I had deleted the file, or
-				 * an Error if I haven't
-				 */
-
-				// Invalidate file
-
-				return;
+				responseProtocol = Protocol.WD_DELETE;
+				payload = filename;
 			} else {
 				// Privilege level disagreement w/ manager
 				throw new PrivilegeLevelDisagreementException(
-						"Manager expecting RW but I have "
-								+ clientCacheStatus.get(filename));
+						"Manager asked for " + RForWF + " on " + filename
+								+ " but I don't have RW or the file on disk");
 			}
 		} else {
 			// read file contents
 			payload = filename + delimiter + getFile(filename);
 		}
 
-		// send contents back
-		SendToManager(responseProtocol, Utility.stringToByteArray(payload));
+		// send update to manager
 		printVerbose("sending " + Protocol.protocolToString(responseProtocol)
 				+ " to manager " + filename);
+		SendToManager(responseProtocol, Utility.stringToByteArray(payload));
 
 		// update permissions
 		if (keepRO) {
@@ -1490,8 +1488,7 @@ public class Client extends RIONode {
 					+ filename);
 		} else {
 			clientCacheStatus.remove(filename);
-			printVerbose("changed permission level to Invalid on file: "
-					+ filename);
+			printVerbose("losing permissions on file: " + filename);
 		}
 	}
 
@@ -1554,9 +1551,54 @@ public class Client extends RIONode {
 
 	/*************************************************
 	 * begin client and manager cache coherency functions
+	 * 
+	 * @throws NotManagerException
+	 * @throws IOException
 	 ************************************************/
 
 	// TODO: Zach: Code review receive{W,R}D
+
+	protected void receiveWD_DELETE(int from, String filename)
+			throws NotManagerException, IOException {
+		if (!isManager) {
+			throw new NotManagerException(
+					"WD_DELETE should only be received by the manager");
+		}
+
+		// delete locally
+		deleteFile(filename);
+
+		// remove permissions
+		managerCacheStatuses.get(filename).clear();
+
+		// look for pending requests
+
+		// check for a create
+		Integer requester = managerPendingRPCCreateRequests.get(filename);
+		if (requester != null) {
+			// create the file which was deleted by the owner
+			createNewFile(filename, requester);
+			return;
+		}
+
+		requester = managerPendingRPCDeleteRequests.get(filename);
+		if (requester != null) {
+			// file was previously deleted by owner
+			sendError(requester, Protocol.DELETE, filename,
+					ErrorCode.FileDoesNotExist);
+			return;
+		}
+
+		requester = managerPendingCCPermissionRequests.get(filename);
+		if (requester != null) {
+			// file was deleted by owner
+			sendError(requester, filename, ErrorCode.FileDoesNotExist);
+		}
+
+		// TODO: create an exception for this
+		printError("Received WD_DELETE on file: " + filename
+				+ " but found no pending RPC");
+	}
 
 	/**
 	 * @param msgString
@@ -1635,8 +1677,8 @@ public class Client extends RIONode {
 				Integer destAddr = managerPendingCCPermissionRequests
 						.get(filename);
 				if (destAddr != null) {
-					// TODO: when would this ever be null?
-					sendFile(destAddr, filename, Protocol.WD);
+					// TODO: HIGH: when would this ever be null?
+					managerSendFile(destAddr, filename, Protocol.WD);
 				}
 
 				// update the status of the client who sent the WD
@@ -1701,7 +1743,7 @@ public class Client extends RIONode {
 
 				// send out a RD to anyone requesting this
 				int destAddr = managerPendingCCPermissionRequests.get(filename);
-				sendFile(destAddr, filename, Protocol.RD);
+				managerSendFile(destAddr, filename, Protocol.RD);
 
 			}
 			// update the status of the client who sent the WD

@@ -39,6 +39,7 @@ public class Protocol {
 	public static final int RC = 16;
 	public static final int IV = 17;
 	public static final int IC = 18;
+	public static final int WD_DELETE = 19;
 
 	// Error Type
 
@@ -54,7 +55,7 @@ public class Protocol {
 	 */
 	public static boolean isPktProtocolValid(int protocol) {
 		// TODO: Update
-		return ((19 > protocol && protocol > -1) || protocol == 125 || protocol == 127);
+		return ((20 > protocol && protocol > -1) || protocol == 125 || protocol == 127);
 	}
 
 	/**
@@ -105,6 +106,8 @@ public class Protocol {
 			return "RIO_IV";
 		case IC:
 			return "RIO_IC";
+		case WD_DELETE:
+			return "RIO_WD_DELETE";
 		case SUCCESS:
 			return "RIO_SUCCESS";
 		case ERROR:
