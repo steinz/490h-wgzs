@@ -1,0 +1,1929 @@
+Node 1: initialized as client with uuid: 00000000-0000-0000-0000-000000000001
+REGISTERING NEW OPERATION 100
+NEW OPERATION 100
+Node 1: doing command: create f0
+Node 1: client locking file: f0
+Node 1: sending create rpc to 0 for file: f0
+Node 0: sending ACK 0 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f0
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 0 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f0
+Node 1: client unlocking file: f0
+REGISTERING NEW OPERATION 99
+NEW OPERATION 99
+Node 1: doing command: delete f0
+Node 1: deleting file: f0
+REGISTERING NEW OPERATION 98
+NEW OPERATION 98
+Node 2: doing command: create f1
+Node 2: client locking file: f1
+Node 2: sending create rpc to 0 for file: f1
+Node 0: sending ACK 0 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f1
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 0 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f1
+Node 2: client unlocking file: f1
+REGISTERING NEW OPERATION 97
+NEW OPERATION 97
+Node 1: doing command: create f2
+Node 1: client locking file: f2
+Node 1: sending create rpc to 0 for file: f2
+Node 0: sending ACK 1 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f2
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 1 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f2
+Node 1: client unlocking file: f2
+REGISTERING NEW OPERATION 96
+NEW OPERATION 96
+Node 1: doing command: create f3
+Node 1: client locking file: f3
+Node 1: sending create rpc to 0 for file: f3
+Node 0: sending ACK 2 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f3
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 2 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f3
+Node 1: client unlocking file: f3
+REGISTERING NEW OPERATION 95
+NEW OPERATION 95
+Node 1: doing command: get f2
+Node 1: getting file: f2
+Node 1: Got file, contents below:
+Node 1: 
+REGISTERING NEW OPERATION 94
+NEW OPERATION 94
+Node 1: doing command: append f1 738
+Node 1: client locking file: f1
+Node 1: requesting ownership of f1
+Node 0: sending ACK 3 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f1
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 1 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f1
+Node 2: sending RIO_WD to manager f1
+Node 2: losing permissions on file: f1
+Node 0: sending ACK 1 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f1, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f1
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 3 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f1
+Node 1: creating file: f1
+Node 1: putting to file: f1, contents: 
+Node 1: deleting file: .temp
+Node 1: appending to file: f1, contents: 738
+Node 1: client unlocking file: f1
+Node 1: sending wc to manager for f1
+REGISTERING NEW OPERATION 93
+Node 0: sending ACK 4 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f1
+NEW OPERATION 93
+Node 1: doing command: delete f2
+Node 1: deleting file: f2
+REGISTERING NEW OPERATION 92
+NEW OPERATION 92
+Node 2: doing command: get f3
+Node 2: client locking file: f3
+Node 2: requesting read access for f3
+Node 0: sending ACK 2 to 2
+Node 0: got packet protocol: RIO_RQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f3
+Node 0: sending RIO_RF to 1
+Node 1: sending ACK 4 to 0
+Node 1: got packet protocol: RIO_RF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f3
+Node 1: sending RIO_RD to manager f3
+Node 1: changed permission level to ReadOnly on file: f3
+Node 0: sending ACK 5 to 1
+Node 0: got packet protocol: RIO_RD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f3, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f3
+Node 0: sending RIO_RD to 2
+Node 2: sending ACK 2 to 0
+Node 2: got packet protocol: RIO_RD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadOnly on f3
+Node 2: creating file: f3
+Node 2: putting to file: f3, contents: 
+Node 2: deleting file: .temp
+Node 2: 
+Node 2: client unlocking file: f3
+Node 2: sending rc to manager for f3
+REGISTERING NEW OPERATION 91
+Node 0: sending ACK 3 to 2
+Node 0: got packet protocol: RIO_RC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 2 to RO
+Node 0: changing client: 2 to ReadOnly
+Node 0: manager unlocking file: f3
+NEW OPERATION 91
+Node 1: doing command: delete f1
+Node 1: deleting file: f1
+REGISTERING NEW OPERATION 90
+NEW OPERATION 90
+Node 1: doing command: put f3 123
+Node 1: client locking file: f3
+Node 1: requesting ownership of f3
+Node 0: sending ACK 6 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f3
+Node 0: sending RIO_IV to 2
+Node 2: sending ACK 3 to 0
+Node 2: got packet protocol: RIO_IV
+Node 2: receiving packet from RIOLayer
+Node 2: marking invalid f3
+Node 2: sending ic to manager for file: f3
+Node 0: sending ACK 4 to 2
+Node 0: got packet protocol: RIO_IC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 2 to IV
+Node 0: getting file: f3
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 5 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f3
+Node 1: putting to file: f3, contents: 
+Node 1: deleting file: .temp
+Node 1: putting to file: f3, contents: 123
+Node 1: deleting file: .temp
+Node 1: client unlocking file: f3
+Node 1: sending wc to manager for f3
+REGISTERING NEW OPERATION 89
+Node 0: sending ACK 7 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f3
+NEW OPERATION 89
+Node 1: doing command: delete f3
+Node 1: deleting file: f3
+REGISTERING NEW OPERATION 88
+NEW OPERATION 88
+Node 2: doing command: create f4
+Node 2: client locking file: f4
+Node 2: sending create rpc to 0 for file: f4
+Node 0: sending ACK 5 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f4
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 4 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f4
+Node 2: client unlocking file: f4
+REGISTERING NEW OPERATION 87
+NEW OPERATION 87
+Node 2: doing command: put f4 234
+Node 2: putting to file: f4, contents: 234
+Node 2: deleting file: .temp
+REGISTERING NEW OPERATION 86
+NEW OPERATION 86
+Node 2: doing command: create f5
+Node 2: client locking file: f5
+Node 2: sending create rpc to 0 for file: f5
+Node 0: sending ACK 6 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f5
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 5 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f5
+Node 2: client unlocking file: f5
+REGISTERING NEW OPERATION 85
+NEW OPERATION 85
+Node 2: doing command: append f5 395
+Node 2: appending to file: f5, contents: 395
+REGISTERING NEW OPERATION 84
+NEW OPERATION 84
+Node 2: doing command: delete f5
+Node 2: deleting file: f5
+REGISTERING NEW OPERATION 83
+NEW OPERATION 83
+Node 2: doing command: append f4 194
+Node 2: appending to file: f4, contents: 194
+REGISTERING NEW OPERATION 82
+NEW OPERATION 82
+Node 1: doing command: delete f4
+Node 1: client locking file: f4
+Node 1: sending delete rpc to 0 for file: f4
+Node 0: sending ACK 8 to 1
+Node 0: got packet protocol: RIO_DELETE
+Node 0: receiving packet from RIOLayer
+Node 0: sending RIO_WF to 2
+Node 0: manager locking file: f4
+Node 2: sending ACK 6 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f4
+Node 2: sending RIO_WD to manager f4
+Node 2: losing permissions on file: f4
+Node 0: sending ACK 7 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f4, contents: 234194
+
+Node 0: deleting file: .temp
+Node 0: deleting file: f4
+Node 0: marking file f4 as unowned
+Node 1: sending ACK 6 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: client unlocking file: f4
+REGISTERING NEW OPERATION 81
+NEW OPERATION 81
+Node 2: doing command: create f6
+Node 2: client locking file: f6
+Node 2: sending create rpc to 0 for file: f6
+Node 0: sending ACK 8 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f6
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 7 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f6
+Node 2: client unlocking file: f6
+REGISTERING NEW OPERATION 80
+NEW OPERATION 80
+Node 2: doing command: append f6 525
+Node 2: appending to file: f6, contents: 525
+REGISTERING NEW OPERATION 79
+NEW OPERATION 79
+Node 2: doing command: delete f6
+Node 2: deleting file: f6
+REGISTERING NEW OPERATION 78
+NEW OPERATION 78
+Node 1: doing command: create f7
+Node 1: client locking file: f7
+Node 1: sending create rpc to 0 for file: f7
+Node 0: sending ACK 9 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f7
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 7 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f7
+Node 1: client unlocking file: f7
+REGISTERING NEW OPERATION 77
+NEW OPERATION 77
+Node 1: doing command: delete f7
+Node 1: deleting file: f7
+REGISTERING NEW OPERATION 76
+NEW OPERATION 76
+Node 1: doing command: create f8
+Node 1: client locking file: f8
+Node 1: sending create rpc to 0 for file: f8
+Node 0: sending ACK 10 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f8
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 8 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f8
+Node 1: client unlocking file: f8
+REGISTERING NEW OPERATION 75
+NEW OPERATION 75
+Node 1: doing command: create f9
+Node 1: client locking file: f9
+Node 1: sending create rpc to 0 for file: f9
+Node 0: sending ACK 11 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f9
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 9 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f9
+Node 1: client unlocking file: f9
+REGISTERING NEW OPERATION 74
+NEW OPERATION 74
+Node 2: doing command: put f9 221
+Node 2: client locking file: f9
+Node 2: requesting ownership of f9
+Node 0: sending ACK 9 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f9
+Node 0: sending RIO_WF to 1
+Node 1: sending ACK 10 to 0
+Node 1: got packet protocol: RIO_WF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f9
+Node 1: sending RIO_WD to manager f9
+Node 1: losing permissions on file: f9
+Node 0: sending ACK 12 to 1
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f9, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f9
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 8 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f9
+Node 2: creating file: f9
+Node 2: putting to file: f9, contents: 
+Node 2: deleting file: .temp
+Node 2: putting to file: f9, contents: 221
+Node 2: deleting file: .temp
+Node 2: client unlocking file: f9
+Node 2: sending wc to manager for f9
+REGISTERING NEW OPERATION 73
+Node 0: sending ACK 10 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f9
+NEW OPERATION 73
+Node 1: doing command: get f8
+Node 1: getting file: f8
+Node 1: Got file, contents below:
+Node 1: 
+REGISTERING NEW OPERATION 72
+NEW OPERATION 72
+Node 2: doing command: append f8 997
+Node 2: client locking file: f8
+Node 2: requesting ownership of f8
+Node 0: sending ACK 11 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f8
+Node 0: sending RIO_WF to 1
+Node 1: sending ACK 11 to 0
+Node 1: got packet protocol: RIO_WF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f8
+Node 1: sending RIO_WD to manager f8
+Node 1: losing permissions on file: f8
+Node 0: sending ACK 13 to 1
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f8, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f8
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 9 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f8
+Node 2: creating file: f8
+Node 2: putting to file: f8, contents: 
+Node 2: deleting file: .temp
+Node 2: appending to file: f8, contents: 997
+Node 2: client unlocking file: f8
+Node 2: sending wc to manager for f8
+REGISTERING NEW OPERATION 71
+Node 0: sending ACK 12 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f8
+NEW OPERATION 71
+Node 2: doing command: get f8
+Node 2: getting file: f8
+Node 2: Got file, contents below:
+Node 2: 997
+
+REGISTERING NEW OPERATION 70
+NEW OPERATION 70
+Node 2: doing command: get f8
+Node 2: getting file: f8
+Node 2: Got file, contents below:
+Node 2: 997
+
+REGISTERING NEW OPERATION 69
+NEW OPERATION 69
+Node 1: doing command: append f8 326
+Node 1: client locking file: f8
+Node 1: requesting ownership of f8
+Node 0: sending ACK 14 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f8
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 10 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f8
+Node 2: sending RIO_WD to manager f8
+Node 2: losing permissions on file: f8
+Node 0: sending ACK 13 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f8, contents: 997
+
+Node 0: deleting file: .temp
+Node 0: getting file: f8
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 12 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f8
+Node 1: putting to file: f8, contents: 997
+
+Node 1: deleting file: .temp
+Node 1: appending to file: f8, contents: 326
+Node 1: client unlocking file: f8
+Node 1: sending wc to manager for f8
+REGISTERING NEW OPERATION 68
+Node 0: sending ACK 15 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f8
+NEW OPERATION 68
+Node 2: doing command: create f10
+Node 2: client locking file: f10
+Node 2: sending create rpc to 0 for file: f10
+Node 0: sending ACK 14 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f10
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 11 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f10
+Node 2: client unlocking file: f10
+REGISTERING NEW OPERATION 67
+NEW OPERATION 67
+Node 1: doing command: create f11
+Node 1: client locking file: f11
+Node 1: sending create rpc to 0 for file: f11
+Node 0: sending ACK 16 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f11
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 13 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f11
+Node 1: client unlocking file: f11
+REGISTERING NEW OPERATION 66
+NEW OPERATION 66
+Node 2: doing command: get f11
+Node 2: client locking file: f11
+Node 2: requesting read access for f11
+Node 0: sending ACK 15 to 2
+Node 0: got packet protocol: RIO_RQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f11
+Node 0: sending RIO_RF to 1
+Node 1: sending ACK 14 to 0
+Node 1: got packet protocol: RIO_RF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f11
+Node 1: sending RIO_RD to manager f11
+Node 1: changed permission level to ReadOnly on file: f11
+Node 0: sending ACK 17 to 1
+Node 0: got packet protocol: RIO_RD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f11, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f11
+Node 0: sending RIO_RD to 2
+Node 2: sending ACK 12 to 0
+Node 2: got packet protocol: RIO_RD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadOnly on f11
+Node 2: creating file: f11
+Node 2: putting to file: f11, contents: 
+Node 2: deleting file: .temp
+Node 2: 
+Node 2: client unlocking file: f11
+Node 2: sending rc to manager for f11
+REGISTERING NEW OPERATION 65
+Node 0: sending ACK 16 to 2
+Node 0: got packet protocol: RIO_RC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 2 to RO
+Node 0: changing client: 2 to ReadOnly
+Node 0: manager unlocking file: f11
+NEW OPERATION 65
+Node 1: doing command: append f8 387
+Node 1: appending to file: f8, contents: 387
+REGISTERING NEW OPERATION 64
+NEW OPERATION 64
+Node 2: doing command: create f12
+Node 2: client locking file: f12
+Node 2: sending create rpc to 0 for file: f12
+Node 0: sending ACK 17 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f12
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 13 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f12
+Node 2: client unlocking file: f12
+REGISTERING NEW OPERATION 63
+NEW OPERATION 63
+Node 1: doing command: get f10
+Node 1: client locking file: f10
+Node 1: requesting read access for f10
+Node 0: sending ACK 18 to 1
+Node 0: got packet protocol: RIO_RQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f10
+Node 0: sending RIO_RF to 2
+Node 2: sending ACK 14 to 0
+Node 2: got packet protocol: RIO_RF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f10
+Node 2: sending RIO_RD to manager f10
+Node 2: changed permission level to ReadOnly on file: f10
+Node 0: sending ACK 18 to 2
+Node 0: got packet protocol: RIO_RD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f10, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f10
+Node 0: sending RIO_RD to 1
+Node 1: sending ACK 15 to 0
+Node 1: got packet protocol: RIO_RD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadOnly on f10
+Node 1: creating file: f10
+Node 1: putting to file: f10, contents: 
+Node 1: deleting file: .temp
+Node 1: 
+Node 1: client unlocking file: f10
+Node 1: sending rc to manager for f10
+REGISTERING NEW OPERATION 62
+Node 0: sending ACK 19 to 1
+Node 0: got packet protocol: RIO_RC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 1 to RO
+Node 0: changing client: 1 to ReadOnly
+Node 0: manager unlocking file: f10
+NEW OPERATION 62
+Node 1: doing command: append f12 978
+Node 1: client locking file: f12
+Node 1: requesting ownership of f12
+Node 0: sending ACK 20 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f12
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 15 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f12
+Node 2: sending RIO_WD to manager f12
+Node 2: losing permissions on file: f12
+Node 0: sending ACK 19 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f12, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f12
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 16 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f12
+Node 1: creating file: f12
+Node 1: putting to file: f12, contents: 
+Node 1: deleting file: .temp
+Node 1: appending to file: f12, contents: 978
+Node 1: client unlocking file: f12
+Node 1: sending wc to manager for f12
+REGISTERING NEW OPERATION 61
+Node 0: sending ACK 21 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f12
+NEW OPERATION 61
+Node 2: doing command: append f10 123
+Node 2: client locking file: f10
+Node 2: requesting ownership of f10
+Node 0: sending ACK 20 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f10
+Node 0: sending RIO_IV to 1
+Node 1: sending ACK 17 to 0
+Node 1: got packet protocol: RIO_IV
+Node 1: receiving packet from RIOLayer
+Node 1: marking invalid f10
+Node 1: sending ic to manager for file: f10
+Node 0: sending ACK 22 to 1
+Node 0: got packet protocol: RIO_IC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 1 to IV
+Node 0: getting file: f10
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 16 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f10
+Node 2: putting to file: f10, contents: 
+Node 2: deleting file: .temp
+Node 2: appending to file: f10, contents: 123
+Node 2: client unlocking file: f10
+Node 2: sending wc to manager for f10
+REGISTERING NEW OPERATION 60
+Node 0: sending ACK 21 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f10
+NEW OPERATION 60
+Node 2: doing command: put f12 657
+Node 2: client locking file: f12
+Node 2: requesting ownership of f12
+Node 0: sending ACK 22 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f12
+Node 0: sending RIO_WF to 1
+Node 1: sending ACK 18 to 0
+Node 1: got packet protocol: RIO_WF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f12
+Node 1: sending RIO_WD to manager f12
+Node 1: losing permissions on file: f12
+Node 0: sending ACK 23 to 1
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f12, contents: 978
+
+Node 0: deleting file: .temp
+Node 0: getting file: f12
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 17 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f12
+Node 2: putting to file: f12, contents: 978
+
+Node 2: deleting file: .temp
+Node 2: putting to file: f12, contents: 657
+Node 2: deleting file: .temp
+Node 2: client unlocking file: f12
+Node 2: sending wc to manager for f12
+REGISTERING NEW OPERATION 59
+Node 0: sending ACK 23 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f12
+NEW OPERATION 59
+Node 1: doing command: append f9 248
+Node 1: client locking file: f9
+Node 1: requesting ownership of f9
+Node 0: sending ACK 24 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f9
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 18 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f9
+Node 2: sending RIO_WD to manager f9
+Node 2: losing permissions on file: f9
+Node 0: sending ACK 24 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f9, contents: 221
+
+Node 0: deleting file: .temp
+Node 0: getting file: f9
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 19 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f9
+Node 1: putting to file: f9, contents: 221
+
+Node 1: deleting file: .temp
+Node 1: appending to file: f9, contents: 248
+Node 1: client unlocking file: f9
+Node 1: sending wc to manager for f9
+REGISTERING NEW OPERATION 58
+Node 0: sending ACK 25 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f9
+NEW OPERATION 58
+Node 1: doing command: append f9 376
+Node 1: appending to file: f9, contents: 376
+REGISTERING NEW OPERATION 57
+NEW OPERATION 57
+Node 1: doing command: put f9 601
+Node 1: putting to file: f9, contents: 601
+Node 1: deleting file: .temp
+REGISTERING NEW OPERATION 56
+NEW OPERATION 56
+Node 1: doing command: create f13
+Node 1: client locking file: f13
+Node 1: sending create rpc to 0 for file: f13
+Node 0: sending ACK 26 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f13
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 20 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f13
+Node 1: client unlocking file: f13
+REGISTERING NEW OPERATION 55
+NEW OPERATION 55
+Node 2: doing command: put f8 181
+Node 2: client locking file: f8
+Node 2: requesting ownership of f8
+Node 0: sending ACK 25 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f8
+Node 0: sending RIO_WF to 1
+Node 1: sending ACK 21 to 0
+Node 1: got packet protocol: RIO_WF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f8
+Node 1: sending RIO_WD to manager f8
+Node 1: losing permissions on file: f8
+Node 0: sending ACK 27 to 1
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f8, contents: 997
+326387
+
+Node 0: deleting file: .temp
+Node 0: getting file: f8
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 19 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f8
+Node 2: putting to file: f8, contents: 997
+326387
+
+Node 2: deleting file: .temp
+Node 2: putting to file: f8, contents: 181
+Node 2: deleting file: .temp
+Node 2: client unlocking file: f8
+Node 2: sending wc to manager for f8
+REGISTERING NEW OPERATION 54
+Node 0: sending ACK 26 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f8
+NEW OPERATION 54
+Node 2: doing command: append f11 435
+Node 2: client locking file: f11
+Node 2: requesting ownership of f11
+Node 0: sending ACK 27 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f11
+Node 0: sending RIO_IV to 1
+Node 1: sending ACK 22 to 0
+Node 1: got packet protocol: RIO_IV
+Node 1: receiving packet from RIOLayer
+Node 1: marking invalid f11
+Node 1: sending ic to manager for file: f11
+Node 0: sending ACK 28 to 1
+Node 0: got packet protocol: RIO_IC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 1 to IV
+Node 0: getting file: f11
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 20 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f11
+Node 2: putting to file: f11, contents: 
+Node 2: deleting file: .temp
+Node 2: appending to file: f11, contents: 435
+Node 2: client unlocking file: f11
+Node 2: sending wc to manager for f11
+REGISTERING NEW OPERATION 53
+Node 0: sending ACK 28 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f11
+NEW OPERATION 53
+Node 2: doing command: create f14
+Node 2: client locking file: f14
+Node 2: sending create rpc to 0 for file: f14
+Node 0: sending ACK 29 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f14
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 21 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f14
+Node 2: client unlocking file: f14
+REGISTERING NEW OPERATION 52
+NEW OPERATION 52
+Node 2: doing command: append f12 361
+Node 2: appending to file: f12, contents: 361
+REGISTERING NEW OPERATION 51
+NEW OPERATION 51
+Node 1: doing command: append f13 389
+Node 1: appending to file: f13, contents: 389
+REGISTERING NEW OPERATION 50
+NEW OPERATION 50
+Node 1: doing command: append f8 395
+Node 1: client locking file: f8
+Node 1: requesting ownership of f8
+Node 0: sending ACK 29 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f8
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 22 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f8
+Node 2: sending RIO_WD to manager f8
+Node 2: losing permissions on file: f8
+Node 0: sending ACK 30 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f8, contents: 181
+
+Node 0: deleting file: .temp
+Node 0: getting file: f8
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 23 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f8
+Node 1: putting to file: f8, contents: 181
+
+Node 1: deleting file: .temp
+Node 1: appending to file: f8, contents: 395
+Node 1: client unlocking file: f8
+Node 1: sending wc to manager for f8
+REGISTERING NEW OPERATION 49
+Node 0: sending ACK 30 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f8
+NEW OPERATION 49
+Node 2: doing command: delete f8
+Node 2: client locking file: f8
+Node 2: sending delete rpc to 0 for file: f8
+Node 0: sending ACK 31 to 2
+Node 0: got packet protocol: RIO_DELETE
+Node 0: receiving packet from RIOLayer
+Node 0: sending RIO_WF to 1
+Node 0: manager locking file: f8
+Node 1: sending ACK 24 to 0
+Node 1: got packet protocol: RIO_WF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f8
+Node 1: sending RIO_WD to manager f8
+Node 1: losing permissions on file: f8
+Node 0: sending ACK 31 to 1
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f8, contents: 181
+395
+
+Node 0: deleting file: .temp
+Node 0: deleting file: f8
+Node 0: marking file f8 as unowned
+Node 2: sending ACK 23 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: deleting file: f8
+Node 2: client unlocking file: f8
+REGISTERING NEW OPERATION 48
+NEW OPERATION 48
+Node 2: doing command: append f9 291
+Node 2: client locking file: f9
+Node 2: requesting ownership of f9
+Node 0: sending ACK 32 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f9
+Node 0: sending RIO_WF to 1
+Node 1: sending ACK 25 to 0
+Node 1: got packet protocol: RIO_WF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f9
+Node 1: sending RIO_WD to manager f9
+Node 1: losing permissions on file: f9
+Node 0: sending ACK 32 to 1
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f9, contents: 601
+
+Node 0: deleting file: .temp
+Node 0: getting file: f9
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 24 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f9
+Node 2: putting to file: f9, contents: 601
+
+Node 2: deleting file: .temp
+Node 2: appending to file: f9, contents: 291
+Node 2: client unlocking file: f9
+Node 2: sending wc to manager for f9
+REGISTERING NEW OPERATION 47
+Node 0: sending ACK 33 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f9
+NEW OPERATION 47
+Node 1: doing command: delete f11
+Node 1: client locking file: f11
+Node 1: sending delete rpc to 0 for file: f11
+Node 0: sending ACK 33 to 1
+Node 0: got packet protocol: RIO_DELETE
+Node 0: receiving packet from RIOLayer
+Node 0: sending RIO_WF to 2
+Node 0: manager locking file: f11
+Node 2: sending ACK 25 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f11
+Node 2: sending RIO_WD to manager f11
+Node 2: losing permissions on file: f11
+Node 0: sending ACK 34 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f11, contents: 435
+
+Node 0: deleting file: .temp
+Node 0: deleting file: f11
+Node 0: marking file f11 as unowned
+Node 1: sending ACK 26 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: deleting file: f11
+Node 1: client unlocking file: f11
+REGISTERING NEW OPERATION 46
+NEW OPERATION 46
+Node 1: doing command: create f15
+Node 1: client locking file: f15
+Node 1: sending create rpc to 0 for file: f15
+Node 0: sending ACK 34 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f15
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 27 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f15
+Node 1: client unlocking file: f15
+REGISTERING NEW OPERATION 45
+NEW OPERATION 45
+Node 2: doing command: delete f10
+Node 2: deleting file: f10
+REGISTERING NEW OPERATION 44
+NEW OPERATION 44
+Node 1: doing command: append f12 103
+Node 1: client locking file: f12
+Node 1: requesting ownership of f12
+Node 0: sending ACK 35 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f12
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 26 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f12
+Node 2: sending RIO_WD to manager f12
+Node 2: losing permissions on file: f12
+Node 0: sending ACK 35 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f12, contents: 657361
+
+Node 0: deleting file: .temp
+Node 0: getting file: f12
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 28 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f12
+Node 1: putting to file: f12, contents: 657361
+
+Node 1: deleting file: .temp
+Node 1: appending to file: f12, contents: 103
+Node 1: client unlocking file: f12
+Node 1: sending wc to manager for f12
+REGISTERING NEW OPERATION 43
+Node 0: sending ACK 36 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f12
+NEW OPERATION 43
+Node 2: doing command: create f16
+Node 2: client locking file: f16
+Node 2: sending create rpc to 0 for file: f16
+Node 0: sending ACK 36 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f16
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 27 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f16
+Node 2: client unlocking file: f16
+REGISTERING NEW OPERATION 42
+NEW OPERATION 42
+Node 1: doing command: get f12
+Node 1: getting file: f12
+Node 1: Got file, contents below:
+Node 1: 657361
+103
+
+REGISTERING NEW OPERATION 41
+NEW OPERATION 41
+Node 2: doing command: get f9
+Node 2: getting file: f9
+Node 2: Got file, contents below:
+Node 2: 601
+291
+
+REGISTERING NEW OPERATION 40
+NEW OPERATION 40
+Node 2: doing command: append f9 497
+Node 2: appending to file: f9, contents: 497
+REGISTERING NEW OPERATION 39
+NEW OPERATION 39
+Node 1: doing command: get f13
+Node 1: getting file: f13
+Node 1: Got file, contents below:
+Node 1: 389
+
+REGISTERING NEW OPERATION 38
+NEW OPERATION 38
+Node 2: doing command: put f12 431
+Node 2: client locking file: f12
+Node 2: requesting ownership of f12
+Node 0: sending ACK 37 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f12
+Node 0: sending RIO_WF to 1
+Node 1: sending ACK 29 to 0
+Node 1: got packet protocol: RIO_WF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f12
+Node 1: sending RIO_WD to manager f12
+Node 1: losing permissions on file: f12
+Node 0: sending ACK 37 to 1
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f12, contents: 657361
+103
+
+Node 0: deleting file: .temp
+Node 0: getting file: f12
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 28 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f12
+Node 2: putting to file: f12, contents: 657361
+103
+
+Node 2: deleting file: .temp
+Node 2: putting to file: f12, contents: 431
+Node 2: deleting file: .temp
+Node 2: client unlocking file: f12
+Node 2: sending wc to manager for f12
+REGISTERING NEW OPERATION 37
+Node 0: sending ACK 38 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f12
+NEW OPERATION 37
+Node 1: doing command: append f15 509
+Node 1: appending to file: f15, contents: 509
+REGISTERING NEW OPERATION 36
+NEW OPERATION 36
+Node 2: doing command: get f9
+Node 2: getting file: f9
+Node 2: Got file, contents below:
+Node 2: 601
+291497
+
+REGISTERING NEW OPERATION 35
+NEW OPERATION 35
+Node 2: doing command: append f16 418
+Node 2: appending to file: f16, contents: 418
+REGISTERING NEW OPERATION 34
+NEW OPERATION 34
+Node 2: doing command: delete f16
+Node 2: deleting file: f16
+REGISTERING NEW OPERATION 33
+NEW OPERATION 33
+Node 2: doing command: put f12 977
+Node 2: putting to file: f12, contents: 977
+Node 2: deleting file: .temp
+REGISTERING NEW OPERATION 32
+NEW OPERATION 32
+Node 1: doing command: get f14
+Node 1: client locking file: f14
+Node 1: requesting read access for f14
+Node 0: sending ACK 38 to 1
+Node 0: got packet protocol: RIO_RQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f14
+Node 0: sending RIO_RF to 2
+Node 2: sending ACK 29 to 0
+Node 2: got packet protocol: RIO_RF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f14
+Node 2: sending RIO_RD to manager f14
+Node 2: changed permission level to ReadOnly on file: f14
+Node 0: sending ACK 39 to 2
+Node 0: got packet protocol: RIO_RD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f14, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f14
+Node 0: sending RIO_RD to 1
+Node 1: sending ACK 30 to 0
+Node 1: got packet protocol: RIO_RD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadOnly on f14
+Node 1: creating file: f14
+Node 1: putting to file: f14, contents: 
+Node 1: deleting file: .temp
+Node 1: 
+Node 1: client unlocking file: f14
+Node 1: sending rc to manager for f14
+REGISTERING NEW OPERATION 31
+Node 0: sending ACK 39 to 1
+Node 0: got packet protocol: RIO_RC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 1 to RO
+Node 0: changing client: 1 to ReadOnly
+Node 0: manager unlocking file: f14
+NEW OPERATION 31
+Node 2: doing command: get f15
+Node 2: client locking file: f15
+Node 2: requesting read access for f15
+Node 0: sending ACK 40 to 2
+Node 0: got packet protocol: RIO_RQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f15
+Node 0: sending RIO_RF to 1
+Node 1: sending ACK 31 to 0
+Node 1: got packet protocol: RIO_RF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f15
+Node 1: sending RIO_RD to manager f15
+Node 1: changed permission level to ReadOnly on file: f15
+Node 0: sending ACK 40 to 1
+Node 0: got packet protocol: RIO_RD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f15, contents: 509
+
+Node 0: deleting file: .temp
+Node 0: getting file: f15
+Node 0: sending RIO_RD to 2
+Node 2: sending ACK 30 to 0
+Node 2: got packet protocol: RIO_RD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadOnly on f15
+Node 2: creating file: f15
+Node 2: putting to file: f15, contents: 509
+
+Node 2: deleting file: .temp
+Node 2: 509
+
+Node 2: client unlocking file: f15
+Node 2: sending rc to manager for f15
+REGISTERING NEW OPERATION 30
+Node 0: sending ACK 41 to 2
+Node 0: got packet protocol: RIO_RC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 2 to RO
+Node 0: changing client: 2 to ReadOnly
+Node 0: manager unlocking file: f15
+NEW OPERATION 30
+Node 2: doing command: get f13
+Node 2: client locking file: f13
+Node 2: requesting read access for f13
+Node 0: sending ACK 42 to 2
+Node 0: got packet protocol: RIO_RQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f13
+Node 0: sending RIO_RF to 1
+Node 1: sending ACK 32 to 0
+Node 1: got packet protocol: RIO_RF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f13
+Node 1: sending RIO_RD to manager f13
+Node 1: changed permission level to ReadOnly on file: f13
+Node 0: sending ACK 41 to 1
+Node 0: got packet protocol: RIO_RD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f13, contents: 389
+
+Node 0: deleting file: .temp
+Node 0: getting file: f13
+Node 0: sending RIO_RD to 2
+Node 2: sending ACK 31 to 0
+Node 2: got packet protocol: RIO_RD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadOnly on f13
+Node 2: creating file: f13
+Node 2: putting to file: f13, contents: 389
+
+Node 2: deleting file: .temp
+Node 2: 389
+
+Node 2: client unlocking file: f13
+Node 2: sending rc to manager for f13
+REGISTERING NEW OPERATION 29
+Node 0: sending ACK 43 to 2
+Node 0: got packet protocol: RIO_RC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 2 to RO
+Node 0: changing client: 2 to ReadOnly
+Node 0: manager unlocking file: f13
+NEW OPERATION 29
+Node 2: doing command: put f9 845
+Node 2: putting to file: f9, contents: 845
+Node 2: deleting file: .temp
+REGISTERING NEW OPERATION 28
+NEW OPERATION 28
+Node 2: doing command: get f13
+Node 2: getting file: f13
+Node 2: Got file, contents below:
+Node 2: 389
+
+REGISTERING NEW OPERATION 27
+NEW OPERATION 27
+Node 1: doing command: delete f12
+Node 1: client locking file: f12
+Node 1: sending delete rpc to 0 for file: f12
+Node 0: sending ACK 42 to 1
+Node 0: got packet protocol: RIO_DELETE
+Node 0: receiving packet from RIOLayer
+Node 0: sending RIO_WF to 2
+Node 0: manager locking file: f12
+Node 2: sending ACK 32 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f12
+Node 2: sending RIO_WD to manager f12
+Node 2: losing permissions on file: f12
+Node 0: sending ACK 44 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f12, contents: 977
+
+Node 0: deleting file: .temp
+Node 0: deleting file: f12
+Node 0: marking file f12 as unowned
+Node 1: sending ACK 33 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: deleting file: f12
+Node 1: client unlocking file: f12
+REGISTERING NEW OPERATION 26
+NEW OPERATION 26
+Node 2: doing command: get f13
+Node 2: getting file: f13
+Node 2: Got file, contents below:
+Node 2: 389
+
+REGISTERING NEW OPERATION 25
+NEW OPERATION 25
+Node 2: doing command: put f13 379
+Node 2: client locking file: f13
+Node 2: requesting ownership of f13
+Node 0: sending ACK 45 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f13
+Node 0: sending RIO_IV to 1
+Node 1: sending ACK 34 to 0
+Node 1: got packet protocol: RIO_IV
+Node 1: receiving packet from RIOLayer
+Node 1: marking invalid f13
+Node 1: sending ic to manager for file: f13
+Node 0: sending ACK 43 to 1
+Node 0: got packet protocol: RIO_IC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 1 to IV
+Node 0: getting file: f13
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 33 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f13
+Node 2: putting to file: f13, contents: 389
+
+Node 2: deleting file: .temp
+Node 2: putting to file: f13, contents: 379
+Node 2: deleting file: .temp
+Node 2: client unlocking file: f13
+Node 2: sending wc to manager for f13
+REGISTERING NEW OPERATION 24
+Node 0: sending ACK 46 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f13
+NEW OPERATION 24
+Node 2: doing command: put f9 550
+Node 2: putting to file: f9, contents: 550
+Node 2: deleting file: .temp
+REGISTERING NEW OPERATION 23
+NEW OPERATION 23
+Node 2: doing command: create f17
+Node 2: client locking file: f17
+Node 2: sending create rpc to 0 for file: f17
+Node 0: sending ACK 47 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f17
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 34 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f17
+Node 2: client unlocking file: f17
+REGISTERING NEW OPERATION 22
+NEW OPERATION 22
+Node 1: doing command: append f14 382
+Node 1: client locking file: f14
+Node 1: requesting ownership of f14
+Node 0: sending ACK 44 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f14
+Node 0: sending RIO_IV to 2
+Node 2: sending ACK 35 to 0
+Node 2: got packet protocol: RIO_IV
+Node 2: receiving packet from RIOLayer
+Node 2: marking invalid f14
+Node 2: sending ic to manager for file: f14
+Node 0: sending ACK 48 to 2
+Node 0: got packet protocol: RIO_IC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 2 to IV
+Node 0: getting file: f14
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 35 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f14
+Node 1: putting to file: f14, contents: 
+Node 1: deleting file: .temp
+Node 1: appending to file: f14, contents: 382
+Node 1: client unlocking file: f14
+Node 1: sending wc to manager for f14
+REGISTERING NEW OPERATION 21
+Node 0: sending ACK 45 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f14
+NEW OPERATION 21
+Node 2: doing command: create f18
+Node 2: client locking file: f18
+Node 2: sending create rpc to 0 for file: f18
+Node 0: sending ACK 49 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f18
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 36 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f18
+Node 2: client unlocking file: f18
+REGISTERING NEW OPERATION 20
+NEW OPERATION 20
+Node 1: doing command: put f17 875
+Node 1: client locking file: f17
+Node 1: requesting ownership of f17
+Node 0: sending ACK 46 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f17
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 37 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f17
+Node 2: sending RIO_WD to manager f17
+Node 2: losing permissions on file: f17
+Node 0: sending ACK 50 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f17, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f17
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 36 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f17
+Node 1: creating file: f17
+Node 1: putting to file: f17, contents: 
+Node 1: deleting file: .temp
+Node 1: putting to file: f17, contents: 875
+Node 1: deleting file: .temp
+Node 1: client unlocking file: f17
+Node 1: sending wc to manager for f17
+REGISTERING NEW OPERATION 19
+Node 0: sending ACK 47 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f17
+NEW OPERATION 19
+Node 1: doing command: create f19
+Node 1: client locking file: f19
+Node 1: sending create rpc to 0 for file: f19
+Node 0: sending ACK 48 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f19
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 37 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f19
+Node 1: client unlocking file: f19
+REGISTERING NEW OPERATION 18
+NEW OPERATION 18
+Node 1: doing command: delete f19
+Node 1: deleting file: f19
+REGISTERING NEW OPERATION 17
+NEW OPERATION 17
+Node 1: doing command: get f9
+Node 1: client locking file: f9
+Node 1: requesting read access for f9
+Node 0: sending ACK 49 to 1
+Node 0: got packet protocol: RIO_RQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f9
+Node 0: sending RIO_RF to 2
+Node 2: sending ACK 38 to 0
+Node 2: got packet protocol: RIO_RF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f9
+Node 2: sending RIO_RD to manager f9
+Node 2: changed permission level to ReadOnly on file: f9
+Node 0: sending ACK 51 to 2
+Node 0: got packet protocol: RIO_RD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f9, contents: 550
+
+Node 0: deleting file: .temp
+Node 0: getting file: f9
+Node 0: sending RIO_RD to 1
+Node 1: sending ACK 38 to 0
+Node 1: got packet protocol: RIO_RD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadOnly on f9
+Node 1: putting to file: f9, contents: 550
+
+Node 1: deleting file: .temp
+Node 1: 550
+
+Node 1: client unlocking file: f9
+Node 1: sending rc to manager for f9
+REGISTERING NEW OPERATION 16
+Node 0: sending ACK 50 to 1
+Node 0: got packet protocol: RIO_RC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 1 to RO
+Node 0: changing client: 1 to ReadOnly
+Node 0: manager unlocking file: f9
+NEW OPERATION 16
+Node 1: doing command: delete f18
+Node 1: client locking file: f18
+Node 1: sending delete rpc to 0 for file: f18
+Node 0: sending ACK 51 to 1
+Node 0: got packet protocol: RIO_DELETE
+Node 0: receiving packet from RIOLayer
+Node 0: sending RIO_WF to 2
+Node 0: manager locking file: f18
+Node 2: sending ACK 39 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f18
+Node 2: sending RIO_WD to manager f18
+Node 2: losing permissions on file: f18
+Node 0: sending ACK 52 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f18, contents: 
+Node 0: deleting file: .temp
+Node 0: deleting file: f18
+Node 0: marking file f18 as unowned
+Node 1: sending ACK 39 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: client unlocking file: f18
+REGISTERING NEW OPERATION 15
+NEW OPERATION 15
+Node 2: doing command: put f9 237
+Node 2: client locking file: f9
+Node 2: requesting ownership of f9
+Node 0: sending ACK 53 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f9
+Node 0: sending RIO_IV to 1
+Node 1: sending ACK 40 to 0
+Node 1: got packet protocol: RIO_IV
+Node 1: receiving packet from RIOLayer
+Node 1: marking invalid f9
+Node 1: sending ic to manager for file: f9
+Node 0: sending ACK 52 to 1
+Node 0: got packet protocol: RIO_IC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 1 to IV
+Node 0: getting file: f9
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 40 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f9
+Node 2: putting to file: f9, contents: 550
+
+Node 2: deleting file: .temp
+Node 2: putting to file: f9, contents: 237
+Node 2: deleting file: .temp
+Node 2: client unlocking file: f9
+Node 2: sending wc to manager for f9
+REGISTERING NEW OPERATION 14
+Node 0: sending ACK 54 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f9
+NEW OPERATION 14
+Node 1: doing command: create f20
+Node 1: client locking file: f20
+Node 1: sending create rpc to 0 for file: f20
+Node 0: sending ACK 53 to 1
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f20
+Node 0: changing client: 1 to ReadWrite
+Node 0: sending RIO_SUCCESS to 1
+Node 1: sending ACK 41 to 0
+Node 1: got packet protocol: RIO_SUCCESS
+Node 1: receiving packet from RIOLayer
+Node 1: creating file: f20
+Node 1: client unlocking file: f20
+REGISTERING NEW OPERATION 13
+NEW OPERATION 13
+Node 2: doing command: create f21
+Node 2: client locking file: f21
+Node 2: sending create rpc to 0 for file: f21
+Node 0: sending ACK 55 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f21
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 41 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f21
+Node 2: client unlocking file: f21
+REGISTERING NEW OPERATION 12
+NEW OPERATION 12
+Node 1: doing command: put f13 272
+Node 1: client locking file: f13
+Node 1: requesting ownership of f13
+Node 0: sending ACK 54 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f13
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 42 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f13
+Node 2: sending RIO_WD to manager f13
+Node 2: losing permissions on file: f13
+Node 0: sending ACK 56 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f13, contents: 379
+
+Node 0: deleting file: .temp
+Node 0: getting file: f13
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 42 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f13
+Node 1: putting to file: f13, contents: 379
+
+Node 1: deleting file: .temp
+Node 1: putting to file: f13, contents: 272
+Node 1: deleting file: .temp
+Node 1: client unlocking file: f13
+Node 1: sending wc to manager for f13
+REGISTERING NEW OPERATION 11
+Node 0: sending ACK 55 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f13
+NEW OPERATION 11
+Node 2: doing command: append f9 149
+Node 2: appending to file: f9, contents: 149
+REGISTERING NEW OPERATION 10
+NEW OPERATION 10
+Node 1: doing command: put f13 422
+Node 1: putting to file: f13, contents: 422
+Node 1: deleting file: .temp
+REGISTERING NEW OPERATION 9
+NEW OPERATION 9
+Node 2: doing command: append f13 321
+Node 2: client locking file: f13
+Node 2: requesting ownership of f13
+Node 0: sending ACK 57 to 2
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f13
+Node 0: sending RIO_WF to 1
+Node 1: sending ACK 43 to 0
+Node 1: got packet protocol: RIO_WF
+Node 1: receiving packet from RIOLayer
+Node 1: getting file: f13
+Node 1: sending RIO_WD to manager f13
+Node 1: losing permissions on file: f13
+Node 0: sending ACK 56 to 1
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f13, contents: 422
+
+Node 0: deleting file: .temp
+Node 0: getting file: f13
+Node 0: sending RIO_WD to 2
+Node 2: sending ACK 43 to 0
+Node 2: got packet protocol: RIO_WD
+Node 2: receiving packet from RIOLayer
+Node 2: got ReadWrite on f13
+Node 2: putting to file: f13, contents: 422
+
+Node 2: deleting file: .temp
+Node 2: appending to file: f13, contents: 321
+Node 2: client unlocking file: f13
+Node 2: sending wc to manager for f13
+REGISTERING NEW OPERATION 8
+Node 0: sending ACK 58 to 2
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 2 to ReadWrite
+Node 0: manager unlocking file: f13
+NEW OPERATION 8
+Node 2: doing command: append f21 936
+Node 2: appending to file: f21, contents: 936
+REGISTERING NEW OPERATION 7
+NEW OPERATION 7
+Node 2: doing command: get f9
+Node 2: getting file: f9
+Node 2: Got file, contents below:
+Node 2: 237149
+
+REGISTERING NEW OPERATION 6
+NEW OPERATION 6
+Node 1: doing command: put f13 820
+Node 1: client locking file: f13
+Node 1: requesting ownership of f13
+Node 0: sending ACK 57 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f13
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 44 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f13
+Node 2: sending RIO_WD to manager f13
+Node 2: losing permissions on file: f13
+Node 0: sending ACK 59 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f13, contents: 422
+321
+
+Node 0: deleting file: .temp
+Node 0: getting file: f13
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 44 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f13
+Node 1: putting to file: f13, contents: 422
+321
+
+Node 1: deleting file: .temp
+Node 1: putting to file: f13, contents: 820
+Node 1: deleting file: .temp
+Node 1: client unlocking file: f13
+Node 1: sending wc to manager for f13
+REGISTERING NEW OPERATION 5
+Node 0: sending ACK 58 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f13
+NEW OPERATION 5
+Node 1: doing command: append f21 536
+Node 1: client locking file: f21
+Node 1: requesting ownership of f21
+Node 0: sending ACK 59 to 1
+Node 0: got packet protocol: RIO_WQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f21
+Node 0: sending RIO_WF to 2
+Node 2: sending ACK 45 to 0
+Node 2: got packet protocol: RIO_WF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f21
+Node 2: sending RIO_WD to manager f21
+Node 2: losing permissions on file: f21
+Node 0: sending ACK 60 to 2
+Node 0: got packet protocol: RIO_WD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f21, contents: 936
+
+Node 0: deleting file: .temp
+Node 0: getting file: f21
+Node 0: sending RIO_WD to 1
+Node 1: sending ACK 45 to 0
+Node 1: got packet protocol: RIO_WD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadWrite on f21
+Node 1: creating file: f21
+Node 1: putting to file: f21, contents: 936
+
+Node 1: deleting file: .temp
+Node 1: appending to file: f21, contents: 536
+Node 1: client unlocking file: f21
+Node 1: sending wc to manager for f21
+REGISTERING NEW OPERATION 4
+Node 0: sending ACK 60 to 1
+Node 0: got packet protocol: RIO_WC
+Node 0: receiving packet from RIOLayer
+Node 0: changing client: 1 to ReadWrite
+Node 0: manager unlocking file: f21
+NEW OPERATION 4
+Node 2: doing command: create f22
+Node 2: client locking file: f22
+Node 2: sending create rpc to 0 for file: f22
+Node 0: sending ACK 61 to 2
+Node 0: got packet protocol: RIO_CREATE
+Node 0: receiving packet from RIOLayer
+Node 0: creating file: f22
+Node 0: changing client: 2 to ReadWrite
+Node 0: sending RIO_SUCCESS to 2
+Node 2: sending ACK 46 to 0
+Node 2: got packet protocol: RIO_SUCCESS
+Node 2: receiving packet from RIOLayer
+Node 2: creating file: f22
+Node 2: client unlocking file: f22
+REGISTERING NEW OPERATION 3
+NEW OPERATION 3
+Node 1: doing command: get f21
+Node 1: getting file: f21
+Node 1: Got file, contents below:
+Node 1: 936
+536
+
+REGISTERING NEW OPERATION 2
+NEW OPERATION 2
+Node 1: doing command: put f20 208
+Node 1: putting to file: f20, contents: 208
+Node 1: deleting file: .temp
+REGISTERING NEW OPERATION 1
+NEW OPERATION 1
+Node 1: doing command: get f22
+Node 1: client locking file: f22
+Node 1: requesting read access for f22
+Node 0: sending ACK 61 to 1
+Node 0: got packet protocol: RIO_RQ
+Node 0: receiving packet from RIOLayer
+Node 0: manager locking file: f22
+Node 0: sending RIO_RF to 2
+Node 2: sending ACK 47 to 0
+Node 2: got packet protocol: RIO_RF
+Node 2: receiving packet from RIOLayer
+Node 2: getting file: f22
+Node 2: sending RIO_RD to manager f22
+Node 2: changed permission level to ReadOnly on file: f22
+Node 0: sending ACK 62 to 2
+Node 0: got packet protocol: RIO_RD
+Node 0: receiving packet from RIOLayer
+Node 0: putting to file: f22, contents: 
+Node 0: deleting file: .temp
+Node 0: getting file: f22
+Node 0: sending RIO_RD to 1
+Node 1: sending ACK 46 to 0
+Node 1: got packet protocol: RIO_RD
+Node 1: receiving packet from RIOLayer
+Node 1: got ReadOnly on f22
+Node 1: creating file: f22
+Node 1: putting to file: f22, contents: 
+Node 1: deleting file: .temp
+Node 1: 
+Node 1: client unlocking file: f22
+Node 1: sending rc to manager for f22
+REGISTERING NEW OPERATION 0
+Node 0: sending ACK 62 to 1
+Node 0: got packet protocol: RIO_RC
+Node 0: receiving packet from RIOLayer
+Node 0: Changing client: 1 to RO
+Node 0: changing client: 1 to ReadOnly
+Node 0: manager unlocking file: f22

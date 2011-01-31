@@ -275,7 +275,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		printInfo("doing command: " + cmd);
 
 		// a fake root for Synoptic
-		logSynopticEvent("COMMAND");
+		//logSynopticEvent("COMMAND");
 		// first child should always be command name
 		logSynopticEvent(cmdName);
 
@@ -301,7 +301,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Counter of files created for onlyValid
 	 */
-	protected int name = 0;
+	protected static int name = 0;
 	/**
 	 * List of existing files for onlyValid
 	 */
