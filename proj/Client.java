@@ -433,7 +433,7 @@ public class Client extends RIONode {
 			return;
 		} else if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-			// have ownership
+			// have ownership - writeFile varifies existance on disk
 			writeFile(filename, content, false);
 		} else {
 			// lock and request ownership
@@ -776,7 +776,7 @@ public class Client extends RIONode {
 		}
 
 		if (!Utility.fileExists(this, filename)) {
-			throw new FileAlreadyExistsException();
+			throw new FileNotFoundException();
 		} else {
 			if (!append) {
 				// save current contents in temp file
@@ -822,6 +822,7 @@ public class Client extends RIONode {
 
 		PersistentStorageWriter temp = getWriter(tempFilename, false);
 		temp.write(oldContent.toString());
+		temp.close();
 	}
 
 	/****************************************************
@@ -1769,10 +1770,13 @@ public class Client extends RIONode {
 		printVerbose("client unlocking file: " + filename);
 		clientLockedFiles.remove(filename);
 
+		// TODO: LOW: I think this needs a monad
 		Queue<String> queuedRequests = clientQueuedCommands.get(filename);
-		String request = queuedRequests.poll();
-		if (request != null) {
-			onCommand(request);
+		if (queuedRequests != null) {
+			String request = queuedRequests.poll();
+			if (request != null) {
+				onCommand(request);
+			}
 		}
 	}
 
