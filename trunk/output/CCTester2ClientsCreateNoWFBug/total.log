@@ -1,0 +1,333 @@
+0 node:1 START
+1 node:0 START
+2 node:2 START
+3 node:0 TIMESTEP time:1
+4 node:1 TIMESTEP time:1
+5 node:2 TIMESTEP time:1
+6 node:1 COMMAND begin
+7 node:0 TIMESTEP time:2
+8 node:1 TIMESTEP time:2
+9 node:2 TIMESTEP time:2
+10 node:0 TIMESTEP time:3
+11 node:1 TIMESTEP time:3
+12 node:2 TIMESTEP time:3
+13 node:0 TIMESTEP time:4
+14 node:1 TIMESTEP time:4
+15 node:2 TIMESTEP time:4
+16 node:0 TIMESTEP time:5
+17 node:1 TIMESTEP time:5
+18 node:2 TIMESTEP time:5
+19 node:0 TIMESTEP time:6
+20 node:1 TIMESTEP time:6
+21 node:2 TIMESTEP time:6
+22 node:0 TIMESTEP time:7
+23 node:1 TIMESTEP time:7
+24 node:2 TIMESTEP time:7
+25 node:0 TIMESTEP time:8
+26 node:1 TIMESTEP time:8
+27 node:2 TIMESTEP time:8
+28 node:0 TIMESTEP time:9
+29 node:1 TIMESTEP time:9
+30 node:2 TIMESTEP time:9
+31 node:0 TIMESTEP time:10
+32 node:1 TIMESTEP time:10
+33 node:2 TIMESTEP time:10
+34 node:0 TIMESTEP time:11
+35 node:1 TIMESTEP time:11
+36 node:2 TIMESTEP time:11
+37 node:2 TIMEOUT fire-time:11 doOp
+38 node:2 USER-EVENT NEW OPERATION
+39 node:2 USER-EVENT COMMAND
+40 node:2 USER-EVENT CREATE
+41 SEND src:2 dest:0 proto:2 rio-proto:RIO_CREATE rio-seqNum:0 rio-payload:f0
+42 node:0 TIMESTEP time:12
+43 node:1 TIMESTEP time:12
+44 node:2 TIMESTEP time:12
+45 RECVD src:2 dest:0 proto:2 rio-proto:RIO_CREATE rio-seqNum:0 rio-payload:f0
+46 SEND src:0 dest:2 proto:1 
+47 node:0 USER-EVENT CREATING-FILE
+48 node:0 WRITE create:f0
+49 SEND src:0 dest:2 proto:125 rio-proto:RIO_SUCCESS rio-seqNum:0 rio-payload:RIO_CREATE f0
+50 node:0 TIMESTEP time:13
+51 node:1 TIMESTEP time:13
+52 node:2 TIMESTEP time:13
+53 RECVD src:0 dest:2 proto:125 rio-proto:RIO_SUCCESS rio-seqNum:0 rio-payload:RIO_CREATE f0
+54 SEND src:2 dest:0 proto:1 
+55 node:2 USER-EVENT CREATING-FILE
+56 node:2 WRITE create:f0
+57 RECVD src:0 dest:2 proto:1 
+58 node:0 TIMESTEP time:14
+59 node:1 TIMESTEP time:14
+60 node:2 TIMESTEP time:14
+61 RECVD src:2 dest:0 proto:1 
+62 node:0 TIMESTEP time:15
+63 node:1 TIMESTEP time:15
+64 node:2 TIMESTEP time:15
+65 node:0 TIMESTEP time:16
+66 node:1 TIMESTEP time:16
+67 node:2 TIMESTEP time:16
+68 node:2 TIMEOUT fire-time:16 onTimeout
+69 node:0 TIMESTEP time:17
+70 node:1 TIMESTEP time:17
+71 node:2 TIMESTEP time:17
+72 node:0 TIMEOUT fire-time:17 onTimeout
+73 node:0 TIMESTEP time:18
+74 node:1 TIMESTEP time:18
+75 node:2 TIMESTEP time:18
+76 node:0 TIMESTEP time:19
+77 node:1 TIMESTEP time:19
+78 node:2 TIMESTEP time:19
+79 node:0 TIMESTEP time:20
+80 node:1 TIMESTEP time:20
+81 node:2 TIMESTEP time:20
+82 node:0 TIMESTEP time:21
+83 node:1 TIMESTEP time:21
+84 node:2 TIMESTEP time:21
+85 node:0 TIMESTEP time:22
+86 node:1 TIMESTEP time:22
+87 node:2 TIMESTEP time:22
+88 node:0 TIMESTEP time:23
+89 node:1 TIMESTEP time:23
+90 node:2 TIMESTEP time:23
+91 node:2 TIMEOUT fire-time:23 doOp
+92 node:2 USER-EVENT NEW OPERATION
+93 node:2 USER-EVENT COMMAND
+94 node:2 USER-EVENT DELETE
+95 node:2 USER-EVENT DELETING-FILE
+96 node:2 WRITE create:f0
+97 node:2 WRITE delete:f0
+98 node:0 TIMESTEP time:24
+99 node:1 TIMESTEP time:24
+100 node:2 TIMESTEP time:24
+101 node:0 TIMESTEP time:25
+102 node:1 TIMESTEP time:25
+103 node:2 TIMESTEP time:25
+104 node:0 TIMESTEP time:26
+105 node:1 TIMESTEP time:26
+106 node:2 TIMESTEP time:26
+107 node:0 TIMESTEP time:27
+108 node:1 TIMESTEP time:27
+109 node:2 TIMESTEP time:27
+110 node:0 TIMESTEP time:28
+111 node:1 TIMESTEP time:28
+112 node:2 TIMESTEP time:28
+113 node:0 TIMESTEP time:29
+114 node:1 TIMESTEP time:29
+115 node:2 TIMESTEP time:29
+116 node:0 TIMESTEP time:30
+117 node:1 TIMESTEP time:30
+118 node:2 TIMESTEP time:30
+119 node:0 TIMESTEP time:31
+120 node:1 TIMESTEP time:31
+121 node:2 TIMESTEP time:31
+122 node:0 TIMESTEP time:32
+123 node:1 TIMESTEP time:32
+124 node:2 TIMESTEP time:32
+125 node:0 TIMESTEP time:33
+126 node:1 TIMESTEP time:33
+127 node:2 TIMESTEP time:33
+128 node:1 TIMEOUT fire-time:33 doOp
+129 node:1 USER-EVENT NEW OPERATION
+130 node:1 USER-EVENT COMMAND
+131 node:1 USER-EVENT CREATE
+132 SEND src:1 dest:0 proto:2 rio-proto:RIO_CREATE rio-seqNum:0 rio-payload:f0
+133 node:0 TIMESTEP time:34
+134 node:1 TIMESTEP time:34
+135 node:2 TIMESTEP time:34
+136 RECVD src:1 dest:0 proto:2 rio-proto:RIO_CREATE rio-seqNum:0 rio-payload:f0
+137 SEND src:0 dest:1 proto:1 
+138 SEND src:0 dest:1 proto:127 rio-proto:RIO_ERROR rio-seqNum:0 rio-payload:f0 RIO_ERROR 11 FileAlreadyExists
+139 node:0 TIMESTEP time:35
+140 node:1 TIMESTEP time:35
+141 node:2 TIMESTEP time:35
+142 RECVD src:0 dest:1 proto:127 rio-proto:RIO_ERROR rio-seqNum:0 rio-payload:f0 RIO_ERROR 11 FileAlreadyExists
+143 SEND src:1 dest:0 proto:1 
+144 RECVD src:0 dest:1 proto:1 
+145 node:0 TIMESTEP time:36
+146 node:1 TIMESTEP time:36
+147 node:2 TIMESTEP time:36
+148 RECVD src:1 dest:0 proto:1 
+149 node:0 TIMESTEP time:37
+150 node:1 TIMESTEP time:37
+151 node:2 TIMESTEP time:37
+152 node:0 TIMESTEP time:38
+153 node:1 TIMESTEP time:38
+154 node:2 TIMESTEP time:38
+155 node:1 TIMEOUT fire-time:38 onTimeout
+156 node:0 TIMESTEP time:39
+157 node:1 TIMESTEP time:39
+158 node:2 TIMESTEP time:39
+159 node:0 TIMEOUT fire-time:39 onTimeout
+160 node:0 TIMESTEP time:40
+161 node:1 TIMESTEP time:40
+162 node:2 TIMESTEP time:40
+163 node:0 TIMESTEP time:41
+164 node:1 TIMESTEP time:41
+165 node:2 TIMESTEP time:41
+166 node:0 TIMESTEP time:42
+167 node:1 TIMESTEP time:42
+168 node:2 TIMESTEP time:42
+169 node:0 TIMESTEP time:43
+170 node:1 TIMESTEP time:43
+171 node:2 TIMESTEP time:43
+172 node:0 TIMESTEP time:44
+173 node:1 TIMESTEP time:44
+174 node:2 TIMESTEP time:44
+175 node:0 TIMESTEP time:45
+176 node:1 TIMESTEP time:45
+177 node:2 TIMESTEP time:45
+178 node:2 TIMEOUT fire-time:45 doOp
+179 node:2 USER-EVENT NEW OPERATION
+180 node:2 USER-EVENT COMMAND
+181 node:2 USER-EVENT CREATE
+182 SEND src:2 dest:0 proto:2 rio-proto:RIO_CREATE rio-seqNum:1 rio-payload:f1
+183 node:0 TIMESTEP time:46
+184 node:1 TIMESTEP time:46
+185 node:2 TIMESTEP time:46
+186 RECVD src:2 dest:0 proto:2 rio-proto:RIO_CREATE rio-seqNum:1 rio-payload:f1
+187 SEND src:0 dest:2 proto:1 
+188 node:0 USER-EVENT CREATING-FILE
+189 node:0 WRITE create:f1
+190 SEND src:0 dest:2 proto:125 rio-proto:RIO_SUCCESS rio-seqNum:1 rio-payload:RIO_CREATE f1
+191 node:0 TIMESTEP time:47
+192 node:1 TIMESTEP time:47
+193 node:2 TIMESTEP time:47
+194 RECVD src:0 dest:2 proto:125 rio-proto:RIO_SUCCESS rio-seqNum:1 rio-payload:RIO_CREATE f1
+195 SEND src:2 dest:0 proto:1 
+196 node:2 USER-EVENT CREATING-FILE
+197 node:2 WRITE create:f1
+198 RECVD src:0 dest:2 proto:1 
+199 node:0 TIMESTEP time:48
+200 node:1 TIMESTEP time:48
+201 node:2 TIMESTEP time:48
+202 RECVD src:2 dest:0 proto:1 
+203 node:0 TIMESTEP time:49
+204 node:1 TIMESTEP time:49
+205 node:2 TIMESTEP time:49
+206 node:0 TIMESTEP time:50
+207 node:1 TIMESTEP time:50
+208 node:2 TIMESTEP time:50
+209 node:2 TIMEOUT fire-time:50 onTimeout
+210 node:0 TIMESTEP time:51
+211 node:1 TIMESTEP time:51
+212 node:2 TIMESTEP time:51
+213 node:0 TIMEOUT fire-time:51 onTimeout
+214 node:0 TIMESTEP time:52
+215 node:1 TIMESTEP time:52
+216 node:2 TIMESTEP time:52
+217 node:0 TIMESTEP time:53
+218 node:1 TIMESTEP time:53
+219 node:2 TIMESTEP time:53
+220 node:0 TIMESTEP time:54
+221 node:1 TIMESTEP time:54
+222 node:2 TIMESTEP time:54
+223 node:0 TIMESTEP time:55
+224 node:1 TIMESTEP time:55
+225 node:2 TIMESTEP time:55
+226 node:0 TIMESTEP time:56
+227 node:1 TIMESTEP time:56
+228 node:2 TIMESTEP time:56
+229 node:0 TIMESTEP time:57
+230 node:1 TIMESTEP time:57
+231 node:2 TIMESTEP time:57
+232 node:2 TIMEOUT fire-time:57 doOp
+233 node:2 USER-EVENT NEW OPERATION
+234 node:2 USER-EVENT COMMAND
+235 node:2 USER-EVENT CREATE
+236 SEND src:2 dest:0 proto:2 rio-proto:RIO_CREATE rio-seqNum:2 rio-payload:f2
+237 node:0 TIMESTEP time:58
+238 node:1 TIMESTEP time:58
+239 node:2 TIMESTEP time:58
+240 RECVD src:2 dest:0 proto:2 rio-proto:RIO_CREATE rio-seqNum:2 rio-payload:f2
+241 SEND src:0 dest:2 proto:1 
+242 node:0 USER-EVENT CREATING-FILE
+243 node:0 WRITE create:f2
+244 SEND src:0 dest:2 proto:125 rio-proto:RIO_SUCCESS rio-seqNum:2 rio-payload:RIO_CREATE f2
+245 node:0 TIMESTEP time:59
+246 node:1 TIMESTEP time:59
+247 node:2 TIMESTEP time:59
+248 RECVD src:0 dest:2 proto:1 
+249 RECVD src:0 dest:2 proto:125 rio-proto:RIO_SUCCESS rio-seqNum:2 rio-payload:RIO_CREATE f2
+250 SEND src:2 dest:0 proto:1 
+251 node:2 USER-EVENT CREATING-FILE
+252 node:2 WRITE create:f2
+253 node:0 TIMESTEP time:60
+254 node:1 TIMESTEP time:60
+255 node:2 TIMESTEP time:60
+256 RECVD src:2 dest:0 proto:1 
+257 node:0 TIMESTEP time:61
+258 node:1 TIMESTEP time:61
+259 node:2 TIMESTEP time:61
+260 node:0 TIMESTEP time:62
+261 node:1 TIMESTEP time:62
+262 node:2 TIMESTEP time:62
+263 node:2 TIMEOUT fire-time:62 onTimeout
+264 node:0 TIMESTEP time:63
+265 node:1 TIMESTEP time:63
+266 node:2 TIMESTEP time:63
+267 node:0 TIMEOUT fire-time:63 onTimeout
+268 node:0 TIMESTEP time:64
+269 node:1 TIMESTEP time:64
+270 node:2 TIMESTEP time:64
+271 node:0 TIMESTEP time:65
+272 node:1 TIMESTEP time:65
+273 node:2 TIMESTEP time:65
+274 node:0 TIMESTEP time:66
+275 node:1 TIMESTEP time:66
+276 node:2 TIMESTEP time:66
+277 node:0 TIMESTEP time:67
+278 node:1 TIMESTEP time:67
+279 node:2 TIMESTEP time:67
+280 node:0 TIMESTEP time:68
+281 node:1 TIMESTEP time:68
+282 node:2 TIMESTEP time:68
+283 node:0 TIMESTEP time:69
+284 node:1 TIMESTEP time:69
+285 node:2 TIMESTEP time:69
+286 node:2 TIMEOUT fire-time:69 doOp
+287 node:2 USER-EVENT NEW OPERATION
+288 node:2 USER-EVENT COMMAND
+289 node:2 USER-EVENT GET
+290 node:2 USER-EVENT GETTING-FILE
+291 node:2 READ readline
+292 node:0 TIMESTEP time:70
+293 node:1 TIMESTEP time:70
+294 node:2 TIMESTEP time:70
+295 node:0 TIMESTEP time:71
+296 node:1 TIMESTEP time:71
+297 node:2 TIMESTEP time:71
+298 node:0 TIMESTEP time:72
+299 node:1 TIMESTEP time:72
+300 node:2 TIMESTEP time:72
+301 node:0 TIMESTEP time:73
+302 node:1 TIMESTEP time:73
+303 node:2 TIMESTEP time:73
+304 node:0 TIMESTEP time:74
+305 node:1 TIMESTEP time:74
+306 node:2 TIMESTEP time:74
+307 node:0 TIMESTEP time:75
+308 node:1 TIMESTEP time:75
+309 node:2 TIMESTEP time:75
+310 node:0 TIMESTEP time:76
+311 node:1 TIMESTEP time:76
+312 node:2 TIMESTEP time:76
+313 node:0 TIMESTEP time:77
+314 node:1 TIMESTEP time:77
+315 node:2 TIMESTEP time:77
+316 node:0 TIMESTEP time:78
+317 node:1 TIMESTEP time:78
+318 node:2 TIMESTEP time:78
+319 node:0 TIMESTEP time:79
+320 node:1 TIMESTEP time:79
+321 node:2 TIMESTEP time:79
+322 node:2 TIMEOUT fire-time:79 doOp
+323 node:2 USER-EVENT NEW OPERATION
+324 node:2 USER-EVENT COMMAND
+325 node:2 USER-EVENT APPEND
+326 node:2 USER-EVENT APPENDING-FILE
+327 node:0 TIMESTEP time:80
+328 node:1 TIMESTEP time:80
+329 node:2 TIMESTEP time:80
+330 node:0 STOPPED
+331 node:1 STOPPED
+332 node:2 STOPPED
