@@ -15,8 +15,10 @@ import java.io.PrintStream;
  */
 public class Logger {
 
+	// TODO: Add color codes as described on message board?
+
 	/**
-	 *
+	 * The path to the server log
 	 */
 	private static final String LOG_FILE = "server_log.txt";
 
