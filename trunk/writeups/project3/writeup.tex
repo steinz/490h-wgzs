@@ -1,0 +1,30 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath, amssymb, amsthm}    	% need for subequations
+\usepackage{fullpage} 	% without this, will have wide math-article-paper margins
+\usepackage{graphicx}	% use to include graphics
+\usepackage{verbatim}
+
+
+%%%% Beginning of the Document %%%%
+\begin{document}
+
+\begin{center}
+{\large CSE 490h -- Project 2: Cache Coherence Writeup} \\
+\textbf{Wayne Gerard - wayger} \\
+\textbf{Zachary Stein - steinz} \\
+January 27, 2011
+\end{center}
+
+\textbf{Notes:} \\
+
+-Enforce filename order
+-So, if client wants to do: 
+	-Get f2 => x
+	-Put f1 x
+, they have to actually:
+	-Append "" f1
+	-Get f2 => x
+	-Put f1 x
+
+\end{document}
