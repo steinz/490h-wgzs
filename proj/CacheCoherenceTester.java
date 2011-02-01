@@ -26,7 +26,6 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	 */
 
 	/**
-	 * Static random number generator.
 	 * 
 	 * TODO: Remove seed once class has been tested.
 	 */
@@ -35,7 +34,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Number of commands to perform
 	 */
-	protected static int commandCount = 1000;
+	protected static int commandCount = 100;
 
 	/**
 	 * A list of the non-manager clients in the swarm

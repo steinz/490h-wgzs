@@ -19,8 +19,6 @@ import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.Map.Entry;
 
-import edu.washington.cs.cse490h.lib.PersistentStorageReader;
-import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /**
@@ -40,6 +38,10 @@ import edu.washington.cs.cse490h.lib.Utility;
  * that the manager acts as a client when it should and as manager otherwise.
  */
 public class Client extends RIONode {
+
+	/**
+	 * TODO: HIGH: We require locking of files in order by name, document this
+	 */
 
 	/*
 	 * TODO: LOW: Separate the Client and Manager code into two node types -
@@ -61,6 +63,10 @@ public class Client extends RIONode {
 	/*
 	 * TODO: EC: Don't send ACKs for messages that always get responses - for
 	 * ex, let WD be WQ's ACK
+	 */
+
+	/*
+	 * TODO: EC: Multiple TX for clients at the same time
 	 */
 
 	/**
@@ -119,6 +125,11 @@ public class Client extends RIONode {
 	 * Name of the temp file used by write when append is false
 	 */
 	protected static final String tempFilename = ".temp";
+
+	/**
+	 * Name of the log file used by FS operations
+	 */
+	protected static final String logFilename = ".log";
 
 	/**
 	 * Whether or not this node is the manager for project 2.
@@ -209,51 +220,48 @@ public class Client extends RIONode {
 	 * end manager only data structures
 	 ************************************************/
 
-	public Client() {
-		// Initialize manager state in the managerHandler
-		super();
-		// TODO: This should be in start, but I don't think it matters
+	/*
+	 * TODO: HIGH: Implement TransactionalFileSystem
+	 * 
+	 * All FS operations write to log and queue op in memory.
+	 * 
+	 * Queued ops are written to disk on commit, then log is cleared.
+	 * 
+	 * Queue is thrown out on abort.
+	 */
+
+	/**
+	 * FS for this node
+	 */
+	protected ReliableFileSystem fs;
+
+	/**
+	 * Cleans up failed puts if necessary
+	 */
+	public void start() {
+		// NOTE: Initialize manager state in the managerHandler
+
+		// Initialization
 		this.clientCacheStatus = new HashMap<String, CacheStatuses>();
 		this.clientPendingOperations = new HashMap<String, PendingClientOperation>();
 		this.clientLockedFiles = new HashSet<String>();
 		this.clientQueuedCommands = new HashMap<String, Queue<String>>();
 		this.isManager = false;
 		this.managerAddr = -1;
-		Logger.eraseLog(); // Wipe the server log
-	}
 
-	/**
-	 * Cleans up failed puts if necessary
-	 */
-	public void start() {
+		// Wipe the server log
+		Logger.eraseLog();
+
+		fs = new ReliableFileSystem(this);
+
+		// Look for a temp file to recover
 		try {
-			recoverTempFile();
+			fs.recoverTempFile();
 		} catch (FileNotFoundException e) {
 			printError(e);
 		} catch (IOException e) {
 			printError(e);
 		}
-	}
-
-	/**
-	 * Replaces the file on disk with the temp file to recover from a crash
-	 * 
-	 * @throws FileNotFoundException
-	 * @throws IOException
-	 */
-	protected void recoverTempFile() throws FileNotFoundException, IOException {
-		if (!Utility.fileExists(this, tempFilename)) {
-			// Do nothing if we don't have a temp file
-			return;
-		}
-
-		String tempFile = getFile(tempFilename);
-		int newline = tempFile.indexOf(System.getProperty("line.separator"));
-		String filename = tempFile.substring(0, newline);
-		String content = tempFile.substring(newline + 1);
-
-		writeFile(filename, content, false);
-		deleteFile(tempFilename);
 	}
 
 	/**************************************************************************
@@ -350,7 +358,7 @@ public class Client extends RIONode {
 		} else if (clientCacheStatus.containsKey(filename)
 				&& (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite)) {
 			// have permissions
-			createFile(filename);
+			fs.createFile(filename);
 		} else {
 			// lock and perform rpc
 			if (this.managerAddr == -1) {
@@ -377,7 +385,7 @@ public class Client extends RIONode {
 		} else if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// have permissions
-			deleteFile(filename);
+			fs.deleteFile(filename);
 		} else {
 			// lock and perform rpc
 			if (this.managerAddr == -1) {
@@ -403,7 +411,7 @@ public class Client extends RIONode {
 			return;
 		} else if (clientCacheStatus.containsKey(filename)) {
 			// have permissions
-			String content = getFile(filename);
+			String content = fs.getFile(filename);
 			printInfo("Got file, contents below:");
 			printInfo(content);
 		} else {
@@ -414,11 +422,14 @@ public class Client extends RIONode {
 		}
 	}
 
+	/*
+	 * TODO: Investigate the cause of the PUT<->DELETE loop near the bottom of
+	 * the PUT command chain in CCTester2ClientsCorrectness
+	 */
+
 	/**
 	 * Get ownership of a file and put to it
 	 * 
-	 * @param tokens
-	 * @param line
 	 * @throws IOException
 	 * @throws UnknownManagerException
 	 */
@@ -431,12 +442,12 @@ public class Client extends RIONode {
 			return;
 		} else if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-			// have ownership - writeFile varifies existance on disk
-			writeFile(filename, content, false);
+			// have ownership - writeFile verifies existence on disk
+			fs.writeFile(filename, content, false);
 		} else {
 			// lock and request ownership
 			clientLockFile(filename);
-			printInfo("requesting ownership of " + filename);
+			printVerbose("requesting ownership of " + filename);
 			SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
 			clientPendingOperations.put(filename, new PendingClientOperation(
 					ClientOperation.PUT, content));
@@ -465,11 +476,11 @@ public class Client extends RIONode {
 		} else if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// have ownership
-			writeFile(filename, content, true);
+			fs.writeFile(filename, content, true);
 		} else {
 			// lock and request ownership
 			clientLockFile(filename);
-			printInfo("requesting ownership of " + filename);
+			printVerbose("requesting ownership of " + filename);
 			SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
 			clientPendingOperations.put(filename, new PendingClientOperation(
 					ClientOperation.APPEND, content));
@@ -504,7 +515,7 @@ public class Client extends RIONode {
 	 */
 	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
-		printInfo("sending noop to " + server);
+		printVerbose("sending noop to " + server);
 		RIOSend(server, Protocol.NOOP, Utility.stringToByteArray(""));
 	}
 
@@ -520,7 +531,8 @@ public class Client extends RIONode {
 	 * Perform a create RPC to the given address
 	 */
 	public void createRPC(int address, String filename) {
-		printInfo("sending create rpc to " + address + " for file: " + filename);
+		printVerbose("sending create rpc to " + address + " for file: "
+				+ filename);
 		RIOSend(address, Protocol.CREATE, Utility.stringToByteArray(filename));
 	}
 
@@ -528,13 +540,18 @@ public class Client extends RIONode {
 	 * Perform a delete RPC to the given address
 	 */
 	public void deleteRPC(int address, String filename) {
-		printInfo("sending delete rpc to " + address + " for file: " + filename);
+		printVerbose("sending delete rpc to " + address + " for file: "
+				+ filename);
 		RIOSend(address, Protocol.DELETE, Utility.stringToByteArray(filename));
 	}
 
 	/*************************************************
 	 * end RPC methods
 	 ************************************************/
+
+	/*
+	 * Propagate errors back to clients, send aborts on failures, etc.
+	 */
 
 	/**
 	 * Process a command from user or file. Lowercases the command for further
@@ -547,7 +564,7 @@ public class Client extends RIONode {
 		try {
 			cmd = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
-			printError(ErrorCode.InvalidCommand, "");
+			printError("no command found");
 			return;
 		}
 
@@ -560,12 +577,16 @@ public class Client extends RIONode {
 			Object[] args = { tokens, line };
 			handler.invoke(this, args);
 		} catch (NoSuchMethodException e) {
-			printError(ErrorCode.InvalidCommand, cmd);
+			printError("invalid command");
 		} catch (IllegalArgumentException e) {
-			printError(ErrorCode.DynamicCommandError, cmd);
+			printError("invalid command");
 		} catch (IllegalAccessException e) {
-			printError(ErrorCode.DynamicCommandError, cmd);
+			printError("invalid command");
 		} catch (InvocationTargetException e) {
+			/*
+			 * TODO: HIGH: Command failed, abort tx
+			 */
+
 			printError(e);
 		}
 	}
@@ -599,15 +620,18 @@ public class Client extends RIONode {
 		Logger.info(sb.toString());
 	}
 
-	// TODO: cleanup and comment printError
-
+	/**
+	 * Prints node name and then exception via logger
+	 */
 	public void printError(Exception e) {
 		StringBuilder sb = appendNodeAddress();
 		sb.append("caught exception (see below)");
-		Logger.error(sb.toString());
 		Logger.error(e);
 	}
 
+	/**
+	 * Print node name, error, then msg
+	 */
 	public void printError(String msg) {
 		StringBuilder sb = appendNodeAddress();
 		sb.append("Error: ");
@@ -615,227 +639,9 @@ public class Client extends RIONode {
 		Logger.error(sb.toString());
 	}
 
-	// TODO: reevaluate the existance of these helpers - above seem eaiser
-
-	/**
-	 * Convenience method for printing errors
-	 */
-	public void printError(int error, String command, int server,
-			String filename) {
-		StringBuilder sb = appendNodeAddress();
-		sb.append(" ");
-		appendError(sb, command);
-		sb.append(" on server ");
-		sb.append(server);
-		sb.append(", file ");
-		sb.append(filename);
-		Logger.error(error, sb.toString());
-	}
-
-	/**
-	 * Stub for printError for when less information is available
-	 */
-	public void printError(int error, String command, String filename) {
-		StringBuilder sb = appendNodeAddress();
-		sb.append(" ");
-		appendError(sb, command);
-		sb.append(" on file ");
-		sb.append(filename);
-		Logger.error(error, sb.toString());
-	}
-
-	/**
-	 * Stub for printError for when even less information is available
-	 */
-	public void printError(int error, String command) {
-		StringBuilder sb = appendNodeAddress();
-		sb.append(" ");
-		appendError(sb, command);
-		Logger.error(error, sb.toString());
-	}
-
-	/**
-	 * Helper that appends Error: label
-	 */
-	protected StringBuilder appendError(StringBuilder sb, String command) {
-		sb.append("Error: ");
-		sb.append(command);
-		sb.append(" returned error code ");
-		return sb;
-	}
-
 	/*************************************************
 	 * end logger wrappers
 	 ************************************************/
-
-	/*************************************************
-	 * begin FS methods
-	 ************************************************/
-
-	/*
-	 * TODO: LOW: Log a different Synoptic event when temp files are written /
-	 * deleted
-	 */
-
-	/**
-	 * Creates a file on the local filesystem
-	 * 
-	 * @param filename
-	 *            the file to create
-	 * @throws IOException
-	 */
-	public void createFile(String filename) throws IOException {
-
-		printVerbose("creating file: " + filename);
-		logSynopticEvent("CREATING-FILE");
-
-		if (Utility.fileExists(this, filename)) {
-			throw new FileAlreadyExistsException();
-		} else {
-			PersistentStorageWriter writer = getWriter(filename, false);
-			writer.close();
-		}
-	}
-
-	/**
-	 * Deletes a file from the local file system
-	 * 
-	 * @param filename
-	 *            the file to delete
-	 * @throws IOException
-	 */
-	public void deleteFile(String filename) throws IOException {
-
-		printVerbose("deleting file: " + filename);
-		logSynopticEvent("DELETING-FILE");
-
-		if (!Utility.fileExists(this, filename)) {
-			throw new FileNotFoundException();
-		} else {
-			PersistentStorageWriter writer = getWriter(filename, false);
-			if (!writer.delete())
-				throw new IOException("delete failed");
-			writer.close();
-		}
-
-	}
-
-	/**
-	 * Local get file
-	 * 
-	 * @param filename
-	 * @throws IOException
-	 */
-	public String getFile(String filename) throws IOException {
-
-		printVerbose("getting file: " + filename);
-		logSynopticEvent("GETTING-FILE");
-
-		// check if the file exists
-		if (!Utility.fileExists(this, filename)) {
-			throw new FileNotFoundException();
-		} else {
-			// read and return the file if it does
-			StringBuilder contents = new StringBuilder();
-			PersistentStorageReader reader = getReader(filename);
-
-			/*
-			 * TODO: This is the same suck as in writeTempFile. See commet
-			 * there, refactor writeTempFile to use getFile, and fix the suck
-			 * (probably need to use read instead of readLine...).
-			 */
-			String inLine;
-			while ((inLine = reader.readLine()) != null) {
-				contents.append(inLine);
-				contents.append(System.getProperty("line.separator"));
-			}
-
-			reader.close();
-			return contents.toString();
-		}
-	}
-
-	/*
-	 * TODO: Investigate the cause of the PUT<->DELETE loop near the bottom of
-	 * the PUT command chain in CCTester2ClientsCorrectness
-	 */
-
-	/**
-	 * Writes a file to the local filesystem. Fails if the file does not exist
-	 * already
-	 * 
-	 * @param filename
-	 *            the file name to write to
-	 * @param contents
-	 *            the contents to write
-	 * @throws IOException
-	 */
-	public void writeFile(String filename, String contents, boolean append)
-			throws IOException {
-
-		if (append) {
-			printVerbose("appending to file: " + filename + ", contents: "
-					+ contents);
-			logSynopticEvent("APPENDING-FILE");
-		} else {
-			printVerbose("putting to file: " + filename + ", contents: "
-					+ contents);
-			logSynopticEvent("PUTTING-FILE");
-		}
-
-		if (!Utility.fileExists(this, filename)) {
-			throw new FileNotFoundException();
-		} else {
-			if (!append) {
-				// save current contents in temp file
-				writeTempFile(filename);
-			}
-
-			PersistentStorageWriter writer = getWriter(filename, append);
-			writer.write(contents);
-			writer.close();
-
-			if (!append) {
-				deleteFile(tempFilename);
-			}
-		}
-	}
-
-	/**
-	 * Used to temporarily save a file that could be lost in a crash since
-	 * getWriter deletes a file it doesn't open for appending.
-	 * 
-	 * @param filename
-	 * @throws FileNotFoundException
-	 * @throws IOException
-	 */
-	protected void writeTempFile(String filename) throws IOException {
-		StringBuilder oldContent = new StringBuilder();
-		oldContent.append(filename);
-		oldContent.append(System.getProperty("line.separator"));
-
-		PersistentStorageReader oldFileReader = getReader(filename);
-
-		/*
-		 * TODO: This sucks. I'm going to assume all files end w/ newlines for
-		 * now. The readline(), while loop method was writing "null" to files.
-		 */
-		String inLine;
-		while ((inLine = oldFileReader.readLine()) != null) {
-			oldContent.append(inLine);
-			oldContent.append(System.getProperty("line.separator"));
-		}
-
-		oldFileReader.close();
-
-		PersistentStorageWriter temp = getWriter(tempFilename, false);
-		temp.write(oldContent.toString());
-		temp.close();
-	}
-
-	/****************************************************
-	 * end FS methods
-	 ***************************************************/
 
 	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
@@ -925,6 +731,15 @@ public class Client extends RIONode {
 				printError("received invalid packet");
 			}
 		} catch (Exception e) {
+
+			/*
+			 * TODO: HIGH: All errors should be caught and dealt w/ here
+			 * 
+			 * Manager side: respond by sendError to from or failing tx
+			 * 
+			 * Client side: printError, abort tx?
+			 */
+
 			printError(e);
 		}
 	}
@@ -932,6 +747,11 @@ public class Client extends RIONode {
 	/*************************************************
 	 * begin manager-only cache coherency functions
 	 ************************************************/
+
+	/**
+	 * TODO: HIGH: Manager: send heartbeat pings to client in middle of
+	 * transactions, fail their transactions if they are too slow in responding
+	 */
 
 	/**
 	 * Create RPC
@@ -987,7 +807,7 @@ public class Client extends RIONode {
 	protected void createNewFile(String filename, int client)
 			throws IOException, NotManagerException {
 		// local create
-		createFile(filename);
+		fs.createFile(filename);
 
 		// give RW to the requester for filename
 		managerUpdateCacheStatus(CacheStatuses.ReadWrite, client, filename);
@@ -1004,10 +824,12 @@ public class Client extends RIONode {
 	 * @throws NotManagerException
 	 * @throws IOException
 	 * @throws PrivilegeLevelDisagreementException
+	 * @throws InconsistentPrivelageLevelsDetectedException
 	 */
 	protected void receiveDelete(int from, String filename)
 			throws NotManagerException, IOException,
-			PrivilegeLevelDisagreementException {
+			PrivilegeLevelDisagreementException,
+			InconsistentPrivelageLevelsDetectedException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
@@ -1039,14 +861,16 @@ public class Client extends RIONode {
 		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
 				if (rw != null) {
-					printError("Detected multiple owners on file: " + filename);
+					throw new InconsistentPrivelageLevelsDetectedException(
+							"Detected multiple owners on file: " + filename);
 				}
 				rw = entry.getKey();
 			}
 			if (entry.getValue().equals(CacheStatuses.ReadOnly)) {
 				if (rw != null) {
-					printError("Detected clients with simultaneous RW and RO on file: "
-							+ filename);
+					throw new InconsistentPrivelageLevelsDetectedException(
+							"Detected clients with simultaneous RW and RO on file: "
+									+ filename);
 				}
 				if (entry.getKey() != from) {
 					ro.add(entry.getKey());
@@ -1094,7 +918,7 @@ public class Client extends RIONode {
 	public void deleteExistingFile(String filename, int from)
 			throws IOException {
 		// delete the file locally
-		deleteFile(filename);
+		fs.deleteFile(filename);
 
 		// update permissions
 		printVerbose("marking file " + filename + " as unowned");
@@ -1133,7 +957,8 @@ public class Client extends RIONode {
 
 	protected void receiveQ(int client, String filename, int receivedProtocol,
 			int responseProtocol, int forwardingProtocol, boolean preserveROs)
-			throws IOException, NotManagerException {
+			throws IOException, NotManagerException,
+			InconsistentPrivelageLevelsDetectedException {
 		// check if locked
 		if (managerQueueRequestIfLocked(client, receivedProtocol, filename)) {
 			return;
@@ -1161,9 +986,10 @@ public class Client extends RIONode {
 		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
 			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
 				if (rw != null) {
-					printError("multiple owners " + "(" + rw + " and "
-							+ entry.getKey() + ") detected on file: "
-							+ filename);
+					throw new InconsistentPrivelageLevelsDetectedException(
+							"multiple owners " + "(" + rw + " and "
+									+ entry.getKey() + ") detected on file: "
+									+ filename);
 				}
 				rw = entry.getKey();
 			} else if (entry.getValue().equals(CacheStatuses.ReadOnly)
@@ -1174,8 +1000,9 @@ public class Client extends RIONode {
 		}
 
 		if (rw != null && ros.size() > 0) {
-			printError("simultaneous RW (" + rw + ") and ROs ("
-					+ ros.toString() + ") detected on file: " + filename);
+			throw new InconsistentPrivelageLevelsDetectedException(
+					"simultaneous RW (" + rw + ") and ROs (" + ros.toString()
+							+ ") detected on file: " + filename);
 		}
 
 		if (rw != null) { // someone has RW
@@ -1217,7 +1044,7 @@ public class Client extends RIONode {
 		} else {
 			sendMsg.append(filename);
 			sendMsg.append(delimiter);
-			sendMsg.append(getFile(filename));
+			sendMsg.append(fs.getFile(filename));
 		}
 
 		byte[] payload = Utility.stringToByteArray(sendMsg.toString());
@@ -1239,6 +1066,10 @@ public class Client extends RIONode {
 	}
 
 	/**
+	 * TODO: HIGH: Delay all manager side unlocks until transaction finishes
+	 */
+
+	/**
 	 * Unlocks filename and checks if there is another request to service
 	 */
 	protected void managerUnlockFile(String filename) {
@@ -1258,7 +1089,8 @@ public class Client extends RIONode {
 	}
 
 	protected void receiveRQ(int client, String filename)
-			throws NotManagerException, IOException {
+			throws NotManagerException, IOException,
+			InconsistentPrivelageLevelsDetectedException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
@@ -1267,7 +1099,8 @@ public class Client extends RIONode {
 	}
 
 	protected void receiveWQ(int client, String filename)
-			throws NotManagerException, IOException {
+			throws NotManagerException, IOException,
+			InconsistentPrivelageLevelsDetectedException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
@@ -1391,8 +1224,7 @@ public class Client extends RIONode {
 				// still waiting for more ICs
 				List<Integer> waitingFor = managerPendingICs.get(filename);
 				StringBuilder waiting = new StringBuilder();
-				waiting
-						.append("Received IC but waiting for IC from clients : ");
+				waiting.append("Received IC but waiting for IC from clients : ");
 				for (int i : waitingFor) {
 					waiting.append(i + " ");
 				}
@@ -1460,7 +1292,7 @@ public class Client extends RIONode {
 			}
 		} else {
 			// read file contents
-			payload = filename + delimiter + getFile(filename);
+			payload = filename + delimiter + fs.getFile(filename);
 		}
 
 		// send update to manager
@@ -1549,7 +1381,7 @@ public class Client extends RIONode {
 		}
 
 		// delete locally
-		deleteFile(filename);
+		fs.deleteFile(filename);
 
 		// remove permissions
 		managerCacheStatuses.get(filename).clear();
@@ -1611,9 +1443,9 @@ public class Client extends RIONode {
 
 			// update in cache
 			if (!Utility.fileExists(this, filename)) {
-				createFile(filename);
+				fs.createFile(filename);
 			}
-			writeFile(filename, contents, false);
+			fs.writeFile(filename, contents, false);
 
 			// do what you originally intended with the file
 			if (clientPendingOperations.containsKey(filename)) {
@@ -1621,18 +1453,19 @@ public class Client extends RIONode {
 						.get(filename);
 				switch (intent.operation) {
 				case PUT:
-					writeFile(filename, intent.content, false);
+					fs.writeFile(filename, intent.content, false);
 					break;
 				case APPEND:
-					writeFile(filename, intent.content, true);
+					fs.writeFile(filename, intent.content, true);
 					break;
 				default:
-					printError("unhandled intent operation recalled on file: "
-							+ filename);
-					break;
+					throw new MissingPendingRequestException(
+							"unhandled intent operation recalled on file: "
+									+ filename);
 				}
 			} else {
-				printError("missing intent on file: " + filename);
+				throw new MissingPendingRequestException(
+						"missing intent on file: " + filename);
 			}
 
 			// unlock for local use
@@ -1650,7 +1483,7 @@ public class Client extends RIONode {
 			 * nice)
 			 */
 			// first write the file to save a local copy
-			writeFile(filename, contents, false);
+			fs.writeFile(filename, contents, false);
 
 			// look for pending request
 			boolean foundPendingRequest = false;
@@ -1715,11 +1548,12 @@ public class Client extends RIONode {
 
 			// update in cache
 			if (!Utility.fileExists(this, filename)) {
-				createFile(filename);
+				fs.createFile(filename);
 			}
-			writeFile(filename, contents, false);
+			fs.writeFile(filename, contents, false);
 
 			// print GET result
+			printInfo("Got file, contents below:");
 			printInfo(contents);
 
 			// unlock the file for local use
@@ -1731,7 +1565,7 @@ public class Client extends RIONode {
 		} else {
 
 			// first write the file to save a local copy
-			writeFile(filename, contents, false);
+			fs.writeFile(filename, contents, false);
 
 			/*
 			 * send out a RD to anyone requesting this - unlike for WD, this
@@ -1744,10 +1578,6 @@ public class Client extends RIONode {
 			// update the status of the client who sent the WD
 			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
 			m.put(from, CacheStatuses.ReadOnly);
-			/*
-			 * TODO: HIGH: Wayne, no need to put the map back into
-			 * managerCacheStatuses, we just mutate the contained map
-			 */
 		}
 	}
 
@@ -1792,20 +1622,20 @@ public class Client extends RIONode {
 
 			if (cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
 				if (!Utility.fileExists(this, filename)) {
-					createFile(filename);
+					fs.createFile(filename);
 				} else {
 					/*
 					 * file could have been deleted by someone else, and now I'm
 					 * creating, but I could still have an old copy on disk
 					 */
-					writeFile(filename, "", false);
+					fs.writeFile(filename, "", false);
 				}
 				clientUnlockFile(filename);
 				clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
 				if (Utility.fileExists(this, filename)) {
 					// migh not exist here
-					deleteFile(filename);
+					fs.deleteFile(filename);
 				}
 				clientUnlockFile(filename);
 				clientCacheStatus.put(filename, CacheStatuses.ReadWrite);

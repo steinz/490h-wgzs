@@ -41,6 +41,15 @@ public class Protocol {
 	public static final int IC = 18;
 	public static final int WD_DELETE = 19;
 
+	// Transcactions - Sent to manager
+	public static final int TX_START = 20;
+	public static final int TX_COMMIT = 21;
+	public static final int TX_ABORT = 22;
+	// Transactions - Sent to client
+	public static final int TX_SUCCESS = 23;
+	public static final int TX_FAILURE = 24;
+	// TODO: HIGH: update protocol stuff below
+	
 	// Error Type
 
 	public static final int SUCCESS = 125;
