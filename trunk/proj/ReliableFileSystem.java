@@ -13,8 +13,15 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class ReliableFileSystem {
 
-	protected static final String lineSeparator = System.getProperty("line.separator");
-	
+	/*
+	 * TODO: Some of the FS logging is out of order
+	 * 
+	 * ex) Put: PUT -> GET -> DEL-TEMP -> GET
+	 */
+
+	protected static final String lineSeparator = System
+			.getProperty("line.separator");
+
 	/**
 	 * Name of the temp file used by write when append is false
 	 */
@@ -188,6 +195,7 @@ public class ReliableFileSystem {
 	protected void writeTempFile(String filename) throws IOException {
 		String oldContent = getFile(filename);
 
+		n.logSynopticEvent("PUTTING-TEMP-FILE");
 		performWrite(tempFilename, false, oldContent.toString());
 	}
 
@@ -203,10 +211,11 @@ public class ReliableFileSystem {
 		writer.close();
 	}
 
-	protected void performWriteLine(String filename, boolean append, String contents) throws IOException {
+	protected void performWriteLine(String filename, boolean append,
+			String contents) throws IOException {
 		performWrite(filename, append, contents + lineSeparator);
 	}
-	
+
 	/**
 	 * Cleans up after a crash
 	 * 
@@ -220,7 +229,7 @@ public class ReliableFileSystem {
 			// Do nothing if we don't have a temp file
 			return;
 		}
-		
+
 		String tempFile = getFile(tempFilename);
 		int newline = tempFile.indexOf(lineSeparator);
 		String filename = tempFile.substring(0, newline);
