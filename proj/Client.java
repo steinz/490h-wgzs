@@ -503,11 +503,6 @@ public class Client extends RIONode {
 		}
 	}
 
-	/*
-	 * TODO: Investigate the cause of the PUT<->DELETE loop near the bottom of
-	 * the PUT command chain in CCTester2ClientsCorrectness
-	 */
-
 	/**
 	 * Get ownership of a file and put to it
 	 * 
@@ -1660,7 +1655,9 @@ public class Client extends RIONode {
 			printVerbose("got ReadWrite on " + filename);
 			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 
-			// update in cache
+			/*
+			 *  update in cache (not strictly necessary w/o txs on PUTs)
+			 */
 			if (!Utility.fileExists(this, filename)) {
 				fs.createFile(filename);
 			}
