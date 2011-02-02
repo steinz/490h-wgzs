@@ -1,3 +1,9 @@
+/**
+ * CSE 490h
+ * 
+ * @author wayger, steinz
+ */
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
@@ -7,15 +13,12 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class ReliableFileSystem {
 
+	protected static final String lineSeparator = System.getProperty("line.separator");
+	
 	/**
 	 * Name of the temp file used by write when append is false
 	 */
 	protected String tempFilename;
-
-	/**
-	 * Name of the log file used by FS operations
-	 */
-	protected String logFilename;
 
 	/**
 	 * The client object this FS is associated with - used by the Persistent
@@ -23,10 +26,9 @@ public class ReliableFileSystem {
 	 */
 	protected Client n;
 
-	public ReliableFileSystem(Client n, String tempFilename, String logFilename) {
+	public ReliableFileSystem(Client n, String tempFilename) {
 		this.n = n;
 		this.tempFilename = tempFilename;
-		this.logFilename = logFilename;
 	}
 
 	/**
@@ -95,7 +97,7 @@ public class ReliableFileSystem {
 			String inLine;
 			while ((inLine = reader.readLine()) != null) {
 				contents.append(inLine);
-				contents.append(System.getProperty("line.separator"));
+				contents.append(lineSeparator);
 			}
 
 			reader.close();
@@ -201,22 +203,28 @@ public class ReliableFileSystem {
 		writer.close();
 	}
 
+	protected void performWriteLine(String filename, boolean append, String contents) throws IOException {
+		performWrite(filename, append, contents + lineSeparator);
+	}
+	
 	/**
-	 * Replaces the file on disk with the temp file to recover from a crash
+	 * Cleans up after a crash
+	 * 
+	 * Writes any temp file on disk to the proper file
 	 * 
 	 * @throws FileNotFoundException
 	 * @throws IOException
 	 */
-	protected void recoverTempFile() throws FileNotFoundException, IOException {
+	protected void recover() throws FileNotFoundException, IOException {
 		if (!Utility.fileExists(n, tempFilename)) {
 			// Do nothing if we don't have a temp file
 			return;
 		}
 		
 		String tempFile = getFile(tempFilename);
-		int newline = tempFile.indexOf(System.getProperty("line.separator"));
+		int newline = tempFile.indexOf(lineSeparator);
 		String filename = tempFile.substring(0, newline);
-		String content = tempFile.substring(newline + System.getProperty("line.separator").length());
+		String content = tempFile.substring(newline + lineSeparator.length());
 
 		performWrite(filename, false, content);
 		deleteFile(tempFilename);
