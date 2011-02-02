@@ -16,6 +16,8 @@ import java.util.Queue;
 import java.util.StringTokenizer;
 import java.util.Map.Entry;
 
+import edu.washington.cs.cse490h.lib.Utility;
+
 /*
  * TODO: HIGH: Implement TransactionalFileSystem
  * 
@@ -135,6 +137,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	 */
 	protected static class TransactionLog {
 
+		protected String logFilename;
+		
 		protected TransactionalFileSystem fs;
 
 		/**
@@ -143,8 +147,9 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 */
 		Map<Integer, Queue<PendingOperation>> queuedOperations;
 
-		public TransactionLog(TransactionalFileSystem fs) {
+		public TransactionLog(TransactionalFileSystem fs, String logFilename) {
 			this.fs = fs;
+			this.logFilename = logFilename;
 			queuedOperations = new HashMap<Integer, Queue<PendingOperation>>();
 		}
 
@@ -204,6 +209,11 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			 * PendingOperation objects or just written and read externally.
 			 */
 
+			if (!Utility.fileExists(fs.n, logFilename)) {
+				// no log, so nothing to do
+				return;
+			}
+			
 			// read log from disk, parsing lines into PendingOperation objects
 			String log = "";
 
@@ -247,13 +257,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		}
 
 		/**
-		 * Clear the log file
-		 */
-		public void clear() {
-
-		}
-
-		/**
 		 * Add a new operation to the given client's queue
 		 * 
 		 * @throws TransactionException
@@ -290,16 +293,19 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		// setup the log file
 		this.logFilename = logFilename;
-		try {
-			// create the log if necessary
-			createFile(logFilename);
-		} finally {
-			// clear the log
-			performWrite(logFilename, false, "");
-		}
 
 		// setup the log object
-		this.txLog = new TransactionLog(this);
+		this.txLog = new TransactionLog(this, this.logFilename);
+		
+		// recover from the log if necessary
+		this.recover();
+		
+		// create or clear the log file on disk
+		if (Utility.fileExists(n, logFilename)) {
+			performWrite(logFilename, false, "");
+		} else {
+			createFile(logFilename);
+		}
 	}
 
 	/**
@@ -307,10 +313,9 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	 * transaction log and then clears the log on disk.
 	 */
 	@Override
-	protected void recover() throws FileNotFoundException, IOException {
+	public void recover() throws FileNotFoundException, IOException {
 		super.recover();
 		txLog.recover();
-		txLog.clear();
 	}
 
 	public void createFileTentative(int client, String filename)

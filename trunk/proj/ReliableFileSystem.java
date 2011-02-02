@@ -215,7 +215,7 @@ public class ReliableFileSystem {
 	 * @throws FileNotFoundException
 	 * @throws IOException
 	 */
-	protected void recover() throws FileNotFoundException, IOException {
+	public void recover() throws FileNotFoundException, IOException {
 		if (!Utility.fileExists(n, tempFilename)) {
 			// Do nothing if we don't have a temp file
 			return;

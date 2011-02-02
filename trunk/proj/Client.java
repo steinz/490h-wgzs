@@ -338,15 +338,6 @@ public class Client extends RIONode {
 		} catch (IOException e) {
 			printError(e);
 		}
-
-		// Look for a temp file to recover
-		try {
-			fs.recover();
-		} catch (FileNotFoundException e) {
-			printError(e);
-		} catch (IOException e) {
-			printError(e);
-		}
 	}
 
 	/**************************************************************************
