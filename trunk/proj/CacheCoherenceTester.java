@@ -20,6 +20,11 @@ import edu.washington.cs.cse490h.lib.Callback;
 public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	/*
+	 * TODO: SYNOPTIC: Having each client log to their own file and limit each
+	 * client to one operation at a time
+	 */
+
+	/*
 	 * TODO: LOW: Unit tests could be nice to have for this (w/ different
 	 * seeds?) The framework might also be helpful for testing transactions for
 	 * project 3.

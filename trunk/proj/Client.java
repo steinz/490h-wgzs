@@ -3,7 +3,6 @@
  * @author wayger, steinz
  */
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -34,8 +33,14 @@ import edu.washington.cs.cse490h.lib.Utility;
  * commands to the method named <cmdName>Handler.
  * 
  * TODO: Managers and Clients are distinct in our implementation. That is, a
- * manager is not also a client. We should change receive methods in the so that
- * the manager acts as a client when it should and as manager otherwise.
+ * manager is not also a client. We should change the receive methods so that
+ * the manager acts as a client when it should and as manager otherwise. This
+ * might require splitting existing messages types that both node types can
+ * receive (WD) into two distinct messages types (WD_TO_SERVER and
+ * WD_TO_CLIENT).
+ * 
+ * Event-Drive Framework + Reliable in Order Messaging + Reliable FS + RPC + IVY
+ * CacheCoherencey (Extended w/ Create and Delete) + 2PC Transactions
  */
 public class Client extends RIONode {
 
@@ -676,7 +681,13 @@ public class Client extends RIONode {
 	 ************************************************/
 
 	/*
-	 * Propagate errors back to clients, send aborts on failures, etc.
+	 * TODO: HIGH: Propagate errors back to clients, send aborts on failures,
+	 * etc.
+	 */
+
+	/**
+	 * TODO: LOW: Associate a unique command_id with every operation to make
+	 * Synoptic's trace mapping easier
 	 */
 
 	/**
