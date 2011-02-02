@@ -43,7 +43,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	 * 
 	 */
 	protected static class PendingOperation {
-		protected static final String lineSeparator = System.getProperty("line.separator");
+		protected static final String lineSeparator = System
+				.getProperty("line.separator");
 
 		protected int client;
 
@@ -113,7 +114,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			int len = Integer.parseInt(sLen);
 
 			int next = offset + sClient.length() + sOp.length()
-					+ filename.length() + sLen.length() + 4 * lineSeparator.length();
+					+ filename.length() + sLen.length() + 4
+					* lineSeparator.length();
 			String contents;
 			if (len > -1) {
 				contents = log.substring(next, next + len);
@@ -146,13 +148,22 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			queuedOperations = new HashMap<Integer, Queue<PendingOperation>>();
 		}
 
+		/**
+		 * Blindly creates a new queue for client
+		 * 
+		 * @param client
+		 */
 		public void createQueue(int client) {
-			if (!queuedOperations.containsKey(client)) {
-				queuedOperations
-						.put(client, new LinkedList<PendingOperation>());
-			}
+			queuedOperations.put(client, new LinkedList<PendingOperation>());
 		}
 
+		/**
+		 * Commits each operation in the queue for client and then clears the
+		 * queue
+		 * 
+		 * @param client
+		 * @throws IOException
+		 */
 		public void commitQueue(int client) throws IOException {
 			Queue<PendingOperation> clientQueue = queuedOperations.get(client);
 			for (PendingOperation op : clientQueue) {
@@ -174,6 +185,11 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			clientQueue.clear();
 		}
 
+		/**
+		 * Blindly clears the queue for client
+		 * 
+		 * @param client
+		 */
 		public void abortQueue(int client) {
 			queuedOperations.get(client).clear();
 		}
@@ -210,7 +226,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 					.entrySet()) {
 				List<PendingOperation> ops = entry.getValue();
 
-				// TOOD: HIGH: Factor this loop out or something, it hurts my face
+				// TOOD: HIGH: Factor this loop out or something, it hurts my
+				// face
 				for (int i = 0; i < ops.size(); i++) {
 					PendingOperation op = ops.get(ops.size() - 1 - i);
 					if (op.op == Operation.TXCOMMIT) {
@@ -304,29 +321,41 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		PendingOperation op = new PendingOperation(client, Operation.CREATE,
 				filename);
-		performWrite(logFilename, true, op.toLogString() + PendingOperation.lineSeparator);
+		performWrite(logFilename, true, op.toLogString()
+				+ PendingOperation.lineSeparator);
 		txLog.enque(client, op);
 	}
 
-	// TODO: HIGH: Implement other Tentative TransactionalFS ops
-
-	public void deleteFileTentative(int client, String filename) throws IOException {
+	public void deleteFileTentative(int client, String filename)
+			throws IOException, TransactionException {
 		PendingOperation op = new PendingOperation(client, Operation.DELETE,
 				filename);
 		performWrite(logFilename, true, op.toLogString());
+		txLog.enque(client, op);
 	}
 
 	/*
 	 * TODO: HIGH: Do we need a tentative get file? Depends on the semantics of
-	 * transactions... see the disccusion at the top of Client about what
-	 * happens for a get called during a transaction
+	 * transactions I think... see the disccusion at the top of Client about
+	 * what happens for a get called during a transaction
 	 * 
 	 * public String getFileTentative(int client, String filename) { }
 	 */
 
-	public void writeFileTentative(int client, String filename,
-			String contents, boolean append) {
+	// TODO: HIGH: Implement other Tentative TransactionalFS ops
 
+	public void writeFileTentative(int client, String filename,
+			String contents, boolean append) throws IOException,
+			TransactionException {
+		PendingOperation op;
+		if (append) {
+			op = new PendingOperation(client, Operation.APPEND, filename,
+					contents);
+		} else {
+			op = new PendingOperation(client, Operation.PUT, filename, contents);
+		}
+		performWrite(logFilename, true, op.toLogString());
+		txLog.enque(client, op);
 	}
 
 	public void startTransaction(int client) throws IOException,

@@ -40,7 +40,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 public class Client extends RIONode {
 
 	/*
-	 * TODO: HIGH: During a tx, consider:
+	 * TODO: ASK: During a tx, consider:
 	 * 
 	 * put test hello
 	 * 
