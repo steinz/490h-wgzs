@@ -10,23 +10,24 @@ public class ReliableFileSystem {
 	/**
 	 * Name of the temp file used by write when append is false
 	 */
-	protected static final String tempFilename = ".temp";
+	protected String tempFilename;
 
 	/**
 	 * Name of the log file used by FS operations
 	 */
-	protected static final String logFilename = ".log";
+	protected String logFilename;
 
+	/**
+	 * The client object this FS is associated with - used by the Persistent
+	 * Reader/Writer and for logging
+	 */
 	protected Client n;
 
-	public ReliableFileSystem(Client n) {
+	public ReliableFileSystem(Client n, String tempFilename, String logFilename) {
 		this.n = n;
+		this.tempFilename = tempFilename;
+		this.logFilename = logFilename;
 	}
-
-	/*
-	 * TODO: LOW: Log a different Synoptic event when temp files are written /
-	 * deleted
-	 */
 
 	/**
 	 * Creates a file on the local filesystem
@@ -36,13 +37,12 @@ public class ReliableFileSystem {
 	 * @throws IOException
 	 */
 	public void createFile(String filename) throws IOException {
-
-		n.printVerbose("creating file: " + filename);
-		n.logSynopticEvent("CREATING-FILE");
+		logAccess(filename, "creating");
 
 		if (Utility.fileExists(n, filename)) {
 			throw new FileAlreadyExistsException();
 		} else {
+			// This implicitly creates the file on disk
 			PersistentStorageWriter writer = n.getWriter(filename, false);
 			writer.close();
 		}
@@ -56,19 +56,17 @@ public class ReliableFileSystem {
 	 * @throws IOException
 	 */
 	public void deleteFile(String filename) throws IOException {
-
-		n.printVerbose("deleting file: " + filename);
-		n.logSynopticEvent("DELETING-FILE");
+		logAccess(filename, "deleting");
 
 		if (!Utility.fileExists(n, filename)) {
 			throw new FileNotFoundException();
 		} else {
 			PersistentStorageWriter writer = n.getWriter(filename, false);
-			if (!writer.delete())
+			if (!writer.delete()) {
 				throw new IOException("delete failed");
+			}
 			writer.close();
 		}
-
 	}
 
 	/**
@@ -79,8 +77,7 @@ public class ReliableFileSystem {
 	 */
 	public String getFile(String filename) throws IOException {
 
-		n.printVerbose("getting file: " + filename);
-		n.logSynopticEvent("GETTING-FILE");
+		logAccess(filename, "getting");
 
 		// check if the file exists
 		if (!Utility.fileExists(n, filename)) {
@@ -91,9 +88,9 @@ public class ReliableFileSystem {
 			PersistentStorageReader reader = n.getReader(filename);
 
 			/*
-			 * TODO: This is the same suck as in writeTempFile. See commet
-			 * there, refactor writeTempFile to use getFile, and fix the suck
-			 * (probably need to use read instead of readLine...).
+			 * TODO: This sucks. I'm going to assume all files end w/ newlines
+			 * for now. The readline(), while loop method was writing "null" to
+			 * files. Probably need to use read instead of readLine.
 			 */
 			String inLine;
 			while ((inLine = reader.readLine()) != null) {
@@ -120,13 +117,9 @@ public class ReliableFileSystem {
 			throws IOException {
 
 		if (append) {
-			n.printVerbose("appending to file: " + filename + ", contents: "
-					+ contents);
-			n.logSynopticEvent("APPENDING-FILE");
+			logAccess(filename, "appending", contents);
 		} else {
-			n.printVerbose("putting to file: " + filename + ", contents: "
-					+ contents);
-			n.logSynopticEvent("PUTTING-FILE");
+			logAccess(filename, "putting", contents);
 		}
 
 		if (!Utility.fileExists(n, filename)) {
@@ -137,9 +130,7 @@ public class ReliableFileSystem {
 				writeTempFile(filename);
 			}
 
-			PersistentStorageWriter writer = n.getWriter(filename, append);
-			writer.write(contents);
-			writer.close();
+			performWrite(filename, append, contents);
 
 			if (!append) {
 				deleteFile(tempFilename);
@@ -148,35 +139,66 @@ public class ReliableFileSystem {
 	}
 
 	/**
+	 * Logs access of type operation on filename via n.printVerbose and
+	 * n.logSynopticEvent. Convenience version for operations w/o content.
+	 * 
+	 * @param filename
+	 * @param operation
+	 *            ex) "getting"
+	 */
+	protected void logAccess(String filename, String operation) {
+		logAccess(filename, operation, null);
+	}
+
+	/**
+	 * Logs access of type operation on filename via n.printVerbose and
+	 * n.logSynopticEvent.
+	 * 
+	 * @param filename
+	 * @param operation
+	 *            ex) "getting"
+	 */
+	protected void logAccess(String filename, String operation, String content) {
+		StringBuilder msg = new StringBuilder();
+		msg.append(operation.toLowerCase());
+		msg.append(" file: ");
+		msg.append(filename);
+		if (content != null) {
+			msg.append(" content: ");
+			msg.append(content);
+		}
+		n.printVerbose(msg.toString());
+
+		if (filename.equals(tempFilename)) {
+			n.logSynopticEvent(operation.toUpperCase() + "-TEMP-FILE");
+		} else {
+			n.logSynopticEvent(operation.toUpperCase() + "-FILE");
+		}
+	}
+
+	/**
 	 * Used to temporarily save a file that could be lost in a crash since
 	 * getWriter deletes a file it doesn't open for appending.
 	 * 
-	 * @param filename
 	 * @throws FileNotFoundException
 	 * @throws IOException
 	 */
 	protected void writeTempFile(String filename) throws IOException {
-		StringBuilder oldContent = new StringBuilder();
-		oldContent.append(filename);
-		oldContent.append(System.getProperty("line.separator"));
+		String oldContent = getFile(filename);
 
-		PersistentStorageReader oldFileReader = n.getReader(filename);
+		performWrite(tempFilename, false, oldContent.toString());
+	}
 
-		/*
-		 * TODO: This sucks. I'm going to assume all files end w/ newlines for
-		 * now. The readline(), while loop method was writing "null" to files.
-		 */
-		String inLine;
-		while ((inLine = oldFileReader.readLine()) != null) {
-			oldContent.append(inLine);
-			oldContent.append(System.getProperty("line.separator"));
-		}
-
-		oldFileReader.close();
-
-		PersistentStorageWriter temp = n.getWriter(tempFilename, false);
-		temp.write(oldContent.toString());
-		temp.close();
+	/**
+	 * Actually performs a write of contents to filename
+	 * 
+	 * @throws IOException
+	 */
+	protected void performWrite(String filename, boolean append, String contents)
+			throws IOException {
+		PersistentStorageWriter writer = n.getWriter(filename, append);
+		writer.write(contents);
+		writer.close();
 	}
 
 	/**
@@ -190,14 +212,13 @@ public class ReliableFileSystem {
 			// Do nothing if we don't have a temp file
 			return;
 		}
-
+		
 		String tempFile = getFile(tempFilename);
 		int newline = tempFile.indexOf(System.getProperty("line.separator"));
 		String filename = tempFile.substring(0, newline);
-		String content = tempFile.substring(newline + 1);
+		String content = tempFile.substring(newline + System.getProperty("line.separator").length());
 
-		writeFile(filename, content, false);
+		performWrite(filename, false, content);
 		deleteFile(tempFilename);
 	}
-
 }
