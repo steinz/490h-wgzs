@@ -133,6 +133,8 @@ public class Logger {
 		}
 	}
 
+	//TODO: LOW: keep the writer open between entries
+	
 	public static void writeToLog(String message) {
 		try {
 			BufferedWriter r = null;

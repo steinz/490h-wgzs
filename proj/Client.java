@@ -33,14 +33,93 @@ import edu.washington.cs.cse490h.lib.Utility;
  * handle commands passed in by onCommand - onCommand dynamically dispatches
  * commands to the method named <cmdName>Handler.
  * 
- * TODO: LOW: Managers and Clients are distinct in our implementation. That is,
- * a manager is not also a client. We should change receive methods in the so
- * that the manager acts as a client when it should and as manager otherwise.
+ * TODO: Managers and Clients are distinct in our implementation. That is, a
+ * manager is not also a client. We should change receive methods in the so that
+ * the manager acts as a client when it should and as manager otherwise.
  */
 public class Client extends RIONode {
 
-	/**
-	 * TODO: HIGH: We require locking of files in order by name, document this
+	/*
+	 * TODO: HIGH: During a tx, consider:
+	 * 
+	 * put test hello
+	 * 
+	 * txstart
+	 * 
+	 * create test
+	 * 
+	 * put test world
+	 * 
+	 * get test
+	 * 
+	 * txcommit
+	 * 
+	 * Would "get test" return "hello" or "world"? That is, do operations in the
+	 * transaction occur in order? If so, we have to either write commands done
+	 * during a transaction to disk so the existing code works, or have
+	 * fs.getFile check it's in memory data structures for files that could have
+	 * been changed by this transaction but haven't been written to disk yet -
+	 * checking in memory data structures shouldn't be too hard implement.
+	 * 
+	 * A similar question is whether or not:
+	 * 
+	 * txstart
+	 * 
+	 * create test
+	 * 
+	 * get test
+	 * 
+	 * txcommit
+	 * 
+	 * fails during the get (because test does not exist yet). I think the
+	 * general question is "can a client mutate a file twice in a commit?"
+	 * 
+	 * put test hello
+	 * 
+	 * txstart
+	 * 
+	 * append test _world
+	 * 
+	 * get test -> display to user
+	 * 
+	 * txcommit
+	 * 
+	 * The above transaction would not behave as expected if we don't check
+	 * logged but not committed files for changes within a transaction.
+	 * 
+	 * As an aside, does the get call return to the user before the transaction
+	 * commits? I'm not sure how that would be implemented, but it seems a
+	 * little unintuitive that the client will get feedback from part of their
+	 * transaction before committing it.
+	 */
+
+	/*
+	 * TODO: ASK: I don't understand how all of this is going to get called from
+	 * external code. I would imagine someone would do something like:
+	 * 
+	 * backend.txstart(); // backend.onCommand("txstart"); //
+	 * backend.txstartHandler(null, "");
+	 * 
+	 * backend.append(steinz.friends, "wayne,"); //
+	 * backend.appendHandler("append steinz.friends wayne,");
+	 * 
+	 * backend.append(wayne.friends, "steinz,"); //
+	 * backend.appendHandler("append wayne.friends steinz,");
+	 * 
+	 * backend.txcommit(); // backend.onCommand("txcommit"); //
+	 * backend.txcommitHandler(null, "");
+	 * 
+	 * But then how does the caller actually check that the commit succeeded?
+	 * All commandHandlers return void right now. I guess we could have a
+	 * wrapper to this whole mess that implements the first command listed per
+	 * line, but does the second one internally, but I'm not sure how it would
+	 * get the contents of a get really without the Client cooperating with it
+	 * by, for instance, putting whatever it got last in a
+	 * "public String lastGot;"
+	 * 
+	 * We should have AT LEAST one QZ on interfacing/architecture - how to
+	 * actually build FB on top of this (tying in an interface / webserver /
+	 * whatever) doesn't seem trivial.
 	 */
 
 	/*
@@ -79,16 +158,15 @@ public class Client extends RIONode {
 	/**
 	 * Operation types the client can remember in a PendingClientOperation
 	 */
-	public static enum ClientOperation {
+	protected static enum ClientOperation {
 		PUT, APPEND
 	};
 
 	/**
-	 * Encapsulates a client command and argument
-	 * 
-	 * This includes operation and contents but not filename
+	 * Encapsulates a client command and argument. This includes operation and
+	 * contents but not filename, which is the key used to look up this object.
 	 */
-	protected class PendingClientOperation {
+	protected static class PendingClientOperation {
 		/**
 		 * What we intend to do later
 		 */
@@ -127,7 +205,7 @@ public class Client extends RIONode {
 	protected static final String tempFilename = ".temp";
 
 	/**
-	 * Name of the log file used by FS operations
+	 * Name of the log file used by FS transactions
 	 */
 	protected static final String logFilename = ".log";
 
@@ -164,6 +242,11 @@ public class Client extends RIONode {
 	 * Saves commands on client side locked files
 	 */
 	protected Map<String, Queue<String>> clientQueuedCommands;
+
+	/**
+	 * Whether or not the client is currently performing a transaction
+	 */
+	protected boolean clientTransacting;
 
 	/*************************************************
 	 * end client data structures
@@ -212,6 +295,13 @@ public class Client extends RIONode {
 	private Map<String, Integer> managerPendingRPCDeleteRequests;
 
 	/**
+	 * A set of node addresses currently performing transactions
+	 * 
+	 * TODO: HIGH: Could be pushed down into the TransactionalFileSystem
+	 */
+	protected Set<Integer> managerTransactionsInProgress;
+
+	/**
 	 * Status of who is waiting to create this file via RPC
 	 */
 	private Map<String, Integer> managerPendingRPCCreateRequests;
@@ -220,20 +310,10 @@ public class Client extends RIONode {
 	 * end manager only data structures
 	 ************************************************/
 
-	/*
-	 * TODO: HIGH: Implement TransactionalFileSystem
-	 * 
-	 * All FS operations write to log and queue op in memory.
-	 * 
-	 * Queued ops are written to disk on commit, then log is cleared.
-	 * 
-	 * Queue is thrown out on abort.
-	 */
-
 	/**
 	 * FS for this node
 	 */
-	protected ReliableFileSystem fs;
+	protected TransactionalFileSystem fs;
 
 	/**
 	 * Cleans up failed puts if necessary
@@ -246,17 +326,22 @@ public class Client extends RIONode {
 		this.clientPendingOperations = new HashMap<String, PendingClientOperation>();
 		this.clientLockedFiles = new HashSet<String>();
 		this.clientQueuedCommands = new HashMap<String, Queue<String>>();
+		this.clientTransacting = false;
 		this.isManager = false;
 		this.managerAddr = -1;
 
 		// Wipe the server log
 		Logger.eraseLog();
 
-		fs = new ReliableFileSystem(this);
+		try {
+			fs = new TransactionalFileSystem(this, tempFilename, logFilename);
+		} catch (IOException e) {
+			printError(e);
+		}
 
 		// Look for a temp file to recover
 		try {
-			fs.recoverTempFile();
+			fs.recover();
 		} catch (FileNotFoundException e) {
 			printError(e);
 		} catch (IOException e) {
@@ -418,7 +503,7 @@ public class Client extends RIONode {
 			// lock and get permissions
 			clientLockFile(filename);
 			printVerbose("requesting read access for " + filename);
-			SendToManager(Protocol.RQ, Utility.stringToByteArray(filename));
+			sendToManager(Protocol.RQ, Utility.stringToByteArray(filename));
 		}
 	}
 
@@ -448,7 +533,7 @@ public class Client extends RIONode {
 			// lock and request ownership
 			clientLockFile(filename);
 			printVerbose("requesting ownership of " + filename);
-			SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+			sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
 			clientPendingOperations.put(filename, new PendingClientOperation(
 					ClientOperation.PUT, content));
 
@@ -458,8 +543,6 @@ public class Client extends RIONode {
 	/**
 	 * Get ownership of a file and append to it
 	 * 
-	 * @param tokens
-	 * @param line
 	 * @throws IOException
 	 * @throws UnknownManagerException
 	 */
@@ -481,7 +564,7 @@ public class Client extends RIONode {
 			// lock and request ownership
 			clientLockFile(filename);
 			printVerbose("requesting ownership of " + filename);
-			SendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+			sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
 			clientPendingOperations.put(filename, new PendingClientOperation(
 					ClientOperation.APPEND, content));
 
@@ -517,6 +600,58 @@ public class Client extends RIONode {
 		int server = Integer.parseInt(tokens.nextToken());
 		printVerbose("sending noop to " + server);
 		RIOSend(server, Protocol.NOOP, Utility.stringToByteArray(""));
+	}
+
+	/**
+	 * Sends a TX_START if not already performing a transaction
+	 * 
+	 * @throws TransactionException
+	 * @throws UnknownManagerException
+	 */
+	public void txstartHandler(StringTokenizer tokens, String line)
+			throws TransactionException, UnknownManagerException {
+		if (clientTransacting) {
+			throw new TransactionException(
+					"client already performing a transaction");
+		} else {
+			clientTransacting = true;
+			sendToManager(Protocol.TX_START);
+		}
+	}
+
+	/**
+	 * Sends a TX_COMMIT if performing a transaction
+	 * 
+	 * @throws TransactionException
+	 * @throws UnknownManagerException
+	 */
+	public void txcommitHandler(StringTokenizer tokens, String line)
+			throws TransactionException, UnknownManagerException {
+		if (!clientTransacting) {
+			throw new TransactionException(
+					"client not performing a transaction");
+		} else {
+			// clientTransacting is updated when a response is received
+			sendToManager(Protocol.TX_COMMIT);
+		}
+	}
+
+	/**
+	 * Sends a TX_ABORT if performing a transaction
+	 * 
+	 * @throws UnknownManagerException
+	 * @throws TransactionException
+	 */
+	public void txabortHandler(StringTokenizer tokens, String line)
+			throws UnknownManagerException, TransactionException {
+		if (!clientTransacting) {
+			throw new TransactionException(
+					"client not performing a transaction");
+		} else {
+			// clientTransacting is updated when a response is received
+			sendToManager(Protocol.TX_ABORT);
+		}
+
 	}
 
 	/*************************************************
@@ -658,7 +793,11 @@ public class Client extends RIONode {
 
 		String msgString = Utility.byteArrayToString(msg);
 
-		// TODO: Replace massive switch w/ dynamic dispatch
+		/*
+		 * TODO: HIGH: Replace massive switch w/ dynamic dispatch and
+		 * client/manager side receive helpers. Maybe prepend manager only
+		 * receive function names "managerReceiveWQ" etc.
+		 */
 
 		try {
 			switch (protocol) {
@@ -720,6 +859,21 @@ public class Client extends RIONode {
 				break;
 			case Protocol.WD_DELETE:
 				receiveWD_DELETE(from, msgString);
+				break;
+			case Protocol.TX_START:
+				receiveTX_START(from);
+				break;
+			case Protocol.TX_ABORT:
+				receiveTX_ABORT(from);
+				break;
+			case Protocol.TX_COMMIT:
+				receiveTX_COMMIT(from);
+				break;
+			case Protocol.TX_SUCCESS:
+				receiveTX_SUCCESS();
+				break;
+			case Protocol.TX_FAILURE:
+				receiveTX_FAILURE();
 				break;
 			case Protocol.ERROR:
 				receiveError(from, msgString);
@@ -910,12 +1064,55 @@ public class Client extends RIONode {
 		}
 	}
 
+	protected void receiveTX_START(int from) throws TransactionException,
+			NotManagerException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+		if (managerTransactionsInProgress.contains(from)) {
+			throw new TransactionException("tx already in progress on client "
+					+ from);
+		}
+
+		managerTransactionsInProgress.add(from);
+	}
+
+	protected void receiveTX_COMMIT(int from) throws TransactionException,
+			NotManagerException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+		if (!managerTransactionsInProgress.contains(from)) {
+			throw new TransactionException("tx not in progress on client "
+					+ from);
+		}
+
+		// TODO: HIGH: receiveTX_START
+
+		managerTransactionsInProgress.remove(from);
+	}
+
+	protected void receiveTX_ABORT(int from) throws NotManagerException,
+			TransactionException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+		if (!managerTransactionsInProgress.contains(from)) {
+			throw new TransactionException("tx not in progress on client "
+					+ from);
+		}
+
+		// TODO: HIGH: receiveTX_ABORT
+
+		managerTransactionsInProgress.remove(from);
+	}
+
 	/**
 	 * receiveDelete helper called when the file is in the system.
 	 * 
 	 * @throws IOException
 	 */
-	public void deleteExistingFile(String filename, int from)
+	protected void deleteExistingFile(String filename, int from)
 			throws IOException {
 		// delete the file locally
 		fs.deleteFile(filename);
@@ -1066,7 +1263,12 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * TODO: HIGH: Delay all manager side unlocks until transaction finishes
+	 * TODO: HIGH: Delay all manager side unlocks until transaction finishes. We
+	 * might also have to lock files that we get (but don't write), which we
+	 * might not be doing right now.
+	 * 
+	 * TODO: Detect if client performs operations out of order during
+	 * transaction
 	 */
 
 	/**
@@ -1224,7 +1426,8 @@ public class Client extends RIONode {
 				// still waiting for more ICs
 				List<Integer> waitingFor = managerPendingICs.get(filename);
 				StringBuilder waiting = new StringBuilder();
-				waiting.append("Received IC but waiting for IC from clients : ");
+				waiting
+						.append("Received IC but waiting for IC from clients : ");
 				for (int i : waitingFor) {
 					waiting.append(i + " ");
 				}
@@ -1260,7 +1463,7 @@ public class Client extends RIONode {
 		printVerbose("marking invalid " + msgString);
 
 		printVerbose("sending ic to manager for file: " + msgString);
-		SendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
+		sendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
 	}
 
 	/**
@@ -1298,7 +1501,7 @@ public class Client extends RIONode {
 		// send update to manager
 		printVerbose("sending " + Protocol.protocolToString(responseProtocol)
 				+ " to manager " + filename);
-		SendToManager(responseProtocol, Utility.stringToByteArray(payload));
+		sendToManager(responseProtocol, Utility.stringToByteArray(payload));
 
 		// update permissions
 		if (keepRO) {
@@ -1355,7 +1558,21 @@ public class Client extends RIONode {
 	 * 
 	 * @throws UnknownManagerException
 	 */
-	protected void SendToManager(int protocol, byte[] payload)
+	protected void sendToManager(int protocol) throws UnknownManagerException {
+		if (this.managerAddr == -1) {
+			throw new UnknownManagerException();
+		} else {
+			RIOSend(managerAddr, protocol, Utility.stringToByteArray(""));
+		}
+	}
+
+	/**
+	 * Convenience wrapper of RIOSend that sends a message to the manager if
+	 * their address is known and throws an UnknownManagerException if not
+	 * 
+	 * @throws UnknownManagerException
+	 */
+	protected void sendToManager(int protocol, byte[] payload)
 			throws UnknownManagerException {
 		if (this.managerAddr == -1) {
 			throw new UnknownManagerException();
@@ -1473,7 +1690,7 @@ public class Client extends RIONode {
 
 			// send wc
 			printVerbose("sending wc to manager for " + filename);
-			SendToManager(Protocol.WC, Utility.stringToByteArray(filename));
+			sendToManager(Protocol.WC, Utility.stringToByteArray(filename));
 
 		} else { // Manager receives WD
 
@@ -1561,7 +1778,7 @@ public class Client extends RIONode {
 
 			// send rc
 			printVerbose("sending rc to manager for " + filename);
-			SendToManager(Protocol.RC, Utility.stringToByteArray(filename));
+			sendToManager(Protocol.RC, Utility.stringToByteArray(filename));
 		} else {
 
 			// first write the file to save a local copy
@@ -1646,6 +1863,36 @@ public class Client extends RIONode {
 		}
 
 		// TODO: Figure out if this gets called any other times
+	}
+
+	/**
+	 * Transaction succeeded
+	 * 
+	 * @throws NotClientException
+	 */
+	protected void receiveTX_SUCCESS() throws NotClientException {
+		if (isManager) {
+			throw new NotClientException();
+		}
+
+		// TODO: HIGH: receiveTX_SUCCESS
+
+		clientTransacting = false;
+	}
+
+	/**
+	 * Tranaction failed
+	 * 
+	 * @throws NotClientException
+	 */
+	protected void receiveTX_FAILURE() throws NotClientException {
+		if (isManager) {
+			throw new NotClientException();
+		}
+
+		// TODO: HIGH: receiveTX_FAILED
+
+		clientTransacting = false;
 	}
 
 	/**
