@@ -125,12 +125,6 @@ public class ReliableFileSystem {
 	public void writeFile(String filename, String contents, boolean append)
 			throws IOException {
 
-		if (append) {
-			logAccess(filename, "appending", contents);
-		} else {
-			logAccess(filename, "putting", contents);
-		}
-
 		if (!Utility.fileExists(n, filename)) {
 			throw new FileNotFoundException();
 		} else {
@@ -195,7 +189,6 @@ public class ReliableFileSystem {
 	protected void writeTempFile(String filename) throws IOException {
 		String oldContent = getFile(filename);
 
-		n.logSynopticEvent("PUTTING-TEMP-FILE");
 		performWrite(tempFilename, false, oldContent.toString());
 	}
 
@@ -206,6 +199,12 @@ public class ReliableFileSystem {
 	 */
 	protected void performWrite(String filename, boolean append, String contents)
 			throws IOException {
+		if (append) {
+			logAccess(filename, "appending", contents);
+		} else {
+			logAccess(filename, "putting", contents);
+		}
+		
 		PersistentStorageWriter writer = n.getWriter(filename, append);
 		writer.write(contents);
 		writer.close();
