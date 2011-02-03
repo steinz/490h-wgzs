@@ -6,7 +6,6 @@
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -138,7 +137,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	protected static class TransactionLog {
 
 		protected String logFilename;
-		
+
 		protected TransactionalFileSystem fs;
 
 		/**
@@ -213,7 +212,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				// no log, so nothing to do
 				return;
 			}
-			
+
 			// read log from disk, parsing lines into PendingOperation objects
 			String log = "";
 
@@ -296,10 +295,10 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		// setup the log object
 		this.txLog = new TransactionLog(this, this.logFilename);
-		
+
 		// recover from the log if necessary
 		this.recover();
-		
+
 		// create or clear the log file on disk
 		if (Utility.fileExists(n, logFilename)) {
 			performWrite(logFilename, false, "");
@@ -318,7 +317,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		txLog.recover();
 	}
 
-	public void createFileTentative(int client, String filename)
+	public void createFileTX(int client, String filename)
 			throws TransactionException, IOException {
 		/**
 		 * TODO: HIGH: Check that client is transacting here, or in Client?
@@ -326,38 +325,71 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		PendingOperation op = new PendingOperation(client, Operation.CREATE,
 				filename);
-		performWrite(logFilename, true, op.toLogString()
-				+ PendingOperation.lineSeparator);
+		performWrite(logFilename, true, op.toLogString() + lineSeparator);
 		txLog.enque(client, op);
 	}
 
-	public void deleteFileTentative(int client, String filename)
-			throws IOException, TransactionException {
+	public void deleteFileTX(int client, String filename) throws IOException,
+			TransactionException {
 		PendingOperation op = new PendingOperation(client, Operation.DELETE,
 				filename);
-		performWrite(logFilename, true, op.toLogString());
+		performWrite(logFilename, true, op.toLogString() + lineSeparator);
 		txLog.enque(client, op);
 	}
 
-	/*
-	 * TODO: HIGH: Do we need a tentative get file? Depends on the semantics of
-	 * transactions I think... see the disccusion at the top of Client about
-	 * what happens for a get called during a transaction
-	 * 
-	 * public String getFileTentative(int client, String filename) { }
-	 */
+	public String getFileTX(int client, String filename)
+			throws IOException {
+		// Look through log for ops in this tx that alterd filename
 
-	// TODO: HIGH: Implement other Tentative TransactionalFS ops
+		String putContents = null;
+		Queue<String> appendsQueue = new LinkedList<String>();
+		boolean deleted = false;
+		for (PendingOperation op : txLog.queuedOperations.get(client)) {
+			if (op.filename.equals(filename)) {
+				switch (op.op) {
+				case DELETE:
+					deleted = true;
+					break;
+				case CREATE:
+					deleted = false;
+					break;
+				case PUT:
+					appendsQueue.clear();
+					putContents = op.contents;
+					break;
+				case APPEND:
+					appendsQueue.add(op.contents);
+					break;
+				}
+			}
+		}
 
-	public void writeFileTentative(int client, String filename,
-			String contents, boolean append) throws IOException,
-			TransactionException {
+		if (!deleted && putContents == null && appendsQueue.size() == 0) {
+			// file hasn't been touched during this tx
+			return getFile(filename);
+		} else if (deleted) {
+			// file deleted during this tx
+			throw new FileNotFoundException("file deleted during this tx");
+		} else {
+			// file has been put or appeneded to
+			StringBuilder result = new StringBuilder();
+			result.append(putContents);
+			for (String appendContents : appendsQueue) {
+				result.append(appendContents);
+			}
+			return result.toString();
+		}
+	}
+
+	public void writeFileTX(int client, String filename, String contents,
+			boolean append) throws IOException, TransactionException {
 		PendingOperation op;
 		if (append) {
 			op = new PendingOperation(client, Operation.APPEND, filename,
-					contents);
+					contents + lineSeparator);
 		} else {
-			op = new PendingOperation(client, Operation.PUT, filename, contents);
+			op = new PendingOperation(client, Operation.PUT, filename, contents
+					+ lineSeparator);
 		}
 		performWrite(logFilename, true, op.toLogString());
 		txLog.enque(client, op);
