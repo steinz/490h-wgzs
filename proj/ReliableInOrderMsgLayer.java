@@ -25,7 +25,7 @@ public class ReliableInOrderMsgLayer {
 
 	private HashMap<Integer, InChannel> inConnections;
 	private HashMap<Integer, OutChannel> outConnections;
-	private RIONode n;
+	protected RIONode n;
 
 	/**
 	 * Constructor.
@@ -62,14 +62,7 @@ public class ReliableInOrderMsgLayer {
 			// handshake or a packet from an old session, pass it along
 
 			// at-most-once semantics
-			StringBuilder sb = n.appendNodeAddress();
-			sb.append("sending ACK ");
-			sb.append(riopkt.getSeqNum());
-			sb.append(" to ");
-			sb.append(from);
-			Logger.verbose(sb.toString());
 
-			// "" + <int> is ugly... thanks Java.
 			byte[] seqNumByteArray = Utility.stringToByteArray(""
 					+ riopkt.getSeqNum());
 			n.send(from, Protocol.ACK, seqNumByteArray);
@@ -99,10 +92,10 @@ public class ReliableInOrderMsgLayer {
 
 			if (riopkt.getUUID().equals(n.getID())
 					&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
-				sb = n.appendNodeAddress();
+				StringBuilder sb = n.appendNodeAddress();
 				sb.append("got packet protocol: ");
 				sb.append(Protocol.protocolToString(riopkt.getProtocol()));
-				Logger.verbose(sb.toString());
+				Logger.verbose(n, sb.toString());
 
 				LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
 
@@ -112,9 +105,9 @@ public class ReliableInOrderMsgLayer {
 				}
 			}
 		} catch (PacketPackException e) {
-			Logger.error(e);
+			Logger.error(n, e);
 		} catch (IOException e) {
-			Logger.error(e);
+			Logger.error(n, e);
 		}
 	}
 
@@ -129,7 +122,7 @@ public class ReliableInOrderMsgLayer {
 		sb.append(from);
 		sb.append(" to ");
 		sb.append(receivedID);
-		Logger.info(sb.toString());
+		Logger.info(n, sb.toString());
 
 		/*
 		 * a handshake also means that whoever sent us this handshake probably
@@ -228,6 +221,6 @@ public class ReliableInOrderMsgLayer {
 			sb.append(entry.getValue().seqNumDebug());
 		}
 
-		Logger.info(sb.toString());
+		Logger.info(n, sb.toString());
 	}
 }

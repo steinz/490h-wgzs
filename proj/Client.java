@@ -345,7 +345,7 @@ public class Client extends RIONode {
 		this.managerAddr = -1;
 
 		// Wipe the server log
-		Logger.eraseLog();
+		Logger.eraseLog(this);
 
 		try {
 			fs = new TransactionalFileSystem(this, tempFilename, logFilename);
@@ -752,7 +752,7 @@ public class Client extends RIONode {
 	public void printVerbose(String msg, boolean frame) {
 		StringBuilder sb = appendNodeAddress();
 		sb.append(msg);
-		Logger.verbose(sb.toString(), frame);
+		Logger.verbose(this, sb.toString(), frame);
 	}
 
 	/**
@@ -768,7 +768,7 @@ public class Client extends RIONode {
 	public void printInfo(String msg) {
 		StringBuilder sb = appendNodeAddress();
 		sb.append(msg);
-		Logger.info(sb.toString());
+		Logger.info(this, sb.toString());
 	}
 
 	/**
@@ -777,7 +777,7 @@ public class Client extends RIONode {
 	public void printError(Exception e) {
 		StringBuilder sb = appendNodeAddress();
 		sb.append("caught exception (see below)");
-		Logger.error(e);
+		Logger.error(this, e);
 	}
 
 	/**
@@ -787,7 +787,7 @@ public class Client extends RIONode {
 		StringBuilder sb = appendNodeAddress();
 		sb.append("Error: ");
 		sb.append(msg);
-		Logger.error(sb.toString());
+		Logger.error(this, sb.toString());
 	}
 
 	/*************************************************

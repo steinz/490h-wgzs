@@ -57,9 +57,9 @@ class OutChannel {
 					destAddr, lastSeqNumSent }),
 					ReliableInOrderMsgLayer.TIMEOUT);
 		} catch (PacketPackException e) {
-			Logger.error(e);
+			Logger.error(parent.n, e);
 		} catch (Exception e) {
-			Logger.error(e);
+			Logger.error(parent.n, e);
 		}
 	}
 
@@ -90,7 +90,7 @@ class OutChannel {
 			sb.append("Node: ");
 			sb.append(n.addr);
 			sb.append(" Error: TIMEOUT of " + packet.toString());
-			Logger.error(sb.toString());
+			Logger.error(parent.n, sb.toString());
 
 		} else if (unACKedPackets.containsKey(seqNum)) {
 			resendRIOPacket(n, seqNum);
@@ -139,7 +139,7 @@ class OutChannel {
 			sb.append(riopkt.getSeqNum());
 			sb.append(" protocol: ");
 			sb.append(Protocol.protocolToString(riopkt.getProtocol()));
-			Logger.verbose(sb.toString());
+			Logger.verbose(parent.n, sb.toString());
 
 			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
