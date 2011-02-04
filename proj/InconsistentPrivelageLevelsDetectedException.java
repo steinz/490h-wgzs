@@ -4,7 +4,7 @@
  * @author wayger, steinz
  */
 
-// TODO: USE THIS!!
+// TODO: Uses this exception
 
 public class InconsistentPrivelageLevelsDetectedException extends Exception {
 

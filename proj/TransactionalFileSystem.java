@@ -28,7 +28,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  */
 
 /*
- * TODO: OPT: Keep the log open between writes
+ * TODO: EC: Keep the log open between writes
  */
 
 /**
@@ -153,7 +153,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				} else {
 					return new PendingOperation(client, op, filename);
 				}
-			} catch (IOException e) {
+			} catch (Exception e) {
 				return null;
 			}
 		}
@@ -323,8 +323,9 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		this.logFilename = logFilename;
 		this.txCache = new TransactionCache(this, this.logFilename);
 
-		// recover from the log if necessary
+		// recover RFS and from the log if necessary
 		this.recover();
+		txCache.recover();
 
 		// create or clear the log file on disk
 		if (Utility.fileExists(n, logFilename)) {
@@ -332,20 +333,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		} else {
 			createFile(logFilename);
 		}
-	}
-
-	/**
-	 * Recovers as ReliableFileSystem does but also recovers from the
-	 * transaction log
-	 * 
-	 * @throws IOException
-	 * @throws FileNotFoundException
-	 * @throws TransactionLogException
-	 */
-	@Override
-	protected void recover() throws FileNotFoundException, IOException {
-		super.recover();
-		txCache.recover();
 	}
 
 	public String getFileTX(int client, String filename) throws IOException {

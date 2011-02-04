@@ -1,3 +1,5 @@
+import java.lang.reflect.Field;
+
 /**
  * CSE 490h
  * 
@@ -5,14 +7,14 @@
  */
 
 /**
- * <pre>
  * Contains details about the recognized protocols
- * </pre>
  */
 public class Protocol {
 
-	// TODO: LOW: Replace this class w/ an enum
-
+	/*
+	 * NOTE: No message type should have identifier 127 - methods below using
+	 * reflection will behave unexpectedly
+	 */
 	public static final int MAX_PROTOCOL = 127;
 
 	// Base RIO Types
@@ -48,12 +50,13 @@ public class Protocol {
 	// Transactions - Sent to client
 	public static final int TX_SUCCESS = 23;
 	public static final int TX_FAILURE = 24;
-	// TODO: HIGH: update protocol stuff below
-	
-	// Error Type
 
+	/*
+	 * TODO: These will probably need to be replaced w/ specific ERROR / SUCCESS
+	 * types so that they can be correctly processed if received out of order.
+	 */
 	public static final int SUCCESS = 125;
-	public static final int ERROR = 127;
+	public static final int ERROR = 126;
 
 	/**
 	 * Tests if this is a valid protocol for a Packet
@@ -63,8 +66,8 @@ public class Protocol {
 	 * @return true if the protocol is valid, false otherwise
 	 */
 	public static boolean isPktProtocolValid(int protocol) {
-		// TODO: Update
-		return ((20 > protocol && protocol > -1) || protocol == 125 || protocol == 127);
+		// TODO: Replace w/ reflection
+		return ((25 > protocol && protocol > -1) || protocol == 125 || protocol == 127);
 	}
 
 	/**
@@ -73,56 +76,23 @@ public class Protocol {
 	 * @param protocol
 	 *            The protocol whose string representation is desired
 	 * @return The string representation of the given protocol.
-	 *         "Unknown Protocol" if the protocol is not recognized
+	 *         "Unknown (int identifier)" if the protocol is not recognized
 	 */
 	public static String protocolToString(int protocol) {
-		switch (protocol) {
-		case DATA:
-			return "RIO_DATA";
-		case ACK:
-			return "RIO_ACK";
-		case CREATE:
-			return "RIO_CREATE";
-		case DELETE:
-			return "RIO_DELETE";
-		case GET:
-			return "RIO_GET";
-		case PUT:
-			return "RIO_PUT";
-		case APPEND:
-			return "RIO_APPEND";
-		case HANDSHAKE:
-			return "RIO_HANDSHAKE";
-		case NOOP:
-			return "RIO_NOOP";
-		case WQ:
-			return "RIO_WQ";
-		case WD:
-			return "RIO_WD";
-		case WF:
-			return "RIO_WF";
-		case WC:
-			return "RIO_WC";
-		case RQ:
-			return "RIO_RQ";
-		case RD:
-			return "RIO_RD";
-		case RF:
-			return "RIO_RF";
-		case RC:
-			return "RIO_RC";
-		case IV:
-			return "RIO_IV";
-		case IC:
-			return "RIO_IC";
-		case WD_DELETE:
-			return "RIO_WD_DELETE";
-		case SUCCESS:
-			return "RIO_SUCCESS";
-		case ERROR:
-			return "RIO_ERROR";
-		default:
-			return "RIO_UNKNOWN";
+		try {
+			Class<?> proto = Class.forName("Protocol");
+
+			Field[] fields = proto.getDeclaredFields();
+			for (Field field : fields) {
+				int value = field.getInt(null);
+				if (value == protocol) {
+					return field.getName();
+				}
+			}
+		} catch (Exception e) {
+			return "UNKNOWN (" + protocol + ")";
 		}
+
+		return "UNKNOWN (" + protocol + ")";
 	}
 }

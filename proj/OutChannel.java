@@ -78,8 +78,7 @@ class OutChannel {
 
 		RIOPacket packet = unACKedPackets.get(seqNum);
 
-		// TODO: Timeouts are turned off for project 2
-		if (resendCounts.get(packet) >= MAX_RESENDS && false) {
+		if (resendCounts.get(packet) >= MAX_RESENDS) {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
 

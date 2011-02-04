@@ -18,13 +18,24 @@ January 27, 2011
 
 \textbf{Notes:} \\
 
--Enforce filename order
--So, if client wants to do: 
-	-Get f2 => x
-	-Put f1 x
-, they have to actually:
-	-Append "" f1
-	-Get f2 => x
-	-Put f1 x
+We require clients to operate on files within a transaction in filename order to avoid deadlock.
+So, if a client wants to do: 
+	Get g => x
+	Put x => f
+They have to actually do:
+	Append "" => f
+	Get g => x
+	Put x => f
+
+\textbf{TFS Log Entry Format:} \\
+
+<client_address>
+<Operation type>
+<filename>
+<contents_line_count>
+<contents>
+
+contents_line_count is -1 for operations that don't have contents
+there is a line separator after each <entry> including the contents
 
 \end{document}
