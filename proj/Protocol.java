@@ -11,12 +11,6 @@ import java.lang.reflect.Field;
  */
 public class Protocol {
 
-	/*
-	 * NOTE: No message type should have identifier 127 - methods below using
-	 * reflection will behave unexpectedly
-	 */
-	public static final int MAX_PROTOCOL = 127;
-
 	// Base RIO Types
 	public static final int DATA = 0;
 	public static final int ACK = 1;
@@ -51,48 +45,91 @@ public class Protocol {
 	public static final int TX_SUCCESS = 23;
 	public static final int TX_FAILURE = 24;
 
-	/*
-	 * TODO: These will probably need to be replaced w/ specific ERROR / SUCCESS
-	 * types so that they can be correctly processed if received out of order.
-	 */
+	// Command Status Result Types
 	public static final int SUCCESS = 125;
 	public static final int ERROR = 126;
 
-	/**
-	 * Tests if this is a valid protocol for a Packet
-	 * 
-	 * @param protocol
-	 *            The protocol in question
-	 * @return true if the protocol is valid, false otherwise
+	/*
+	 * END MESSAGE TYPES
 	 */
-	public static boolean isPktProtocolValid(int protocol) {
-		// TODO: Replace w/ reflection
-		return ((25 > protocol && protocol > -1) || protocol == 125 || protocol == 127);
-	}
 
 	/**
-	 * Returns a string representation of the given protocol for debugging.
-	 * 
-	 * @param protocol
-	 *            The protocol whose string representation is desired
-	 * @return The string representation of the given protocol.
-	 *         "Unknown (int identifier)" if the protocol is not recognized
+	 * Exclusive max valid message type
 	 */
-	public static String protocolToString(int protocol) {
+	public static final int MAX_PROTOCOL = 127;
+
+	/**
+	 * Cache of validity for different message type numbers
+	 */
+	private static Boolean[] validProtoCache = new Boolean[MAX_PROTOCOL];
+
+	/**
+	 * Uses reflection to check if this class has an int field with value
+	 * protocol
+	 */
+	private static boolean checkValidProtocol(int protocol) {
 		try {
 			Class<?> proto = Class.forName("Protocol");
-
 			Field[] fields = proto.getDeclaredFields();
 			for (Field field : fields) {
-				int value = field.getInt(null);
-				if (value == protocol) {
-					return field.getName();
+				if (field.getType().equals(int.class)) {
+					int value = field.getInt(null);
+					if (value == protocol) {
+						return true;
+					}
 				}
 			}
 		} catch (Exception e) {
-			return "UNKNOWN (" + protocol + ")";
 		}
+		return false;
+	}
 
-		return "UNKNOWN (" + protocol + ")";
+	/**
+	 * Memoized check if the message type is valid.
+	 */
+	public static boolean isPktProtocolValid(int protocol) {
+		if (protocol < 0 || protocol > MAX_PROTOCOL) {
+			return false;
+		} else if (validProtoCache[protocol] == null) {
+			validProtoCache[protocol] = checkValidProtocol(protocol);
+		}
+		return validProtoCache[protocol];
+	}
+
+	/**
+	 * Cache of message types to names for memoization
+	 */
+	private static String[] protoToStringCache = new String[MAX_PROTOCOL];
+
+	/**
+	 * Uses reflection to generate the string associated with this message type
+	 */
+	private static String generateProtocolToString(int protocol) {
+		try {
+			Class<?> proto = Class.forName("Protocol");
+			Field[] fields = proto.getDeclaredFields();
+			for (Field field : fields) {
+				if (field.getType().equals(int.class)) {
+					int value = field.getInt(null);
+					if (value == protocol) {
+						return field.getName().toUpperCase();
+					}
+				}
+			}
+		} catch (Exception e) {
+		}
+		return "UNKNOWN(" + protocol + ")";
+	}
+
+	/**
+	 * Returns a memoized string representation of the given message type
+	 */
+	public static String protocolToString(int protocol) {
+		if (protocol < 0 || protocol > MAX_PROTOCOL) {
+			return "INVALID(" + protocol + ")";
+		} else if (protoToStringCache[protocol] == null) {
+			protoToStringCache[protocol] = generateProtocolToString(protocol);
+		}
+		return protoToStringCache[protocol];
 	}
 }

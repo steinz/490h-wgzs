@@ -242,6 +242,11 @@ public class Client extends RIONode {
 	 */
 	protected Map<String, PendingClientOperation> clientPendingOperations;
 
+	/*
+	 * TODO: Abstract into some kind of Locker class so you're forced to use
+	 * helpers to access this that we can log
+	 */
+
 	/**
 	 * List of files locked on the client's side
 	 */
@@ -355,11 +360,9 @@ public class Client extends RIONode {
 	 * these methods should pass all exceptions up to their caller
 	 **************************************************************************/
 
-	/*
-	 * TODO: Verify that we log all sends
-	 * 
-	 * /** Prints expected numbers for in and out channels. Likely to change as
-	 * new problems arise.
+	/**
+	 * For debugging purposes only. Prints expected numbers for in and out
+	 * channels. Likely to change as new problems arise.
 	 */
 	public void debugHandler(StringTokenizer tokens, String line) {
 		RIOLayer.printSeqStateDebug();
@@ -390,7 +393,7 @@ public class Client extends RIONode {
 	 */
 	public void managerisHandler(StringTokenizer tokens, String line) {
 		this.managerAddr = Integer.parseInt(tokens.nextToken());
-		printInfo("manager is " + this.managerAddr);
+		printInfo("setting manager address to " + this.managerAddr);
 	}
 
 	/**
@@ -399,15 +402,16 @@ public class Client extends RIONode {
 	 */
 	protected boolean clientQueueLineIfLocked(String filename, String line) {
 		if (clientLockedFiles.contains(filename)) {
-			printVerbose("Queueing command on locked file: " + line);
+			printVerbose("queueing command on locked file: " + filename + ", "
+					+ line);
 
 			Queue<String> requests = clientQueuedCommands.get(filename);
 			if (requests == null) {
 				requests = new LinkedList<String>();
+				clientQueuedCommands.put(filename, requests);
 			}
 			requests.add(line);
 
-			clientQueuedCommands.put(filename, requests);
 			return true;
 		} else {
 			return false;
@@ -422,11 +426,6 @@ public class Client extends RIONode {
 		logSynopticEvent("CLIENT-LOCK");
 		clientLockedFiles.add(filename);
 	}
-
-	/*
-	 * TODO: Throw Exceptions when ops called on manager (this isn't currently
-	 * supported by the CC protocol)
-	 */
 
 	/**
 	 * Get ownership of a file and create it
@@ -695,7 +694,12 @@ public class Client extends RIONode {
 		try {
 			cmd = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
-			printError("no command found");
+			printError("no command found in: " + line);
+			return;
+		}
+		
+		if (isManager && !cmd.equals("manager")) {
+			printError("unsupported command called on manager (manager is not a client): " + line);
 			return;
 		}
 
@@ -708,11 +712,11 @@ public class Client extends RIONode {
 			Object[] args = { tokens, line };
 			handler.invoke(this, args);
 		} catch (NoSuchMethodException e) {
-			printError("invalid command");
+			printError("invalid command:" + line);
 		} catch (IllegalArgumentException e) {
-			printError("invalid command");
+			printError("invalid command:" + line);
 		} catch (IllegalAccessException e) {
-			printError("invalid command");
+			printError("invalid command:" + line);
 		} catch (InvocationTargetException e) {
 			/*
 			 * TODO: HIGH: Command failed, abort tx
@@ -725,6 +729,22 @@ public class Client extends RIONode {
 	/*************************************************
 	 * begin logger wrappers
 	 ************************************************/
+
+	@Override
+	public void send(int destAddr, int protocol, byte[] payload) {
+		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
+				+ destAddr + " with payload: "
+				+ Utility.byteArrayToString(payload));
+		super.send(destAddr, protocol, payload);
+	}
+
+	@Override
+	public void RIOSend(int destAddr, int protocol, byte[] payload) {
+		printVerbose("rio-sending " + Protocol.protocolToString(protocol)
+				+ " to " + destAddr + " with payload: "
+				+ Utility.byteArrayToString(payload));
+		super.RIOSend(destAddr, protocol, payload);
+	}
 
 	/**
 	 * Prepend the node address and then call Logger.verbose.
@@ -774,6 +794,13 @@ public class Client extends RIONode {
 	 * end logger wrappers
 	 ************************************************/
 
+	@Override
+	public void onReceive(Integer from, int protocol, byte[] msg) {
+		printVerbose("received " + Protocol.protocolToString(protocol)
+				+ " from Universe, giving to RIOLayer");
+		super.onReceive(from, protocol, msg);
+	}
+
 	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
 	 * 
@@ -785,10 +812,9 @@ public class Client extends RIONode {
 	 *            The message that was received
 	 */
 	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
-		printVerbose("receiving packet from RIOLayer");
+		printVerbose("received " + Protocol.protocolToString(protocol)
+				+ " from RIOLayer, handling");
 
-
-		
 		String msgString = Utility.byteArrayToString(msg);
 
 		/*
@@ -1404,7 +1430,7 @@ public class Client extends RIONode {
 		if (!managerPendingICs.containsKey(filename) || !isManager
 				|| !managerPendingICs.get(filename).contains(from)) {
 			sendError(from, Protocol.ERROR, filename, ErrorCode.UnknownError);
-			Logger.error(ErrorCode.NotManager, "IC: " + filename);
+			throw new NotManagerException();
 		} else {
 
 			// update the status of the client who sent the IC
@@ -1885,10 +1911,11 @@ public class Client extends RIONode {
 	 * Transaction succeeded
 	 * 
 	 * @throws NotClientException
-	 * @throws TransactionException 
-	 * @throws IOException 
+	 * @throws TransactionException
+	 * @throws IOException
 	 */
-	protected void receiveTX_SUCCESS() throws NotClientException, IOException, TransactionException {
+	protected void receiveTX_SUCCESS() throws NotClientException, IOException,
+			TransactionException {
 		if (isManager) {
 			throw new NotClientException();
 		}
@@ -1901,10 +1928,11 @@ public class Client extends RIONode {
 	 * Tranaction failed
 	 * 
 	 * @throws NotClientException
-	 * @throws TransactionException 
-	 * @throws IOException 
+	 * @throws TransactionException
+	 * @throws IOException
 	 */
-	protected void receiveTX_FAILURE() throws NotClientException, TransactionException, IOException {
+	protected void receiveTX_FAILURE() throws NotClientException,
+			TransactionException, IOException {
 		if (isManager) {
 			throw new NotClientException();
 		}
@@ -1939,13 +1967,13 @@ public class Client extends RIONode {
 	protected void sendSuccess(int destAddr, int protocol, String message) {
 		String msg = Protocol.protocolToString(protocol) + delimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
-		RIOLayer.RIOSend(destAddr, Protocol.SUCCESS, payload);
+		RIOSend(destAddr, Protocol.SUCCESS, payload);
 	}
 
 	protected void sendError(int destAddr, String filename, int errorcode) {
 		String msg = filename + delimiter + ErrorCode.lookup(errorcode);
 		byte[] payload = Utility.stringToByteArray(msg);
-		RIOLayer.RIOSend(destAddr, Protocol.ERROR, payload);
+		RIOSend(destAddr, Protocol.ERROR, payload);
 	}
 
 	/**
@@ -1965,7 +1993,7 @@ public class Client extends RIONode {
 		String msg = filename + delimiter + Protocol.protocolToString(protocol)
 				+ delimiter + ErrorCode.lookup(errorcode);
 		byte[] payload = Utility.stringToByteArray(msg);
-		RIOLayer.RIOSend(destAddr, Protocol.ERROR, payload);
+		RIOSend(destAddr, Protocol.ERROR, payload);
 	}
 
 	/*************************************************

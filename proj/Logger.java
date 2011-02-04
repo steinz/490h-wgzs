@@ -79,25 +79,10 @@ public class Logger {
 	 * @param str
 	 */
 	public static void error(String str) {
-		error(ErrorCode.UnknownError, str);
+		errorPrintln(str);
 	}
 
-	public static void error(int errorCode, String str) {
-		if (printError) {
-			StringBuilder sb = new StringBuilder();
-			sb.append(str);
-			error(errorCode, sb);
-		}
-	}
 
-	public static void error(int errorCode, StringBuilder sb) {
-		if (printError) {
-			sb.append(" [");
-			sb.append(ErrorCode.lookup(errorCode));
-			sb.append("]");
-			errorPrintln(sb.toString());
-		}
-	}
 
 	public static void error(Exception e) {
 		if (printError) {
@@ -134,7 +119,7 @@ public class Logger {
 	}
 
 	// TODO: LOW: keep the writer open between entries
-	
+
 	public static void writeToLog(String message) {
 		try {
 			BufferedWriter r = null;
