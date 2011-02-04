@@ -195,7 +195,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	 * Convenience method - call this for now
 	 */
 	protected void doOp() {
-		Logger.verbose("REGISTERING NEW OPERATION " + commandCount);
+		Logger.verbose(this, "REGISTERING NEW OPERATION " + commandCount);
 
 		Method doOpMethod = null;
 		CacheCoherenceTester client = clients
@@ -234,7 +234,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 		// print something to the log for Synoptic to divide traces on w/ -s
 		logSynopticEvent("NEW OPERATION");
-		Logger.verbose("NEW OPERATION " + commandCount);
+		Logger.verbose(this, "NEW OPERATION " + commandCount);
 
 		// decrement commands left counter
 		commandCount--;

@@ -10,6 +10,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintStream;
 
+import edu.washington.cs.cse490h.lib.Node;
+import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
+
 /**
  * Convenience logging methods
  */
@@ -26,7 +29,7 @@ public class Logger {
 	/**
 	 * The path to the server log
 	 */
-	private static final String LOG_FILE = "server_log";
+	private static final String LOG_FILE = "server_log.log";
 
 	/**
 	 * Print verbose messages. Feel free to change to false.
@@ -50,56 +53,65 @@ public class Logger {
 	 */
 	static PrintStream errorStream = System.err;
 
-	public static void verbose(String str) {
-		verbose(str, false);
+	public static void verbose(Node n, String str) {
+		verbose(n, str, false);
 	}
 
-	public static void verbose(String str, boolean highlight) {
+	public static void verbose(Node n, String str, boolean highlight) {
 		if (printVerbose) {
 			if (highlight) {
-				infoPrintln("\n===VERBOSE===");
+				infoPrintln(n, "\n===VERBOSE===");
 			}
-			infoPrintln(str);
+			infoPrintln(n, str);
 			if (highlight) {
-				infoPrintln("===VERBOSE===\n");
+				infoPrintln(n, "===VERBOSE===\n");
 			}
 		}
 	}
 
-	public static void info(String str) {
+	public static void info(Node n, String str) {
 		if (printInfo) {
-			infoPrintln(str);
+			infoPrintln(n, str);
 		}
 	}
 
-	public static void error(String str) {
-		errorPrintln(str);
+	public static void error(Node n, String str) {
+		errorPrintln(n, str);
 	}
 
-	public static void error(Exception e) {
+	public static void error(Node n, Exception e) {
 		if (printError) {
-			errorPrintln(e.toString());
+			errorPrintln(n, e.toString());
 			StackTraceElement[] trace = e.getStackTrace();
 			for (StackTraceElement st : trace) {
-				errorPrintln(st.toString());
+				errorPrintln(n, st.toString());
 			}
 		}
 	}
 
-	private static void infoPrintln(String str) {
+	private static void infoPrintln(Node n, String str) {
 		infoStream.println(str);
-		writeToLog(str);
+		writeToLog(n, str);
 	}
 
-	private static void errorPrintln(String str) {
+	private static void errorPrintln(Node n, String str) {
 		errorStream.println(str);
-		writeToLog(str);
+		writeToLog(n, str);
 	}
 
 	/**
 	 * A quick and dirty method for wiping the server log at the beginning
 	 */
-	public static void eraseLog() {
+	public static void eraseLog(Node n) {
+		// node's log
+		try {
+			PersistentStorageWriter writer = n.getWriter(LOG_FILE, false);
+			writer.write("");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		// global log
 		try {
 			BufferedWriter r = null;
 			r = new BufferedWriter(new FileWriter(LOG_FILE, false));
@@ -112,7 +124,16 @@ public class Logger {
 
 	// TODO: LOW: keep the writer open between entries
 
-	public static void writeToLog(String message) {
+	private static void writeToLog(Node n, String message) {
+		try {
+			PersistentStorageWriter writer = n.getWriter(LOG_FILE, true);
+			writer.write(message);
+			writer.newLine();
+			writer.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
 		try {
 			BufferedWriter r = null;
 
@@ -129,8 +150,6 @@ public class Logger {
 
 			r.flush();
 			r.close();
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
