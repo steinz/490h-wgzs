@@ -26,7 +26,7 @@ public class Logger {
 	/**
 	 * The path to the server log
 	 */
-	private static final String LOG_FILE = "server_log.txt";
+	private static final String LOG_FILE = "server_log";
 
 	/**
 	 * Print verbose messages. Feel free to change to false.
@@ -72,17 +72,9 @@ public class Logger {
 		}
 	}
 
-	/**
-	 * If there isn't an error code for your error yet, you can call this.
-	 * Consider adding an error code instead.
-	 * 
-	 * @param str
-	 */
 	public static void error(String str) {
 		errorPrintln(str);
 	}
-
-
 
 	public static void error(Exception e) {
 		if (printError) {

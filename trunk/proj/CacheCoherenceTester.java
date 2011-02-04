@@ -20,20 +20,15 @@ import edu.washington.cs.cse490h.lib.Callback;
 public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	/*
-	 * TODO: SYNOPTIC: Having each client log to their own file and limit each
-	 * client to one operation at a time
+	 * TODO: Having each client log to their own file and limiting each client
+	 * to one operation at a time might get us good graphs
 	 */
 
 	/*
-	 * TODO: LOW: Unit tests could be nice to have for this (w/ different
-	 * seeds?) The framework might also be helpful for testing transactions for
-	 * project 3.
+	 * TODO: LOW: Unit tests could be nice to have for this (use different
+	 * seeds, verify expected successes/fails)
 	 */
 
-	/**
-	 * 
-	 * TODO: Remove seed once class has been tested.
-	 */
 	protected static Random random = new Random(7);
 
 	/**
@@ -42,7 +37,12 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	protected static int commandCount = 100;
 
 	/**
-	 * A list of the non-manager clients in the swarm
+	 * Whether or not to do commands that could be invalid
+	 */
+	protected static boolean doInvalidCommands = false;
+
+	/**
+	 * A list of the non-manager clients in the system
 	 */
 	protected static List<CacheCoherenceTester> clients = new ArrayList<CacheCoherenceTester>();
 
@@ -60,6 +60,8 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Wraps onCommand to handle the new command "begin" which should be issued
 	 * to ONLY ONE client to start an op chain
+	 * 
+	 * TODO: Try issuing to two clients to test concurrent commands
 	 */
 	@Override
 	public void onCommand(String line) {
@@ -191,17 +193,13 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	/**
 	 * Convenience method - call this for now
-	 * 
-	 * TODO: switch flag to turn on invalid operations once the protocol is
-	 * robust
 	 */
 	protected void doOp() {
 		Logger.verbose("REGISTERING NEW OPERATION " + commandCount);
 
 		Method doOpMethod = null;
-		boolean arg = true;
-		CacheCoherenceTester client = clients.get(random
-				.nextInt(clients.size()));
+		CacheCoherenceTester client = clients
+				.get(random.nextInt(clients.size()));
 
 		try {
 			doOpMethod = Callback.getMethod("doOp", client,
@@ -214,9 +212,8 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 			printError(e);
 		}
 
-		client.addTimeout(
-				new Callback(doOpMethod, client, new Object[] { arg }),
-				DO_OP_WAIT);
+		client.addTimeout(new Callback(doOpMethod, client,
+				new Object[] { doInvalidCommands }), DO_OP_WAIT);
 	}
 
 	/**
@@ -287,6 +284,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 		// a fake root for Synoptic
 		// logSynopticEvent("COMMAND");
+		
 		// first child should always be command name
 		logSynopticEvent(cmdName);
 
@@ -337,7 +335,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Max number of filenames to use when !onlyValid
 	 */
-	protected final int MAX_FILES = 10;
+	protected final int MAX_FILES = 5;
 
 	/**
 	 * Return a random filename for !onlyValid
@@ -351,6 +349,6 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	 * content
 	 */
 	protected String randomContent() {
-		return random.nextInt(1000) + "";
+		return random.nextInt(1000000) + "";
 	}
 }

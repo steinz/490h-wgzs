@@ -40,9 +40,9 @@ public class PerfectInitializedClient extends PerfectClient {
 		}
 
 		if (this.addr == 0) {
-			printVerbose("initialized as manager with uuid: " + this.ID);
+			printInfo("initialized as manager with session id: " + this.ID);
 		} else {
-			printVerbose("initialized as client with uuid: " + this.ID);
+			printInfo("initialized as client with session id: " + this.ID);
 		}
 	}
 }
