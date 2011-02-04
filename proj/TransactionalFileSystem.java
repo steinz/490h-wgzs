@@ -6,17 +6,14 @@
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Queue;
-import java.util.StringTokenizer;
 import java.util.Map.Entry;
+import java.util.Queue;
 
 import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.Utility;
@@ -174,24 +171,13 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 * 
 		 * @param client
 		 * @throws IOException
+		 * @throws TransactionException
 		 */
-		public void commitQueue(int client) throws IOException {
+		public void commitQueue(int client) throws IOException,
+				TransactionException {
 			Queue<PendingOperation> clientQueue = queuedOperations.get(client);
 			for (PendingOperation op : clientQueue) {
-				switch (op.op) {
-				case CREATE:
-					fs.createFile(op.filename);
-					break;
-				case DELETE:
-					fs.deleteFile(op.filename);
-					break;
-				case PUT:
-					fs.writeFile(op.filename, op.contents, false);
-					break;
-				case APPEND:
-					fs.writeFile(op.filename, op.contents, true);
-					break;
-				}
+				apply(op);
 			}
 			clientQueue.clear();
 		}
@@ -206,13 +192,11 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		}
 
 		/**
-		 * @throws FileNotFoundException
-		 * @throws TransactionLogException
+		 * @throws IOException
 		 * @throws TransactionException
 		 */
 
-		public void recover() throws FileNotFoundException,
-				TransactionLogException {
+		public void recover() throws IOException {
 			/*
 			 * TODO: Decide if the client address should actually be part of the
 			 * PendingOperation objects or just written and read externally.
@@ -247,9 +231,9 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				boolean seenStart = false;
 				for (PendingOperation nextOp : ops) {
 					if (seenStart && nextOp.op == Operation.TXCOMMIT) {
-						// reapply batch
+						// reapply this batch
 						for (PendingOperation reapply : batch) {
-							
+							apply(reapply);
 						}
 					} else if (seenStart && nextOp.op == Operation.TXSTART) {
 						throw new TransactionLogException(
@@ -274,6 +258,27 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 						"client transaction queue uninitialized");
 			}
 			clientQueue.add(op);
+		}
+
+		protected void apply(PendingOperation op) throws IOException  {
+			switch (op.op) {
+			case CREATE:
+				fs.createFile(op.filename);
+				break;
+			case DELETE:
+				fs.deleteFile(op.filename);
+				break;
+			case PUT:
+				fs.writeFile(op.filename, op.contents, false);
+				break;
+			case APPEND:
+				fs.writeFile(op.filename, op.contents, true);
+				break;
+			default:
+				throw new TransactionLogException(
+						"attemp to apply invalid tx op");
+			}
+
 		}
 	}
 
@@ -316,12 +321,13 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	/**
 	 * Recovers as ReliableFileSystem does but also recovers from the
 	 * transaction log and then clears the log on disk.
-	 * @throws IOException 
-	 * @throws FileNotFoundException 
-	 * @throws TransactionLogException 
+	 * 
+	 * @throws IOException
+	 * @throws FileNotFoundException
+	 * @throws TransactionLogException
 	 */
 	@Override
-	protected void recover() throws FileNotFoundException, IOException, TransactionLogException{
+	protected void recover() throws FileNotFoundException, IOException {
 		super.recover();
 		txLog.recover();
 
