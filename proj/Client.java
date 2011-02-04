@@ -734,7 +734,7 @@ public class Client extends RIONode {
 	public void send(int destAddr, int protocol, byte[] payload) {
 		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
 				+ destAddr + " with payload: "
-				+ Utility.byteArrayToString(payload));
+				+ packetBytesToString(payload));
 		super.send(destAddr, protocol, payload);
 	}
 
@@ -742,7 +742,7 @@ public class Client extends RIONode {
 	public void RIOSend(int destAddr, int protocol, byte[] payload) {
 		printVerbose("rio-sending " + Protocol.protocolToString(protocol)
 				+ " to " + destAddr + " with payload: "
-				+ Utility.byteArrayToString(payload));
+				+ packetBytesToString(payload));
 		super.RIOSend(destAddr, protocol, payload);
 	}
 

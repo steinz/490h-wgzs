@@ -213,7 +213,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		}
 
 		client.addTimeout(new Callback(doOpMethod, client,
-				new Object[] { doInvalidCommands }), DO_OP_WAIT);
+				new Object[] { !doInvalidCommands }), DO_OP_WAIT);
 	}
 
 	/**
