@@ -27,14 +27,28 @@ public abstract class RIONode extends Node {
 	/**
 	 * Mapping from other node addresses to session UUIDs
 	 */
-	public HashMap<Integer, UUID> addrToSessionIDMap;
+	protected HashMap<Integer, UUID> addrToSessionIDMap;
+
+	/**
+	 * Set session UUID
+	 */
+	public void setID(UUID iD) {
+		ID = iD;
+	}
+
+	/**
+	 * Get session UUID
+	 */
+	public UUID getID() {
+		return ID;
+	}
 
 	public RIONode() {
 		setID(UUID.randomUUID());
 		addrToSessionIDMap = new HashMap<Integer, UUID>();
 		RIOLayer = new ReliableInOrderMsgLayer(this);
 	}
-	
+
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
 		if (protocol == Protocol.ACK) {
@@ -46,13 +60,6 @@ public abstract class RIONode extends Node {
 
 	/**
 	 * Send a message using the reliable, in-order delivery layer
-	 * 
-	 * @param destAddr
-	 *            The address to send to
-	 * @param protocol
-	 *            The protocol identifier of the message
-	 * @param payload
-	 *            The payload of the message
 	 */
 	public void RIOSend(int destAddr, int protocol, byte[] payload) {
 		RIOLayer.RIOSend(destAddr, protocol, payload);
@@ -60,70 +67,34 @@ public abstract class RIONode extends Node {
 
 	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
-	 * 
-	 * @param from
-	 *            The address from which the message was received
-	 * @param protocol
-	 *            The protocol identifier of the message
-	 * @param msg
-	 *            The message that was received
 	 */
 	public abstract void onRIOReceive(Integer from, int protocol, byte[] msg);
 
 	@Override
 	public String toString() {
-		return RIOLayer.toString();
-	}
-
-	/**
-	 * Set session UUID
-	 * 
-	 * @param iD
-	 */
-	public void setID(UUID iD) {
-		ID = iD;
-	}
-
-	/**
-	 * Get session UUID
-	 * 
-	 * @return
-	 */
-	public UUID getID() {
-		return ID;
-	}
-
-	/**
-	 * Convenience call that initializes a new StringBuilder.
-	 * 
-	 * @return
-	 */
-	public StringBuilder appendNodeAddress() {
-		return appendNodeAddress(new StringBuilder());
+		return "RIONode|SessionID:" + ID + "|RIOLayer:" + RIOLayer.toString();
 	}
 
 	/**
 	 * Returns a new StringBuilder with this node's address prepended for
 	 * logging.
-	 * 
-	 * @param sb
-	 * @return
 	 */
-	public StringBuilder appendNodeAddress(StringBuilder sb) {
+	public StringBuilder appendNodeAddress() {
+		StringBuilder sb = new StringBuilder();
 		sb.append("Node ");
 		sb.append(addr);
 		sb.append(": ");
 		return sb;
 	}
-	
+
 	@Override
 	public String packetBytesToString(byte[] bytes) {
-		// TODO: LOW: Handle ACKs in a better way
+		// TODO: Unpack ACKs so we can log them
 		try {
 			return RIOPacket.unpack(bytes).toString();
 		} catch (Exception e) {
 			// ACKs don't unpack correctly, ignore them
-			return "";
+			return "ACK";
 		}
 	}
 }

@@ -178,8 +178,8 @@ public class RIOPacket {
 	public String toString() {
 		// TODO: fix protocolToString call so all logs print strings instead of
 		// ints
-		return "rio-proto:" + Protocol.protocolToString(this.protocol)
-				+ " rio-seqNum:" + this.seqNum + " rio-payload:"
+		return "proto:" + Protocol.protocolToString(this.protocol)
+				+ "|rio-seqNum:" + this.seqNum + "|payload:"
 				+ Utility.byteArrayToString(payload);
 	}
 }
