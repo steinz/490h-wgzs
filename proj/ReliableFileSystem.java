@@ -33,9 +33,10 @@ public class ReliableFileSystem {
 	 */
 	protected Client n;
 
-	public ReliableFileSystem(Client n, String tempFilename) {
+	public ReliableFileSystem(Client n, String tempFilename) throws FileNotFoundException, IOException {
 		this.n = n;
 		this.tempFilename = tempFilename;
+		this.recover();
 	}
 
 	/**
@@ -223,7 +224,7 @@ public class ReliableFileSystem {
 	 * @throws FileNotFoundException
 	 * @throws IOException
 	 */
-	public void recover() throws FileNotFoundException, IOException {
+	protected void recover() throws FileNotFoundException, IOException {
 		if (!Utility.fileExists(n, tempFilename)) {
 			// Do nothing if we don't have a temp file
 			return;
