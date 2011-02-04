@@ -4,17 +4,21 @@
  * @author wayger, steinz
  */
 
+import java.io.BufferedReader;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.StringTokenizer;
 import java.util.Map.Entry;
 
+import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /*
@@ -59,7 +63,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		protected String contents;
 
 		/**
-		 * Constcut ap op w/o contents
+		 * Construct an op w/o contents
 		 */
 		public PendingOperation(int client, Operation op, String filename) {
 			this.client = client;
@@ -68,7 +72,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		}
 
 		/**
-		 * Constuct an op w/ contents
+		 * Construct an op w/ contents
 		 */
 		public PendingOperation(int client, Operation op, String filename,
 				String contents) {
@@ -93,39 +97,42 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			sb.append(filename);
 			sb.append(lineSeparator);
 			if (contents != null) {
-				sb.append(contents.length());
-				sb.append(lineSeparator);
+				sb.append(contents.split(lineSeparator).length); // line count
 				sb.append(contents);
 			} else {
 				sb.append(-1);
 			}
+			sb.append(lineSeparator);
 			return sb.toString();
 		}
 
-		public static PendingOperation fromLog(String log, int offset) {
-			String examine = log.substring(offset);
-			StringTokenizer t = new StringTokenizer(examine, lineSeparator);
-			String sClient = t.nextToken();
-			String sOp = t.nextToken();
-			String filename = t.nextToken();
-			String sLen = t.nextToken();
+		/**
+		 * Returns the next PendingOperation object read from reader or null
+		 */
+		public static PendingOperation fromLog(BufferedReader reader) {
+			try {
+				String sClient = reader.readLine();
+				String sOp = reader.readLine();
+				String filename = reader.readLine();
+				String sLen = reader.readLine();
 
-			int client = Integer.parseInt(sClient);
-			Operation op = Operation.valueOf(sOp);
-			int len = Integer.parseInt(sLen);
+				int client = Integer.parseInt(sClient);
+				Operation op = Operation.valueOf(sOp);
+				int len = Integer.parseInt(sLen);
 
-			int next = offset + sClient.length() + sOp.length()
-					+ filename.length() + sLen.length() + 4
-					* lineSeparator.length();
-			String contents;
-			if (len > -1) {
-				contents = log.substring(next, next + len);
-				return new PendingOperation(client, op, filename, contents);
-				// next entry is at log[next + delim.length() +
-				// contents.length() ..
-			} else {
-				return new PendingOperation(client, op, filename);
-				// next entry is at log[next ..
+				if (len > -1) {
+					StringBuilder contents = new StringBuilder();
+					for (int i = 0; i < len; i++) {
+						contents.append(reader.readLine());
+						contents.append(lineSeparator);
+					}
+					return new PendingOperation(client, op, filename,
+							contents.toString());
+				} else {
+					return new PendingOperation(client, op, filename);
+				}
+			} catch (IOException e) {
+				return null;
 			}
 		}
 	}
@@ -199,10 +206,13 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		}
 
 		/**
-		 * 
+		 * @throws FileNotFoundException
+		 * @throws TransactionLogException
+		 * @throws TransactionException
 		 */
 
-		public void recover() {
+		public void recover() throws FileNotFoundException,
+				TransactionLogException {
 			/*
 			 * TODO: Decide if the client address should actually be part of the
 			 * PendingOperation objects or just written and read externally.
@@ -213,46 +223,42 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				return;
 			}
 
-			// read log from disk, parsing lines into PendingOperation objects
-			String log = "";
-
 			Map<Integer, List<PendingOperation>> oldTxs = new HashMap<Integer, List<PendingOperation>>();
-			int offset = 0;
 
-			// loop
-			do {
-				PendingOperation op = PendingOperation.fromLog(log, offset);
+			// read log from disk, parsing lines into PendingOperation objects
+			PersistentStorageReader reader = this.fs.n.getReader(logFilename);
+			PendingOperation op = PendingOperation.fromLog(reader);
+			while (op != null) {
 				List<PendingOperation> clientQueue = oldTxs.get(op.client);
 				if (clientQueue == null) {
 					clientQueue = new ArrayList<PendingOperation>();
 					oldTxs.put(op.client, clientQueue);
 				}
 				clientQueue.add(op);
-			} while (false);
-			// end loop
+				op = PendingOperation.fromLog(reader);
+			}
 
+			// reapply txs
 			for (Entry<Integer, List<PendingOperation>> entry : oldTxs
 					.entrySet()) {
 				List<PendingOperation> ops = entry.getValue();
 
-				// TOOD: HIGH: Factor this loop out or something, it hurts my
-				// face
-				for (int i = 0; i < ops.size(); i++) {
-					PendingOperation op = ops.get(ops.size() - 1 - i);
-					if (op.op == Operation.TXCOMMIT) {
-						int start = i + 1;
-
-						// find TXSTART
-
-						// redo between START and COMMIT
+				List<PendingOperation> batch = new ArrayList<PendingOperation>();
+				boolean seenStart = false;
+				for (PendingOperation nextOp : ops) {
+					if (seenStart && nextOp.op == Operation.TXCOMMIT) {
+						// reapply batch
+						for (PendingOperation reapply : batch) {
+							
+						}
+					} else if (seenStart && nextOp.op == Operation.TXSTART) {
+						throw new TransactionLogException(
+								"multiple TXSTART without separating TXCOMMIT");
+					} else if (seenStart) {
+						batch.add(nextOp);
 					}
 				}
 			}
-
-			// update offset
-
-			// reapply committed operations in log
-
 		}
 
 		/**
@@ -286,7 +292,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	protected TransactionLog txLog;
 
 	public TransactionalFileSystem(Client n, String tempFilename,
-			String logFilename) throws IOException {
+			String logFilename) throws IOException, TransactionLogException {
 		// setup ReliableFileSystem
 		super(n, tempFilename);
 
@@ -310,11 +316,15 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	/**
 	 * Recovers as ReliableFileSystem does but also recovers from the
 	 * transaction log and then clears the log on disk.
+	 * @throws IOException 
+	 * @throws FileNotFoundException 
+	 * @throws TransactionLogException 
 	 */
 	@Override
-	public void recover() throws FileNotFoundException, IOException {
+	protected void recover() throws FileNotFoundException, IOException, TransactionLogException{
 		super.recover();
 		txLog.recover();
+
 	}
 
 	public void createFileTX(int client, String filename)
@@ -337,8 +347,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		txLog.enque(client, op);
 	}
 
-	public String getFileTX(int client, String filename)
-			throws IOException {
+	public String getFileTX(int client, String filename) throws IOException {
 		// Look through log for ops in this tx that alterd filename
 
 		String putContents = null;

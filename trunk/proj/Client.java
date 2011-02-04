@@ -128,8 +128,7 @@ public class Client extends RIONode {
 	 */
 
 	/*
-	 * TODO: LOW: Separate the Client and Manager code into two node types -
-	 * this is impossible w/ framework since we can't start two node types
+	 * TODO: Separate the Client and Manager code into two modules
 	 */
 
 	/*
@@ -213,6 +212,11 @@ public class Client extends RIONode {
 	 * Name of the log file used by FS transactions
 	 */
 	protected static final String logFilename = ".log";
+
+	/**
+	 * Static empty payload for use by messages that don't have payloads
+	 */
+	protected static final byte[] emptyPayload = new byte[0];
 
 	/**
 	 * Whether or not this node is the manager for project 2.
@@ -300,16 +304,16 @@ public class Client extends RIONode {
 	private Map<String, Integer> managerPendingRPCDeleteRequests;
 
 	/**
+	 * Status of who is waiting to create this file via RPC
+	 */
+	private Map<String, Integer> managerPendingRPCCreateRequests;
+
+	/**
 	 * A set of node addresses currently performing transactions
 	 * 
 	 * TODO: HIGH: Could be pushed down into the TransactionalFileSystem
 	 */
 	protected Set<Integer> managerTransactionsInProgress;
-
-	/**
-	 * Status of who is waiting to create this file via RPC
-	 */
-	private Map<String, Integer> managerPendingRPCCreateRequests;
 
 	/*************************************************
 	 * end manager only data structures
@@ -590,7 +594,7 @@ public class Client extends RIONode {
 	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
 		printVerbose("sending noop to " + server);
-		RIOSend(server, Protocol.NOOP, Utility.stringToByteArray(""));
+		RIOSend(server, Protocol.NOOP, emptyPayload);
 	}
 
 	/**
@@ -674,11 +678,6 @@ public class Client extends RIONode {
 	/*************************************************
 	 * end RPC methods
 	 ************************************************/
-
-	/*
-	 * TODO: HIGH: Propagate errors back to clients, send aborts on failures,
-	 * etc.
-	 */
 
 	/**
 	 * TODO: LOW: Associate a unique command_id with every operation to make
@@ -886,9 +885,13 @@ public class Client extends RIONode {
 			/*
 			 * TODO: HIGH: All errors should be caught and dealt w/ here
 			 * 
-			 * Manager side: respond by sendError to from or failing tx
+			 * Manager side: respond by sendError(from) or send TX_FAILURE
 			 * 
-			 * Client side: printError, abort tx?
+			 * Client side: printError, abort tx - manager might detect failure
+			 * first, but maybe good to abort here just in case - if manager
+			 * removes the client from it's transacting set an abort shouldn't
+			 * be necessary and the manager needs to know what to do with it
+			 * (ignore it probably)
 			 */
 
 			printError(e);
@@ -1075,7 +1078,7 @@ public class Client extends RIONode {
 	}
 
 	protected void receiveTX_COMMIT(int from) throws TransactionException,
-			NotManagerException {
+			NotManagerException, IOException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
@@ -1084,9 +1087,9 @@ public class Client extends RIONode {
 					+ from);
 		}
 
-		// TODO: HIGH: receiveTX_START
-
+		fs.commitTransaction(from);
 		managerTransactionsInProgress.remove(from);
+		RIOSend(from, Protocol.TX_SUCCESS, emptyPayload);
 	}
 
 	protected void receiveTX_ABORT(int from) throws NotManagerException,
@@ -1099,9 +1102,9 @@ public class Client extends RIONode {
 					+ from);
 		}
 
-		// TODO: HIGH: receiveTX_ABORT
-
+		fs.abortTransaction(from);
 		managerTransactionsInProgress.remove(from);
+		RIOSend(from, Protocol.TX_FAILURE, emptyPayload);
 	}
 
 	/**
@@ -1143,7 +1146,17 @@ public class Client extends RIONode {
 		}
 	}
 
+	/**
+	 * Helper the manager should use to lock a file
+	 * 
+	 * @param filename
+	 */
 	protected void managerLockFile(String filename) {
+		/**
+		 * TODO: Detect if client is performing operations out of order during
+		 * transaction.
+		 */
+
 		printVerbose("manager locking file: " + filename);
 		logSynopticEvent("MANAGER-LOCK");
 		managerLockedFiles.add(filename);
@@ -1262,10 +1275,13 @@ public class Client extends RIONode {
 	/**
 	 * TODO: HIGH: Delay all manager side unlocks until transaction finishes. We
 	 * might also have to lock files that we get (but don't write), which we
-	 * might not be doing right now.
+	 * might not be doing right now. If we want the transacting client to be
+	 * able to do multiple operations on the same file during a transaction
+	 * (which we do), we might need to create another level of locks - the
+	 * existing one keeps the transacting client's operations in order - the new
+	 * one would be the delayed lock keeping other clients from accessing the
+	 * file until the transaction completes.
 	 * 
-	 * TODO: Detect if client performs operations out of order during
-	 * transaction
 	 */
 
 	/**
@@ -1423,8 +1439,7 @@ public class Client extends RIONode {
 				// still waiting for more ICs
 				List<Integer> waitingFor = managerPendingICs.get(filename);
 				StringBuilder waiting = new StringBuilder();
-				waiting
-						.append("Received IC but waiting for IC from clients : ");
+				waiting.append("Received IC but waiting for IC from clients : ");
 				for (int i : waitingFor) {
 					waiting.append(i + " ");
 				}
@@ -1559,7 +1574,7 @@ public class Client extends RIONode {
 		if (this.managerAddr == -1) {
 			throw new UnknownManagerException();
 		} else {
-			RIOSend(managerAddr, protocol, Utility.stringToByteArray(""));
+			RIOSend(managerAddr, protocol, emptyPayload);
 		}
 	}
 
@@ -1656,7 +1671,7 @@ public class Client extends RIONode {
 			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 
 			/*
-			 *  update in cache (not strictly necessary w/o txs on PUTs)
+			 * update in cache (not strictly necessary w/o txs on PUTs)
 			 */
 			if (!Utility.fileExists(this, filename)) {
 				fs.createFile(filename);
@@ -1868,14 +1883,15 @@ public class Client extends RIONode {
 	 * Transaction succeeded
 	 * 
 	 * @throws NotClientException
+	 * @throws TransactionException 
+	 * @throws IOException 
 	 */
-	protected void receiveTX_SUCCESS() throws NotClientException {
+	protected void receiveTX_SUCCESS() throws NotClientException, IOException, TransactionException {
 		if (isManager) {
 			throw new NotClientException();
 		}
 
-		// TODO: HIGH: receiveTX_SUCCESS
-
+		fs.commitTransaction(this.addr);
 		clientTransacting = false;
 	}
 
@@ -1883,14 +1899,14 @@ public class Client extends RIONode {
 	 * Tranaction failed
 	 * 
 	 * @throws NotClientException
+	 * @throws TransactionException 
 	 */
-	protected void receiveTX_FAILURE() throws NotClientException {
+	protected void receiveTX_FAILURE() throws NotClientException, TransactionException {
 		if (isManager) {
 			throw new NotClientException();
 		}
 
-		// TODO: HIGH: receiveTX_FAILED
-
+		fs.abortTransaction(this.addr);
 		clientTransacting = false;
 	}
 
