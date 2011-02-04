@@ -15,7 +15,13 @@ import java.io.PrintStream;
  */
 public class Logger {
 
-	// TODO: Add color codes as described on message board?
+	// TODO: Replace with java.util.logging.Logger
+
+	/*
+	 * TODO: LOW: It would be neat if the logger could take closures so that the
+	 * strings would only be computed if logging was on. This could also help
+	 * clean up long blocks of logging code elsewhere.
+	 */
 
 	/**
 	 * The path to the server log
@@ -47,12 +53,6 @@ public class Logger {
 	public static void verbose(String str) {
 		verbose(str, false);
 	}
-
-	/*
-	 * TODO: LOW: It would be neat if the logger could take methods instead of
-	 * strings so that the strings would only be computed if logging was on.
-	 * This would also clean up long logging block calls in code elsewhere.
-	 */
 
 	public static void verbose(String str, boolean highlight) {
 		if (printVerbose) {
@@ -133,7 +133,7 @@ public class Logger {
 		}
 	}
 
-	//TODO: LOW: keep the writer open between entries
+	// TODO: LOW: keep the writer open between entries
 	
 	public static void writeToLog(String message) {
 		try {
