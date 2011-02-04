@@ -19,30 +19,39 @@ import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /*
- * TODO: HIGH: Implement TransactionalFileSystem
- * 
- * All FS operations write to log and queue op in memory.
- * 
- * Queued ops are written to disk on commit, then log is cleared.
- * 
- * Queue is thrown out on abort.
+ * TODO: EC: In memory file caching - DHT
+ */
+
+/*
+ * TODO: EC: Implement some kind of snapshotting that could be used by long 
+ * running, non-mutating transactions without locking files (for analytics, etc)
+ */
+
+/*
+ * TODO: OPT: Keep the log open between writes
  */
 
 /**
- * Extension of the ReliableFileSystem that adds support for transactions.
+ * Extension of the ReliableFileSystem that adds support for transactions via
+ * -TX methods, which write to a redo log and are cached in memory.
+ * 
+ * The log is purged after initialization
+ * 
+ * TODO: also purge occasionally after transactions commit or abort (where
+ * marked by todos)
  */
 public class TransactionalFileSystem extends ReliableFileSystem {
 
 	/**
-	 * Operations the FS can perform
+	 * Operations the FS logs
 	 */
 	protected static enum Operation {
-		CREATE, DELETE, PUT, APPEND, TXSTART, TXCOMMIT
+		CREATE, DELETE, PUT, APPEND, TXSTART, TXCOMMIT, TXABORT
 	};
 
 	/**
-	 * Encapsulates an operation on a filename and arguments
-	 * 
+	 * Encapsulates an operation performed by a client, possibly with a filename
+	 * and contents
 	 */
 	protected static class PendingOperation {
 		protected static final String lineSeparator = System
@@ -55,16 +64,23 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		protected String filename;
 
 		/**
-		 * Used to store contents for put/append
+		 * Stores contents for put/append
 		 */
 		protected String contents;
+
+		/**
+		 * Construct a tx op
+		 */
+		public PendingOperation(int client, Operation op) {
+			this.client = client;
+			this.op = op;
+		}
 
 		/**
 		 * Construct an op w/o contents
 		 */
 		public PendingOperation(int client, Operation op, String filename) {
-			this.client = client;
-			this.op = op;
+			this(client, op);
 			this.filename = filename;
 		}
 
@@ -73,24 +89,26 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 */
 		public PendingOperation(int client, Operation op, String filename,
 				String contents) {
-			this.client = client;
-			this.op = op;
-			this.filename = filename;
+			this(client, op, filename);
 			this.contents = contents;
 		}
 
-		/*
-		 * TODO: This should be done by the language or a library (serializable,
-		 * JSON, ...)
+		/**
+		 * Turns a pending operation into a string to be written to the log in
+		 * the format described in the third writeup.
 		 */
-
 		public String toLogString() {
-			// TODO: HIGH: Document this format
 			StringBuilder sb = new StringBuilder();
 			sb.append(client);
 			sb.append(lineSeparator);
 			sb.append(op);
 			sb.append(lineSeparator);
+
+			if (op == Operation.TXSTART || op == Operation.TXCOMMIT
+					|| op == Operation.TXABORT) {
+				return sb.toString();
+			}
+
 			sb.append(filename);
 			sb.append(lineSeparator);
 			if (contents != null) {
@@ -105,16 +123,23 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		/**
 		 * Returns the next PendingOperation object read from reader or null
+		 * assuming the format described in the third writeup.
 		 */
 		public static PendingOperation fromLog(BufferedReader reader) {
 			try {
 				String sClient = reader.readLine();
 				String sOp = reader.readLine();
+				int client = Integer.parseInt(sClient);
+				Operation op = Operation.valueOf(sOp);
+
+				if (op == Operation.TXSTART || op == Operation.TXCOMMIT
+						|| op == Operation.TXABORT) {
+					return new PendingOperation(client, op);
+				}
+
 				String filename = reader.readLine();
 				String sLen = reader.readLine();
 
-				int client = Integer.parseInt(sClient);
-				Operation op = Operation.valueOf(sOp);
 				int len = Integer.parseInt(sLen);
 
 				if (len > -1) {
@@ -135,10 +160,11 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	}
 
 	/**
-	 * Keeps a list of operations in memory and on disk in the log for each
-	 * client
+	 * A map from client addresses to PendingOperation queues in memory that
+	 * knows how to commit operations to disk and recover itself from the log on
+	 * disk
 	 */
-	protected static class TransactionLog {
+	protected static class TransactionCache {
 
 		protected String logFilename;
 
@@ -150,7 +176,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 */
 		Map<Integer, Queue<PendingOperation>> queuedOperations;
 
-		public TransactionLog(TransactionalFileSystem fs, String logFilename) {
+		public TransactionCache(TransactionalFileSystem fs, String logFilename) {
 			this.fs = fs;
 			this.logFilename = logFilename;
 			queuedOperations = new HashMap<Integer, Queue<PendingOperation>>();
@@ -158,8 +184,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		/**
 		 * Blindly creates a new queue for client
-		 * 
-		 * @param client
 		 */
 		public void createQueue(int client) {
 			queuedOperations.put(client, new LinkedList<PendingOperation>());
@@ -184,8 +208,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		/**
 		 * Blindly clears the queue for client
-		 * 
-		 * @param client
 		 */
 		public void abortQueue(int client) {
 			queuedOperations.get(client).clear();
@@ -193,15 +215,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		/**
 		 * @throws IOException
-		 * @throws TransactionException
 		 */
-
 		public void recover() throws IOException {
-			/*
-			 * TODO: Decide if the client address should actually be part of the
-			 * PendingOperation objects or just written and read externally.
-			 */
-
 			if (!Utility.fileExists(fs.n, logFilename)) {
 				// no log, so nothing to do
 				return;
@@ -235,9 +250,15 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 						for (PendingOperation reapply : batch) {
 							apply(reapply);
 						}
+						seenStart = false;
+					} else if (seenStart && nextOp.op == Operation.TXABORT) {
+						batch.clear();
+						seenStart = false;
 					} else if (seenStart && nextOp.op == Operation.TXSTART) {
 						throw new TransactionLogException(
 								"multiple TXSTART without separating TXCOMMIT");
+					} else if (!seenStart && nextOp.op == Operation.TXSTART) {
+						seenStart = true;
 					} else if (seenStart) {
 						batch.add(nextOp);
 					}
@@ -260,7 +281,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			clientQueue.add(op);
 		}
 
-		protected void apply(PendingOperation op) throws IOException  {
+		protected void apply(PendingOperation op) throws IOException {
 			switch (op.op) {
 			case CREATE:
 				fs.createFile(op.filename);
@@ -275,37 +296,32 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				fs.writeFile(op.filename, op.contents, true);
 				break;
 			default:
-				throw new TransactionLogException(
-						"attemp to apply invalid tx op");
+				throw new TransactionLogException("attemp to apply tx op");
 			}
 
 		}
 	}
 
 	/**
-	 * TODO: LOW: Keep the log open between writes
-	 */
-
-	/**
 	 * Name of the log file used by FS transactions
 	 */
 	protected String logFilename;
 
+	protected String logTempFilename;
+
 	/**
 	 * Logged operations yet to be committed
 	 */
-	protected TransactionLog txLog;
+	protected TransactionCache txCache;
 
 	public TransactionalFileSystem(Client n, String tempFilename,
 			String logFilename) throws IOException, TransactionLogException {
 		// setup ReliableFileSystem
 		super(n, tempFilename);
 
-		// setup the log file
+		// setup log file state
 		this.logFilename = logFilename;
-
-		// setup the log object
-		this.txLog = new TransactionLog(this, this.logFilename);
+		this.txCache = new TransactionCache(this, this.logFilename);
 
 		// recover from the log if necessary
 		this.recover();
@@ -320,7 +336,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 	/**
 	 * Recovers as ReliableFileSystem does but also recovers from the
-	 * transaction log and then clears the log on disk.
+	 * transaction log
 	 * 
 	 * @throws IOException
 	 * @throws FileNotFoundException
@@ -329,37 +345,16 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	@Override
 	protected void recover() throws FileNotFoundException, IOException {
 		super.recover();
-		txLog.recover();
-
-	}
-
-	public void createFileTX(int client, String filename)
-			throws TransactionException, IOException {
-		/**
-		 * TODO: HIGH: Check that client is transacting here, or in Client?
-		 */
-
-		PendingOperation op = new PendingOperation(client, Operation.CREATE,
-				filename);
-		performWrite(logFilename, true, op.toLogString() + lineSeparator);
-		txLog.enque(client, op);
-	}
-
-	public void deleteFileTX(int client, String filename) throws IOException,
-			TransactionException {
-		PendingOperation op = new PendingOperation(client, Operation.DELETE,
-				filename);
-		performWrite(logFilename, true, op.toLogString() + lineSeparator);
-		txLog.enque(client, op);
+		txCache.recover();
 	}
 
 	public String getFileTX(int client, String filename) throws IOException {
-		// Look through log for ops in this tx that alterd filename
+		// Look through op queue for ops in this tx that altered this file
 
 		String putContents = null;
 		Queue<String> appendsQueue = new LinkedList<String>();
 		boolean deleted = false;
-		for (PendingOperation op : txLog.queuedOperations.get(client)) {
+		for (PendingOperation op : txCache.queuedOperations.get(client)) {
 			if (op.filename.equals(filename)) {
 				switch (op.op) {
 				case DELETE:
@@ -396,6 +391,30 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		}
 	}
 
+	/*
+	 * The below methods all log what they are doing to disk and in the txCache
+	 */
+
+	public void createFileTX(int client, String filename)
+			throws TransactionException, IOException {
+		/**
+		 * TODO: HIGH: Check that client is transacting here, or in Client?
+		 */
+
+		PendingOperation op = new PendingOperation(client, Operation.CREATE,
+				filename);
+		performWrite(logFilename, true, op.toLogString());
+		txCache.enque(client, op);
+	}
+
+	public void deleteFileTX(int client, String filename) throws IOException,
+			TransactionException {
+		PendingOperation op = new PendingOperation(client, Operation.DELETE,
+				filename);
+		performWrite(logFilename, true, op.toLogString());
+		txCache.enque(client, op);
+	}
+
 	public void writeFileTX(int client, String filename, String contents,
 			boolean append) throws IOException, TransactionException {
 		PendingOperation op;
@@ -407,22 +426,31 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 					+ lineSeparator);
 		}
 		performWrite(logFilename, true, op.toLogString());
-		txLog.enque(client, op);
+		txCache.enque(client, op);
 	}
 
 	public void startTransaction(int client) throws IOException,
 			TransactionException {
-		performWrite(logFilename, true, "TX_START " + client + lineSeparator);
-		txLog.createQueue(client);
+		PendingOperation op = new PendingOperation(client, Operation.TXSTART);
+		performWrite(logFilename, true, op.toLogString());
+		txCache.createQueue(client);
 	}
 
 	public void commitTransaction(int client) throws IOException,
 			TransactionException {
-		performWrite(logFilename, true, "TX_COMMIT " + client + lineSeparator);
-		txLog.commitQueue(client);
+		PendingOperation op = new PendingOperation(client, Operation.TXCOMMIT);
+		performWrite(logFilename, true, op.toLogString());
+		txCache.commitQueue(client);
+
+		// TODO: Cleanup log on disk
 	}
 
-	public void abortTransaction(int client) throws TransactionException {
-		txLog.abortQueue(client);
+	public void abortTransaction(int client) throws TransactionException,
+			IOException {
+		PendingOperation op = new PendingOperation(client, Operation.TXABORT);
+		performWrite(logFilename, true, op.toLogString());
+		txCache.abortQueue(client);
+
+		// TODO: Cleanup log on disk
 	}
 }

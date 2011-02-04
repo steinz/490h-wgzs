@@ -787,6 +787,8 @@ public class Client extends RIONode {
 	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
 		printVerbose("receiving packet from RIOLayer");
 
+
+		
 		String msgString = Utility.byteArrayToString(msg);
 
 		/*
@@ -1093,7 +1095,7 @@ public class Client extends RIONode {
 	}
 
 	protected void receiveTX_ABORT(int from) throws NotManagerException,
-			TransactionException {
+			TransactionException, IOException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
@@ -1900,8 +1902,9 @@ public class Client extends RIONode {
 	 * 
 	 * @throws NotClientException
 	 * @throws TransactionException 
+	 * @throws IOException 
 	 */
-	protected void receiveTX_FAILURE() throws NotClientException, TransactionException {
+	protected void receiveTX_FAILURE() throws NotClientException, TransactionException, IOException {
 		if (isManager) {
 			throw new NotClientException();
 		}
