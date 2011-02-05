@@ -831,6 +831,7 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
+		this.managerFunctions.receiveDelete(from, filename);
 
 	}
 
@@ -957,9 +958,6 @@ public class Client extends RIONode {
 		this.managerFunctions.receiveIC(client, filename);
 	}
 	
-
-
-
 
 	/*************************************************
 	 * end manager-only cache coherency functions
@@ -1393,6 +1391,13 @@ public class Client extends RIONode {
 		byte[] payload = Utility.stringToByteArray(msg);
 		RIOSend(destAddr, Protocol.ERROR, payload);
 	}
+
+	public void sendError(int from, String filename, String message) {
+		String msg = filename + delimiter + message;
+		byte[] payload = Utility.stringToByteArray(msg);
+		RIOSend(from, Protocol.ERROR, payload);
+	}
+
 
 	/*************************************************
 	 * begin invariant checkers
