@@ -36,7 +36,7 @@ public class PerfectInitializedClient extends PerfectClient {
 			String line = "manager";
 			StringTokenizer tokens = new StringTokenizer(line);
 			this.isManager = false; // Reset by managerHandler
-			managerHandler(tokens, line);
+			clientFunctions.managerHandler(tokens, line);
 		}
 
 		if (this.addr == 0) {

@@ -6,13 +6,7 @@
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Queue;
-import java.util.Set;
 import java.util.StringTokenizer;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -188,7 +182,7 @@ public class Client extends RIONode {
 	 * Encapsulates client functionality
 	 */
 	protected ClientNode clientFunctions;
-	
+
 	/**
 	 * FS for this node
 	 */
@@ -197,9 +191,11 @@ public class Client extends RIONode {
 	/**
 	 * Cleans up failed puts if necessary
 	 */
-	public void start() {		
+	public void start() {
 		this.isManager = false;
 		this.managerAddr = -1;
+
+		this.clientFunctions = new ClientNode(this);
 
 		// Wipe the server log
 		Logger.eraseLog(this);
@@ -210,351 +206,6 @@ public class Client extends RIONode {
 			printError(e);
 		}
 	}
-
-	/**************************************************************************
-	 * begin onCommand Handler methods
-	 * 
-	 * these methods should pass all exceptions up to their caller
-	 **************************************************************************/
-
-	/**
-	 * For debugging purposes only. Prints expected numbers for in and out
-	 * channels. Likely to change as new problems arise.
-	 */
-	public void debugHandler(StringTokenizer tokens, String line) {
-		RIOLayer.printSeqStateDebug();
-	}
-
-	/**
-	 * Used for project2 to tell a node it is the manager.
-	 */
-	public void managerHandler(StringTokenizer tokens, String line) {
-		if (!isManager) {
-			printInfo("promoted to manager");
-
-			this.isManager = true;
-
-			this.managerFunctions = new ManagerNode(this);
-		} else {
-			printInfo("already manager");
-		}
-	}
-
-	/**
-	 * Used for project2 to tell a node the address of the manager.
-	 */
-	public void managerisHandler(StringTokenizer tokens, String line) {
-		this.managerAddr = Integer.parseInt(tokens.nextToken());
-		printInfo("setting manager address to " + this.managerAddr);
-	}
-
-	/**
-	 * Check if the client has locked the filename. Queue the passed in action
-	 * if the file is locked and return true. Otherwise return false.
-	 */
-	protected boolean clientQueueLineIfLocked(String filename, String line) {
-		if (clientLockedFiles.contains(filename)) {
-			printVerbose("queueing command on locked file: " + filename + ", "
-					+ line);
-
-			Queue<String> requests = clientQueuedCommands.get(filename);
-			if (requests == null) {
-				requests = new LinkedList<String>();
-				clientQueuedCommands.put(filename, requests);
-			}
-			requests.add(line);
-
-			return true;
-		} else {
-			return false;
-		}
-	}
-
-	/**
-	 * Lock the provided filename and print a message
-	 */
-	protected void clientLockFile(String filename) {
-		printVerbose("client locking file: " + filename);
-		logSynopticEvent("CLIENT-LOCK");
-		clientLockedFiles.add(filename);
-	}
-
-	/**
-	 * Get ownership of a file and create it
-	 * 
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 * @throws TransactionException
-	 */
-	public void createHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException, TransactionException {
-		String filename = tokens.nextToken();
-
-		if (clientQueueLineIfLocked(filename, line)) {
-			return;
-		} else if (clientCacheStatus.containsKey(filename)
-				&& (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite)) {
-			// have permissions
-			if (clientTransacting) {
-				fs.createFileTX(this.addr, filename);
-			} else {
-				fs.createFile(filename);
-			}
-		} else {
-			// lock and perform rpc
-			if (this.managerAddr == -1) {
-				throw new UnknownManagerException();
-			} else {
-				clientLockFile(filename);
-				createRPC(this.managerAddr, filename);
-			}
-		}
-	}
-
-	/**
-	 * Get ownership of a file and delete it
-	 * 
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 * @throws TransactionException
-	 */
-	public void deleteHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException, TransactionException {
-		String filename = tokens.nextToken();
-
-		if (clientQueueLineIfLocked(filename, line)) {
-			return;
-		} else if (clientCacheStatus.containsKey(filename)
-				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-			// have permissions
-			if (clientTransacting) {
-				fs.deleteFileTX(this.addr, filename);
-			} else {
-				fs.deleteFile(filename);
-			}
-		} else {
-			// lock and perform rpc
-			if (this.managerAddr == -1) {
-				throw new UnknownManagerException();
-			} else {
-				clientLockFile(filename);
-				deleteRPC(this.managerAddr, filename);
-			}
-		}
-	}
-
-	/**
-	 * Get read access for a file and then get its contents
-	 * 
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 */
-	public void getHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
-		String filename = tokens.nextToken();
-
-		if (clientQueueLineIfLocked(filename, line)) {
-			return;
-		} else if (clientCacheStatus.containsKey(filename)) {
-			// have permissions
-			String content;
-			if (clientTransacting) {
-				content = fs.getFileTX(this.addr, filename);
-			} else {
-				content = fs.getFile(filename);
-			}
-			printInfo("Got file, contents below:");
-			printInfo(content);
-		} else {
-			// lock and get permissions
-			clientLockFile(filename);
-			printVerbose("requesting read access for " + filename);
-			sendToManager(Protocol.RQ, Utility.stringToByteArray(filename));
-		}
-	}
-
-	/**
-	 * Get ownership of a file and put to it
-	 * 
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 * @throws TransactionException
-	 */
-	public void putHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException, TransactionException {
-		String filename = tokens.nextToken();
-		String content = parseAddContent(line, "put", filename);
-
-		if (clientQueueLineIfLocked(filename, line)) {
-			return;
-		} else if (clientCacheStatus.containsKey(filename)
-				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-			// have ownership - writeFile verifies existence
-			if (clientTransacting) {
-				fs.writeFileTX(this.addr, filename, content, false);
-			} else {
-				fs.writeFile(filename, content, false);
-			}
-		} else {
-			// lock and request ownership
-			clientLockFile(filename);
-			printVerbose("requesting ownership of " + filename);
-			sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
-			clientPendingOperations.put(filename, new PendingClientOperation(
-					ClientOperation.PUT, content));
-
-		}
-	}
-
-	/**
-	 * Get ownership of a file and append to it
-	 * 
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 * @throws TransactionException
-	 */
-	public void appendHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException, TransactionException {
-		// TODO: I think I found a framework bug - "append 1 test  world" is
-		// losing the extra space
-
-		String filename = tokens.nextToken();
-		String content = parseAddContent(line, "append", filename);
-
-		if (clientQueueLineIfLocked(filename, line)) {
-			return;
-		} else if (clientCacheStatus.containsKey(filename)
-				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-			// have ownership - writeFile verifies existence
-			if (clientTransacting) {
-				fs.writeFileTX(this.addr, filename, content, true);
-			} else {
-				fs.writeFile(filename, content, true);
-			}
-		} else {
-			// lock and request ownership
-			clientLockFile(filename);
-			printVerbose("requesting ownership of " + filename);
-			sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
-			clientPendingOperations.put(filename, new PendingClientOperation(
-					ClientOperation.APPEND, content));
-
-		}
-	}
-
-	/**
-	 * Parse what content to add to a file for put and append (the rest of the
-	 * line)
-	 */
-	protected String parseAddContent(String line, String cmd, String filename) {
-		int parsedLength = cmd.length() + filename.length() + 2;
-		if (parsedLength >= line.length()) {
-			throw new NoSuchElementException("command content empty");
-		}
-		return line.substring(parsedLength);
-	}
-
-	/**
-	 * Initiates a remote handshake
-	 */
-	public void handshakeHandler(StringTokenizer tokens, String line) {
-		int server = Integer.parseInt(tokens.nextToken());
-		String payload = getID().toString();
-		printInfo("sending handshake to " + server);
-		RIOSend(server, Protocol.HANDSHAKE, Utility.stringToByteArray(payload));
-	}
-
-	/**
-	 * Sends a noop
-	 */
-	public void noopHandler(StringTokenizer tokens, String line) {
-		int server = Integer.parseInt(tokens.nextToken());
-		RIOSend(server, Protocol.NOOP, emptyPayload);
-	}
-
-	/**
-	 * Sends a TX_START if not already performing a transaction
-	 * 
-	 * @throws TransactionException
-	 * @throws UnknownManagerException
-	 * @throws IOException
-	 */
-	public void txstartHandler(StringTokenizer tokens, String line)
-			throws TransactionException, UnknownManagerException, IOException {
-		if (clientTransacting) {
-			throw new TransactionException(
-					"client already performing a transaction");
-		} else {
-			clientTransacting = true;
-			fs.startTransaction(this.addr);
-			sendToManager(Protocol.TX_START);
-		}
-	}
-
-	/**
-	 * Sends a TX_COMMIT if performing a transaction
-	 * 
-	 * @throws TransactionException
-	 * @throws UnknownManagerException
-	 * @throws IOException
-	 */
-	public void txcommitHandler(StringTokenizer tokens, String line)
-			throws TransactionException, UnknownManagerException, IOException {
-		if (!clientTransacting) {
-			throw new TransactionException(
-					"client not performing a transaction");
-		} else {
-			// clientTransacting is updated when a response is received
-			clientWaitingForCommitSuccess = true;
-			sendToManager(Protocol.TX_COMMIT);
-		}
-	}
-
-	/**
-	 * Sends a TX_ABORT if performing a transaction
-	 * 
-	 * @throws UnknownManagerException
-	 * @throws TransactionException
-	 * @throws IOException
-	 */
-	public void txabortHandler(StringTokenizer tokens, String line)
-			throws UnknownManagerException, TransactionException, IOException {
-		if (!clientTransacting) {
-			throw new TransactionException(
-					"client not performing a transaction");
-		} else {
-			fs.abortTransaction(this.addr);
-			clientTransacting = false;
-			sendToManager(Protocol.TX_ABORT);
-		}
-
-	}
-
-	/*************************************************
-	 * end onCommand Handler methods
-	 ************************************************/
-
-	/*************************************************
-	 * begin RPC methods
-	 ************************************************/
-
-	/**
-	 * Perform a create RPC to the given address
-	 */
-	public void createRPC(int address, String filename) {
-		RIOSend(address, Protocol.CREATE, Utility.stringToByteArray(filename));
-	}
-
-	/**
-	 * Perform a delete RPC to the given address
-	 */
-	public void deleteRPC(int address, String filename) {
-		RIOSend(address, Protocol.DELETE, Utility.stringToByteArray(filename));
-	}
-
-	/*************************************************
-	 * end RPC methods
-	 ************************************************/
 
 	/**
 	 * TODO: LOW: Associate a unique command_id with every operation to make
@@ -582,20 +233,22 @@ public class Client extends RIONode {
 			return;
 		}
 
-		// TODO: HIGH: process this queue after receiving
-		// TX_{SUCCESSFUL,FAILURE}
-		if (clientWaitingForCommitSuccess) {
-			clientWaitingForCommitQueue.add(line);
+		/*
+		 * TODO: HIGH: process this queue after receiving
+		 * TX_{SUCCESSFUL,FAILURE}
+		 */
+		if (clientFunctions.clientWaitingForCommitSuccess) {
+			clientFunctions.clientWaitingForCommitQueue.add(line);
 		}
 
 		// Dynamically call <cmd>Command, passing off the tokenizer and the full
 		// command string
 		try {
 			Class<?>[] paramTypes = { StringTokenizer.class, String.class };
-			Method handler = this.getClass().getMethod(cmd + "Handler",
-					paramTypes);
+			Method handler = clientFunctions.getClass().getMethod(
+					cmd + "Handler", paramTypes);
 			Object[] args = { tokens, line };
-			handler.invoke(this, args);
+			handler.invoke(clientFunctions, args);
 		} catch (NoSuchMethodException e) {
 			printError("invalid command:" + line);
 		} catch (IllegalArgumentException e) {
@@ -606,6 +259,9 @@ public class Client extends RIONode {
 			/*
 			 * TODO: HIGH: Command failed, abort tx if in progress
 			 */
+			if (clientFunctions.clientTransacting) {
+
+			}
 
 			printError(e);
 		}
@@ -747,6 +403,11 @@ public class Client extends RIONode {
 	 * begin manager-only cache coherency functions
 	 ************************************************/
 
+	/*
+	 * TODO: HIGH: Are these needed now that the response handlers always send
+	 * responses (and handle their own exceptions)?
+	 */
+
 	/**
 	 * Create RPC
 	 * 
@@ -758,7 +419,6 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-
 		this.managerFunctions.receiveCreate(client, filename);
 	}
 
@@ -778,7 +438,6 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 		this.managerFunctions.receiveDelete(from, filename);
-
 	}
 
 	protected void receiveTX_START(int from) throws TransactionException,
@@ -794,7 +453,6 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-
 		this.managerFunctions.receiveTX_COMMIT(from);
 	}
 
@@ -806,25 +464,15 @@ public class Client extends RIONode {
 		this.managerFunctions.receiveTX_ABORT(from);
 	}
 
-	/**
-	 * Helper that sends a request for the provided filename to the provided
-	 * client using the provided protocol
-	 */
-
-	protected void sendRequest(int client, String filename, int protocol) {
-		byte[] payload = Utility.stringToByteArray(filename);
-		RIOSend(client, protocol, payload);
-	}
-
 	protected void receiveRQ(int client, String filename)
 			throws NotManagerException, IOException,
 			InconsistentPrivelageLevelsDetectedException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-		
-		this.managerFunctions.receiveQ(client, filename, Protocol.RQ, Protocol.RD, 
-				Protocol.RF, true);
+
+		this.managerFunctions.receiveQ(client, filename, Protocol.RQ,
+				Protocol.RD, Protocol.RF, true);
 	}
 
 	protected void receiveWQ(int client, String filename)
@@ -834,8 +482,8 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		this.managerFunctions.receiveQ(client, filename, Protocol.WQ, Protocol.WD, 
-				Protocol.WF, false);
+		this.managerFunctions.receiveQ(client, filename, Protocol.WQ,
+				Protocol.WD, Protocol.WF, false);
 	}
 
 	/**
@@ -889,8 +537,6 @@ public class Client extends RIONode {
 	 * begin client-only cache coherency functions
 	 ************************************************/
 
-	// TODO: Cleanup state after {R,W}{Q,D,F} etc fails
-
 	/**
 	 * Client receives IV as a notification to mark a cached file invalid
 	 * 
@@ -899,57 +545,10 @@ public class Client extends RIONode {
 	 */
 	protected void receiveIV(String msgString) throws NotClientException,
 			UnknownManagerException {
-		// If we're the manager and we received and IV, something bad happened
 		if (isManager) {
 			throw new NotClientException();
 		}
-
-		clientCacheStatus.remove(msgString);
-		printVerbose("marking invalid " + msgString);
-
-		printVerbose("sending ic to manager for file: " + msgString);
-		sendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
-	}
-
-	/**
-	 * Client receives {W,R}F as a request to propagate their changes
-	 * 
-	 * @throws UnknownManagerException
-	 * @throws IOException
-	 * @throws PrivilegeLevelDisagreementException
-	 */
-	protected void receiveF(String msgString, String RForWF,
-			int responseProtocol, boolean keepRO)
-			throws UnknownManagerException, IOException,
-			PrivilegeLevelDisagreementException {
-		StringTokenizer tokens = new StringTokenizer(msgString);
-		String filename = tokens.nextToken();
-
-		String payload = null;
-
-		if (!Utility.fileExists(this, msgString)) {
-			// no file on disk, file was deleted
-			responseProtocol = Protocol.WD_DELETE;
-			payload = filename;
-		} else {
-			// read file contents
-			payload = filename + delimiter + fs.getFile(filename);
-		}
-
-		// send update to manager
-		printVerbose("sending " + Protocol.protocolToString(responseProtocol)
-				+ " to manager " + filename);
-		sendToManager(responseProtocol, Utility.stringToByteArray(payload));
-
-		// update permissions
-		if (keepRO) {
-			clientCacheStatus.put(filename, CacheStatuses.ReadOnly);
-			printVerbose("changed permission level to ReadOnly on file: "
-					+ filename);
-		} else {
-			clientCacheStatus.remove(filename);
-			printVerbose("losing permissions on file: " + filename);
-		}
+		clientFunctions.receiveIV(msgString);
 	}
 
 	/**
@@ -967,8 +566,7 @@ public class Client extends RIONode {
 		if (isManager) {
 			throw new NotClientException();
 		}
-
-		receiveF(msgString, "RF", Protocol.RD, true);
+		clientFunctions.receiveF(msgString, "RF", Protocol.RD, true);
 	}
 
 	/**
@@ -986,37 +584,7 @@ public class Client extends RIONode {
 		if (isManager) {
 			throw new NotClientException();
 		}
-
-		receiveF(msgString, "WF", Protocol.WD, false);
-	}
-
-	/**
-	 * Convenience wrapper of RIOSend that sends a message to the manager if
-	 * their address is known and throws an UnknownManagerException if not
-	 * 
-	 * @throws UnknownManagerException
-	 */
-	protected void sendToManager(int protocol) throws UnknownManagerException {
-		if (this.managerAddr == -1) {
-			throw new UnknownManagerException();
-		} else {
-			RIOSend(managerAddr, protocol, emptyPayload);
-		}
-	}
-
-	/**
-	 * Convenience wrapper of RIOSend that sends a message to the manager if
-	 * their address is known and throws an UnknownManagerException if not
-	 * 
-	 * @throws UnknownManagerException
-	 */
-	protected void sendToManager(int protocol, byte[] payload)
-			throws UnknownManagerException {
-		if (this.managerAddr == -1) {
-			throw new UnknownManagerException();
-		} else {
-			RIOSend(managerAddr, protocol, payload);
-		}
+		clientFunctions.receiveF(msgString, "WF", Protocol.WD, false);
 	}
 
 	/*************************************************
@@ -1027,6 +595,7 @@ public class Client extends RIONode {
 	 * begin client and manager cache coherency functions
 	 ************************************************/
 
+	// TODO: Relocate
 	protected void receiveWD_DELETE(int from, String filename)
 			throws NotManagerException, IOException,
 			MissingPendingRequestException {
@@ -1058,53 +627,9 @@ public class Client extends RIONode {
 		}
 
 		if (!isManager) {
-			// has RW!
-			// TODO: Make/use a helper for this that takes care of the logging
-			printVerbose("got ReadWrite on " + filename);
-			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
-
-			// THIS SHOULD USE THE RFS - MANAGER IS GOD
-
-			/*
-			 * update in cache (not strictly necessary w/o txs on PUTs)
-			 */
-			if (!Utility.fileExists(this, filename)) {
-				fs.createFile(filename);
-			}
-			fs.writeFile(filename, contents, false);
-
-			// do what you originally intended with the file
-			// NOTE: THIS SHOULD USE THE TFS
-			if (clientPendingOperations.containsKey(filename)) {
-				PendingClientOperation intent = clientPendingOperations
-						.get(filename);
-				switch (intent.operation) {
-				case PUT:
-					fs.writeFile(filename, intent.content, false);
-					break;
-				case APPEND:
-					fs.writeFile(filename, intent.content, true);
-					break;
-				default:
-					throw new MissingPendingRequestException(
-							"unhandled intent operation recalled on file: "
-									+ filename);
-				}
-			} else {
-				throw new MissingPendingRequestException(
-						"missing intent on file: " + filename);
-			}
-
-			// unlock for local use
-			clientUnlockFile(filename);
-
-			// send wc
-			printVerbose("sending wc to manager for " + filename);
-			sendToManager(Protocol.WC, Utility.stringToByteArray(filename));
-
-		} else { // Manager receives WD
-
-			this.managerFunctions.receiveWD(from, filename, contents);
+			clientFunctions.receiveWD(from, filename, contents);
+		} else {
+			managerFunctions.receiveWD(from, filename, contents);
 		}
 	}
 
@@ -1124,26 +649,7 @@ public class Client extends RIONode {
 		}
 
 		if (!isManager) {
-			// has RO
-			clientCacheStatus.put(filename, CacheStatuses.ReadOnly);
-			printVerbose("got ReadOnly on " + filename);
-
-			// update in cache
-			if (!Utility.fileExists(this, filename)) {
-				fs.createFile(filename);
-			}
-			fs.writeFile(filename, contents, false);
-
-			// print GET result
-			printInfo("Got file, contents below:");
-			printInfo(contents);
-
-			// unlock the file for local use
-			clientUnlockFile(filename);
-
-			// send rc
-			printVerbose("sending rc to manager for " + filename);
-			sendToManager(Protocol.RC, Utility.stringToByteArray(filename));
+			clientFunctions.receiveRD(from, filename, contents);
 		} else {
 			this.managerFunctions.receiveRD(from, msgString, contents);
 		}
@@ -1163,13 +669,7 @@ public class Client extends RIONode {
 		if (isManager) {
 			throw new NotClientException();
 		}
-
-		printError(msgString);
-
-		String filename = msgString.split("")[0];
-		clientUnlockFile(filename);
-
-		// TODO: Figure out if this gets called any other times
+		clientFunctions.receiveError(from, msgString);
 	}
 
 	/**
@@ -1182,38 +682,7 @@ public class Client extends RIONode {
 		if (isManager) {
 			throw new NotClientException();
 		}
-
-		String[] split = msgString.split(delimiter);
-		String cmd = split[0];
-		if (split.length > 1) {
-			String filename = split[1];
-
-			if (cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
-				if (!Utility.fileExists(this, filename)) {
-					fs.createFile(filename);
-				} else {
-					/*
-					 * file could have been deleted by someone else, and now I'm
-					 * creating, but I could still have an old copy on disk
-					 */
-					fs.writeFile(filename, "", false);
-				}
-				clientUnlockFile(filename);
-				clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
-			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
-				if (Utility.fileExists(this, filename)) {
-					// migh not exist here
-					fs.deleteFile(filename);
-				}
-				clientUnlockFile(filename);
-				clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
-			} else {
-				// TODO: figure out what this exception really should be
-				throw new Exception("receiveSuccessful got unknown packet cmd");
-			}
-		}
-
-		// TODO: Figure out if this gets called any other times
+		clientFunctions.receiveSuccessful(from, msgString);
 	}
 
 	/**
@@ -1228,22 +697,7 @@ public class Client extends RIONode {
 		if (isManager) {
 			throw new NotClientException();
 		}
-
-		if (!clientTransacting || !clientWaitingForCommitSuccess) {
-			throw new TransactionException("unexpected "
-					+ Protocol.protocolToString(Protocol.TX_SUCCESS)
-					+ " received");
-		}
-
-		// commit tx locally
-		fs.commitTransaction(this.addr);
-		clientTransacting = false;
-		
-		// process pending commands
-		clientWaitingForCommitSuccess = false;
-		for (String line : clientWaitingForCommitQueue) {
-			onCommand(line);
-		}
+		clientFunctions.receiveTX_SUCCESS();
 	}
 
 	/**
@@ -1258,28 +712,6 @@ public class Client extends RIONode {
 		if (isManager) {
 			throw new NotClientException();
 		}
-
-		fs.abortTransaction(this.addr);
-		clientTransacting = false;
+		clientFunctions.receiveTX_FAILURE();
 	}
-
-	/**
-	 * Unlock the filename and service and queued requests on it.
-	 */
-	protected void clientUnlockFile(String filename) {
-		printVerbose("client unlocking file: " + filename);
-		logSynopticEvent("CLIENT-UNLOCK");
-		clientLockedFiles.remove(filename);
-
-		// TODO: LOW: I think this needs a monad
-		Queue<String> queuedRequests = clientQueuedCommands.get(filename);
-		if (queuedRequests != null) {
-			String request = queuedRequests.poll();
-			if (request != null) {
-				onCommand(request);
-			}
-		}
-	}
-
-
 }
