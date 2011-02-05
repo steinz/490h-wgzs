@@ -176,8 +176,6 @@ public class RIOPacket {
 	}
 	
 	public String toString() {
-		// TODO: fix protocolToString call so all logs print strings instead of
-		// ints
 		return "proto:" + Protocol.protocolToString(this.protocol)
 				+ "|rio-seqNum:" + this.seqNum + "|payload:"
 				+ Utility.byteArrayToString(payload);
