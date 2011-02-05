@@ -153,7 +153,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 		}
 	}
 
-	// TODO: Are receive{Error, Successful} client only?
+	// I think receive{Error, Successful} are client only
 
 	@Override
 	protected void receiveError(Integer from, String msgString)

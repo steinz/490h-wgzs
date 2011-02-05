@@ -592,7 +592,6 @@ public class Client extends RIONode {
 	 */
 	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
-		printVerbose("sending noop to " + server);
 		RIOSend(server, Protocol.NOOP, emptyPayload);
 	}
 
@@ -660,8 +659,6 @@ public class Client extends RIONode {
 	 * Perform a create RPC to the given address
 	 */
 	public void createRPC(int address, String filename) {
-		printVerbose("sending create rpc to " + address + " for file: "
-				+ filename);
 		RIOSend(address, Protocol.CREATE, Utility.stringToByteArray(filename));
 	}
 
@@ -669,8 +666,6 @@ public class Client extends RIONode {
 	 * Perform a delete RPC to the given address
 	 */
 	public void deleteRPC(int address, String filename) {
-		printVerbose("sending delete rpc to " + address + " for file: "
-				+ filename);
 		RIOSend(address, Protocol.DELETE, Utility.stringToByteArray(filename));
 	}
 
@@ -928,8 +923,6 @@ public class Client extends RIONode {
 		managerUpdateCacheStatus(CacheStatuses.ReadWrite, client, filename);
 
 		// send success to requester
-		printVerbose("sending " + Protocol.protocolToString(Protocol.SUCCESS)
-				+ " to " + client);
 		sendSuccess(client, Protocol.CREATE, filename);
 	}
 
@@ -1216,8 +1209,6 @@ public class Client extends RIONode {
 		}
 
 		byte[] payload = Utility.stringToByteArray(sendMsg.toString());
-		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
-				+ to);
 		RIOSend(to, protocol, payload);
 	}
 
@@ -1228,8 +1219,6 @@ public class Client extends RIONode {
 
 	protected void sendRequest(int client, String filename, int protocol) {
 		byte[] payload = Utility.stringToByteArray(filename);
-		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
-				+ client);
 		RIOSend(client, protocol, payload);
 	}
 
@@ -1319,7 +1308,6 @@ public class Client extends RIONode {
 		}
 
 		printVerbose("Changing client: " + client + " to RO");
-		managerUpdateCacheStatus(CacheStatuses.ReadOnly, client, filename);
 		managerUnlockFile(filename);
 	}
 

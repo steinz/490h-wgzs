@@ -174,7 +174,7 @@ public class RIOPacket {
 
 		return new RIOPacket(protocol, seqNum, payload, name);
 	}
-
+	
 	public String toString() {
 		// TODO: fix protocolToString call so all logs print strings instead of
 		// ints
