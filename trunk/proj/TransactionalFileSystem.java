@@ -376,6 +376,23 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			}
 			return result.toString();
 		}
+
+		/*
+		 * Shouldn't need to write these to log:
+		 * 
+		 * put test hello
+		 * 
+		 * txstart
+		 * 
+		 * get test
+		 * 
+		 * append test world
+		 * 
+		 * txcommit
+		 * 
+		 * The append should be recovered correctly since CC guarantees the
+		 * newest version of test is already in persistent storage
+		 */
 	}
 
 	/*
@@ -404,6 +421,11 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 	public void writeFileTX(int client, String filename, String contents,
 			boolean append) throws IOException, TransactionException {
+		/*
+		 * TODO: HIGH: throw a FNFException if the file isn't on disk / has been
+		 * deleted during this tx
+		 */
+
 		PendingOperation op;
 		if (append) {
 			op = new PendingOperation(client, Operation.APPEND, filename,

@@ -64,11 +64,12 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	 * Begin wrapper for methods that can finish a high level op. Start a new op
 	 * after finishing this one. The Handler logic checks need to match super's
 	 * checks. However, we can ignore client locks since we do ops one at a time
+	 * @throws TransactionException 
 	 **************************************************************************/
 
 	@Override
 	public void createHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
+			throws IOException, UnknownManagerException, TransactionException {
 		String filename = line.split(" ")[1];
 		if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
@@ -81,7 +82,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	@Override
 	public void deleteHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
+			throws IOException, UnknownManagerException, TransactionException {
 		String filename = line.split(" ")[1];
 
 		if (this.clientCacheStatus.containsKey((filename))
@@ -108,7 +109,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	@Override
 	public void putHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
+			throws IOException, UnknownManagerException, TransactionException {
 		String filename = line.split(" ")[1];
 
 		if (this.clientCacheStatus.containsKey((filename))
@@ -122,7 +123,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 	@Override
 	public void appendHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
+			throws IOException, UnknownManagerException, TransactionException {
 		String filename = line.split(" ")[1];
 
 		if (this.clientCacheStatus.containsKey((filename))
