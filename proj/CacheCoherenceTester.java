@@ -64,8 +64,11 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	 * Begin wrapper for methods that can finish a high level op. Start a new op
 	 * after finishing this one. The Handler logic checks need to match super's
 	 * checks. However, we can ignore client locks since we do ops one at a time
-	 * @throws TransactionException 
+	 * 
+	 * @throws TransactionException
 	 **************************************************************************/
+
+	// TODO: Change commandHandlers to use wrappers or change hook strategy
 
 	@Override
 	public void createHandler(StringTokenizer tokens, String line)
@@ -273,7 +276,7 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 
 		// a fake root for Synoptic
 		// logSynopticEvent("COMMAND");
-		
+
 		// first child should always be command name
 		logSynopticEvent(cmdName);
 
