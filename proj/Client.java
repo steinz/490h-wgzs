@@ -1342,54 +1342,6 @@ public class Client extends RIONode {
 		}
 	}
 
-	/*
-	 * TODO: Wayne: Comment all send{Success, Error} methods and think about
-	 * wheter or not we really need all of them
-	 */
-
-	/*
-	 * TODO: send successess and errors for all ops done outside of txs, and
-	 * tx_successful tx_failure at end of all txs (w/ no op specific responses)?
-	 */
-
-	protected void sendSuccess(int destAddr, int protocol, String message) {
-		String msg = Protocol.protocolToString(protocol) + delimiter + message;
-		byte[] payload = Utility.stringToByteArray(msg);
-		RIOSend(destAddr, Protocol.SUCCESS, payload);
-	}
-
-	protected void sendError(int destAddr, String filename, int errorcode) {
-		String msg = filename + delimiter + ErrorCode.lookup(errorcode);
-		byte[] payload = Utility.stringToByteArray(msg);
-		RIOSend(destAddr, Protocol.ERROR, payload);
-	}
-
-	/**
-	 * Send Error method
-	 * 
-	 * @param destAddr
-	 *            Who to send the error code to
-	 * @param protocol
-	 *            The protocol that failed
-	 * @param filename
-	 *            The filename for the protocol that failed
-	 * @param errorcode
-	 *            The error code
-	 */
-	protected void sendError(int destAddr, int protocol, String filename,
-			int errorcode) {
-		String msg = filename + delimiter + Protocol.protocolToString(protocol)
-				+ delimiter + ErrorCode.lookup(errorcode);
-		byte[] payload = Utility.stringToByteArray(msg);
-		RIOSend(destAddr, Protocol.ERROR, payload);
-	}
-
-	public void sendError(int from, String filename, String message) {
-		String msg = filename + delimiter + message;
-		byte[] payload = Utility.stringToByteArray(msg);
-		RIOSend(from, Protocol.ERROR, payload);
-	}
-
 
 	/*************************************************
 	 * begin invariant checkers
