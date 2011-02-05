@@ -697,9 +697,10 @@ public class Client extends RIONode {
 			printError("no command found in: " + line);
 			return;
 		}
-		
+
 		if (isManager && !cmd.equals("manager")) {
-			printError("unsupported command called on manager (manager is not a client): " + line);
+			printError("unsupported command called on manager (manager is not a client): "
+					+ line);
 			return;
 		}
 
@@ -725,74 +726,6 @@ public class Client extends RIONode {
 			printError(e);
 		}
 	}
-
-	/*************************************************
-	 * begin logger wrappers
-	 ************************************************/
-
-	@Override
-	public void send(int destAddr, int protocol, byte[] payload) {
-		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
-				+ destAddr + " with payload: "
-				+ packetBytesToString(payload));
-		super.send(destAddr, protocol, payload);
-	}
-
-	@Override
-	public void RIOSend(int destAddr, int protocol, byte[] payload) {
-		printVerbose("rio-sending " + Protocol.protocolToString(protocol)
-				+ " to " + destAddr + " with payload: "
-				+ packetBytesToString(payload));
-		super.RIOSend(destAddr, protocol, payload);
-	}
-
-	/**
-	 * Prepend the node address and then call Logger.verbose.
-	 */
-	public void printVerbose(String msg, boolean frame) {
-		StringBuilder sb = appendNodeAddress();
-		sb.append(msg);
-		Logger.verbose(this, sb.toString(), frame);
-	}
-
-	/**
-	 * Stub for printVerbose that doesn't print a frame.
-	 */
-	public void printVerbose(String msg) {
-		printVerbose(msg, false);
-	}
-
-	/**
-	 * Prepend the node address and then call Logger.info
-	 */
-	public void printInfo(String msg) {
-		StringBuilder sb = appendNodeAddress();
-		sb.append(msg);
-		Logger.info(this, sb.toString());
-	}
-
-	/**
-	 * Prints node name and then exception via logger
-	 */
-	public void printError(Exception e) {
-		StringBuilder sb = appendNodeAddress();
-		sb.append("caught exception (see below)");
-		Logger.error(this, e);
-	}
-
-	/**
-	 * Print node name, error, then msg
-	 */
-	public void printError(String msg) {
-		StringBuilder sb = appendNodeAddress();
-		sb.append("Error: ");
-		sb.append(msg);
-		Logger.error(this, sb.toString());
-	}
-
-	/*************************************************
-	 * end logger wrappers
-	 ************************************************/
 
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
@@ -1962,6 +1895,11 @@ public class Client extends RIONode {
 	/*
 	 * TODO: Wayne: Comment all send{Success, Error} methods and think about
 	 * wheter or not we really need all of them
+	 */
+
+	/*
+	 * TODO: send successess and errors for all ops done outside of txs, and
+	 * tx_successful tx_failure at end of all txs (w/ no op specific responses)?
 	 */
 
 	protected void sendSuccess(int destAddr, int protocol, String message) {

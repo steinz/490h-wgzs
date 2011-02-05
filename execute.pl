@@ -13,6 +13,6 @@ sub main {
     
     $args = join " ", @ARGV;
 
-    exec("java -cp $classpath edu.washington.cs.cse490h.lib.MessageLayer -l partial.log -L total.log $args");
+    exec("java -cp $classpath edu.washington.cs.cse490h.lib.MessageLayer -l partial.log -L total.log $args | tee full_output.log");
 }
 

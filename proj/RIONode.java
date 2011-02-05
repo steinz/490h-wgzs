@@ -58,10 +58,20 @@ public abstract class RIONode extends Node {
 		}
 	}
 
+	@Override
+	public void send(int destAddr, int protocol, byte[] payload) {
+		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
+				+ destAddr + " with payload: " + packetBytesToString(payload));
+		super.send(destAddr, protocol, payload);
+	}
+	
 	/**
 	 * Send a message using the reliable, in-order delivery layer
 	 */
 	public void RIOSend(int destAddr, int protocol, byte[] payload) {
+		printVerbose("rio-sending " + Protocol.protocolToString(protocol)
+				+ " to " + destAddr + " with payload: "
+				+ packetBytesToString(payload));
 		RIOLayer.RIOSend(destAddr, protocol, payload);
 	}
 
@@ -70,9 +80,48 @@ public abstract class RIONode extends Node {
 	 */
 	public abstract void onRIOReceive(Integer from, int protocol, byte[] msg);
 
-	@Override
-	public String toString() {
-		return "RIONode|SessionID:" + ID + "|RIOLayer:" + RIOLayer.toString();
+	/**
+	 * Prepend the node address and then call Logger.verbose.
+	 */
+	public void printVerbose(String msg, boolean frame) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append(msg);
+		Logger.verbose(this, sb.toString(), frame);
+	}
+
+	/**
+	 * Stub for printVerbose that doesn't print a frame.
+	 */
+	public void printVerbose(String msg) {
+		printVerbose(msg, false);
+	}
+
+	/**
+	 * Prepend the node address and then call Logger.info
+	 */
+	public void printInfo(String msg) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append(msg);
+		Logger.info(this, sb.toString());
+	}
+
+	/**
+	 * Prints node name and then exception via logger
+	 */
+	public void printError(Exception e) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append("caught exception (see below)");
+		Logger.error(this, e);
+	}
+
+	/**
+	 * Print node name, error, then msg
+	 */
+	public void printError(String msg) {
+		StringBuilder sb = appendNodeAddress();
+		sb.append("Error: ");
+		sb.append(msg);
+		Logger.error(this, sb.toString());
 	}
 
 	/**
@@ -97,4 +146,10 @@ public abstract class RIONode extends Node {
 			return "ACK";
 		}
 	}
+
+	@Override
+	public String toString() {
+		return "RIONode|SessionID:" + ID + "|RIOLayer:" + RIOLayer.toString();
+	}
+
 }

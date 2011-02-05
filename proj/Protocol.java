@@ -52,7 +52,7 @@ public class Protocol {
 	/*
 	 * END MESSAGE TYPES
 	 */
-
+	
 	/**
 	 * Exclusive max valid message type
 	 */

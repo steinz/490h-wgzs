@@ -19,16 +19,6 @@ import edu.washington.cs.cse490h.lib.Callback;
  */
 public class CacheCoherenceTester extends PerfectInitializedClient {
 
-	/*
-	 * TODO: Having each client log to their own file and limiting each client
-	 * to one operation at a time might get us good graphs
-	 */
-
-	/*
-	 * TODO: LOW: Unit tests could be nice to have for this (use different
-	 * seeds, verify expected successes/fails)
-	 */
-
 	protected static Random random = new Random(7);
 
 	/**
@@ -60,8 +50,6 @@ public class CacheCoherenceTester extends PerfectInitializedClient {
 	/**
 	 * Wraps onCommand to handle the new command "begin" which should be issued
 	 * to ONLY ONE client to start an op chain
-	 * 
-	 * TODO: Try issuing to two clients to test concurrent commands
 	 */
 	@Override
 	public void onCommand(String line) {
