@@ -259,6 +259,16 @@ public class Client extends RIONode {
 	 */
 	protected boolean clientTransacting;
 
+	/**
+	 * Whether or not the client is waiting for a response to it's txcommit
+	 */
+	protected boolean clientWaitingForCommitSuccess;
+
+	/**
+	 * 
+	 */
+	protected Queue<String> clientWaitingForCommitQueue;
+
 	/*************************************************
 	 * end client data structures
 	 ************************************************/
@@ -267,7 +277,7 @@ public class Client extends RIONode {
 	 * 
 	 */
 	protected ManagerNode managerFunctions;
-	
+
 	/**
 	 * FS for this node
 	 */
@@ -285,6 +295,8 @@ public class Client extends RIONode {
 		this.clientLockedFiles = new HashSet<String>();
 		this.clientQueuedCommands = new HashMap<String, Queue<String>>();
 		this.clientTransacting = false;
+		this.clientWaitingForCommitSuccess = false;
+		this.clientWaitingForCommitQueue = new LinkedList<String>();
 		this.isManager = false;
 		this.managerAddr = -1;
 
@@ -371,9 +383,10 @@ public class Client extends RIONode {
 	 * 
 	 * @throws IOException
 	 * @throws UnknownManagerException
+	 * @throws TransactionException
 	 */
 	public void createHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
+			throws IOException, UnknownManagerException, TransactionException {
 		String filename = tokens.nextToken();
 
 		if (clientQueueLineIfLocked(filename, line)) {
@@ -381,7 +394,11 @@ public class Client extends RIONode {
 		} else if (clientCacheStatus.containsKey(filename)
 				&& (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite)) {
 			// have permissions
-			fs.createFile(filename);
+			if (clientTransacting) {
+				fs.createFileTX(this.addr, filename);
+			} else {
+				fs.createFile(filename);
+			}
 		} else {
 			// lock and perform rpc
 			if (this.managerAddr == -1) {
@@ -398,9 +415,10 @@ public class Client extends RIONode {
 	 * 
 	 * @throws IOException
 	 * @throws UnknownManagerException
+	 * @throws TransactionException
 	 */
 	public void deleteHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
+			throws IOException, UnknownManagerException, TransactionException {
 		String filename = tokens.nextToken();
 
 		if (clientQueueLineIfLocked(filename, line)) {
@@ -408,7 +426,11 @@ public class Client extends RIONode {
 		} else if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// have permissions
-			fs.deleteFile(filename);
+			if (clientTransacting) {
+				fs.deleteFileTX(this.addr, filename);
+			} else {
+				fs.deleteFile(filename);
+			}
 		} else {
 			// lock and perform rpc
 			if (this.managerAddr == -1) {
@@ -434,7 +456,12 @@ public class Client extends RIONode {
 			return;
 		} else if (clientCacheStatus.containsKey(filename)) {
 			// have permissions
-			String content = fs.getFile(filename);
+			String content;
+			if (clientTransacting) {
+				content = fs.getFileTX(this.addr, filename);
+			} else {
+				content = fs.getFile(filename);
+			}
 			printInfo("Got file, contents below:");
 			printInfo(content);
 		} else {
@@ -450,9 +477,10 @@ public class Client extends RIONode {
 	 * 
 	 * @throws IOException
 	 * @throws UnknownManagerException
+	 * @throws TransactionException
 	 */
 	public void putHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
+			throws IOException, UnknownManagerException, TransactionException {
 		String filename = tokens.nextToken();
 		String content = parseAddContent(line, "put", filename);
 
@@ -460,8 +488,12 @@ public class Client extends RIONode {
 			return;
 		} else if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-			// have ownership - writeFile verifies existence on disk
-			fs.writeFile(filename, content, false);
+			// have ownership - writeFile verifies existence
+			if (clientTransacting) {
+				fs.writeFileTX(this.addr, filename, content, false);
+			} else {
+				fs.writeFile(filename, content, false);
+			}
 		} else {
 			// lock and request ownership
 			clientLockFile(filename);
@@ -478,9 +510,10 @@ public class Client extends RIONode {
 	 * 
 	 * @throws IOException
 	 * @throws UnknownManagerException
+	 * @throws TransactionException
 	 */
 	public void appendHandler(StringTokenizer tokens, String line)
-			throws IOException, UnknownManagerException {
+			throws IOException, UnknownManagerException, TransactionException {
 		// TODO: I think I found a framework bug - "append 1 test  world" is
 		// losing the extra space
 
@@ -491,8 +524,12 @@ public class Client extends RIONode {
 			return;
 		} else if (clientCacheStatus.containsKey(filename)
 				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-			// have ownership
-			fs.writeFile(filename, content, true);
+			// have ownership - writeFile verifies existence
+			if (clientTransacting) {
+				fs.writeFileTX(this.addr, filename, content, true);
+			} else {
+				fs.writeFile(filename, content, true);
+			}
 		} else {
 			// lock and request ownership
 			clientLockFile(filename);
@@ -539,14 +576,16 @@ public class Client extends RIONode {
 	 * 
 	 * @throws TransactionException
 	 * @throws UnknownManagerException
+	 * @throws IOException
 	 */
 	public void txstartHandler(StringTokenizer tokens, String line)
-			throws TransactionException, UnknownManagerException {
+			throws TransactionException, UnknownManagerException, IOException {
 		if (clientTransacting) {
 			throw new TransactionException(
 					"client already performing a transaction");
 		} else {
 			clientTransacting = true;
+			fs.startTransaction(this.addr);
 			sendToManager(Protocol.TX_START);
 		}
 	}
@@ -556,14 +595,16 @@ public class Client extends RIONode {
 	 * 
 	 * @throws TransactionException
 	 * @throws UnknownManagerException
+	 * @throws IOException
 	 */
 	public void txcommitHandler(StringTokenizer tokens, String line)
-			throws TransactionException, UnknownManagerException {
+			throws TransactionException, UnknownManagerException, IOException {
 		if (!clientTransacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
 		} else {
 			// clientTransacting is updated when a response is received
+			clientWaitingForCommitSuccess = true;
 			sendToManager(Protocol.TX_COMMIT);
 		}
 	}
@@ -573,14 +614,16 @@ public class Client extends RIONode {
 	 * 
 	 * @throws UnknownManagerException
 	 * @throws TransactionException
+	 * @throws IOException
 	 */
 	public void txabortHandler(StringTokenizer tokens, String line)
-			throws UnknownManagerException, TransactionException {
+			throws UnknownManagerException, TransactionException, IOException {
 		if (!clientTransacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
 		} else {
-			// clientTransacting is updated when a response is received
+			fs.abortTransaction(this.addr);
+			clientTransacting = false;
 			sendToManager(Protocol.TX_ABORT);
 		}
 
@@ -633,8 +676,15 @@ public class Client extends RIONode {
 		}
 
 		if (isManager && !cmd.equals("manager")) {
-			printError("unsupported command called on manager (manager is not a client): " + line);
+			printError("unsupported command called on manager (manager is not a client): "
+					+ line);
 			return;
+		}
+
+		// TODO: HIGH: process this queue after receiving
+		// TX_{SUCCESSFUL,FAILURE}
+		if (clientWaitingForCommitSuccess) {
+			clientWaitingForCommitQueue.add(line);
 		}
 
 		// Dynamically call <cmd>Command, passing off the tokenizer and the full
@@ -653,7 +703,7 @@ public class Client extends RIONode {
 			printError("invalid command:" + line);
 		} catch (InvocationTargetException e) {
 			/*
-			 * TODO: HIGH: Command failed, abort tx
+			 * TODO: HIGH: Command failed, abort tx if in progress
 			 */
 
 			printError(e);
@@ -797,11 +847,6 @@ public class Client extends RIONode {
 	 ************************************************/
 
 	/**
-	 * TODO: HIGH: Manager: send heartbeat pings to client in middle of
-	 * transactions, fail their transactions if they are too slow in responding
-	 */
-
-	/**
 	 * Create RPC
 	 * 
 	 * @throws NotManagerException
@@ -848,7 +893,7 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-		
+
 		this.managerFunctions.receiveTX_COMMIT(from);
 	}
 
@@ -869,22 +914,6 @@ public class Client extends RIONode {
 		byte[] payload = Utility.stringToByteArray(filename);
 		RIOSend(client, protocol, payload);
 	}
-
-	/**
-	 * TODO: HIGH: Delay all manager side unlocks until transaction finishes. We
-	 * might also have to lock files that we get (but don't write), which we
-	 * might not be doing right now. If we want the transacting client to be
-	 * able to do multiple operations on the same file during a transaction
-	 * (which we do), we might need to create another level of locks - the
-	 * existing one keeps the transacting client's operations in order - the new
-	 * one would be the delayed lock keeping other clients from accessing the
-	 * file until the transaction completes.
-	 *
-	 * 
-	 * We shouldn't lock files we get but don't write unless someone else requests RW on that file. If so,
-	 * we should abort one of them.
-	 */
-	
 
 	protected void receiveRQ(int client, String filename)
 			throws NotManagerException, IOException,
@@ -940,16 +969,16 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 		this.managerFunctions.receiveRC(client, filename);
-		
+
 	}
-	
-	protected void receiveIC(int client, String filename) throws NotManagerException, IOException{
+
+	protected void receiveIC(int client, String filename)
+			throws NotManagerException, IOException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
 		this.managerFunctions.receiveIC(client, filename);
 	}
-	
 
 	/*************************************************
 	 * end manager-only cache coherency functions
@@ -998,16 +1027,9 @@ public class Client extends RIONode {
 		String payload = null;
 
 		if (!Utility.fileExists(this, msgString)) {
-			if (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
-				// Client has RW but no file on disk, file was deleted
-				responseProtocol = Protocol.WD_DELETE;
-				payload = filename;
-			} else {
-				// Privilege level disagreement w/ manager
-				throw new PrivilegeLevelDisagreementException(
-						"Manager asked for " + RForWF + " on " + filename
-								+ " but I don't have RW or the file on disk");
-			}
+			// no file on disk, file was deleted
+			responseProtocol = Protocol.WD_DELETE;
+			payload = filename;
 		} else {
 			// read file contents
 			payload = filename + delimiter + fs.getFile(filename);
@@ -1140,6 +1162,8 @@ public class Client extends RIONode {
 			printVerbose("got ReadWrite on " + filename);
 			clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
 
+			// THIS SHOULD USE THE RFS - MANAGER IS GOD
+
 			/*
 			 * update in cache (not strictly necessary w/o txs on PUTs)
 			 */
@@ -1149,6 +1173,7 @@ public class Client extends RIONode {
 			fs.writeFile(filename, contents, false);
 
 			// do what you originally intended with the file
+			// NOTE: THIS SHOULD USE THE TFS
 			if (clientPendingOperations.containsKey(filename)) {
 				PendingClientOperation intent = clientPendingOperations
 						.get(filename);
@@ -1303,12 +1328,25 @@ public class Client extends RIONode {
 			throw new NotClientException();
 		}
 
+		if (!clientTransacting || !clientWaitingForCommitSuccess) {
+			throw new TransactionException("unexpected "
+					+ Protocol.protocolToString(Protocol.TX_SUCCESS)
+					+ " received");
+		}
+
+		// commit tx locally
 		fs.commitTransaction(this.addr);
 		clientTransacting = false;
+		
+		// process pending commands
+		clientWaitingForCommitSuccess = false;
+		for (String line : clientWaitingForCommitQueue) {
+			onCommand(line);
+		}
 	}
 
 	/**
-	 * Tranaction failed
+	 * Transaction failed
 	 * 
 	 * @throws NotClientException
 	 * @throws TransactionException
@@ -1343,16 +1381,4 @@ public class Client extends RIONode {
 	}
 
 
-	/*************************************************
-	 * begin invariant checkers
-	 ************************************************/
-
-	/*
-	 * TODO: LOW: Write invariant checkers to verify cache / file state /
-	 * locking invariants
-	 */
-
-	/*************************************************
-	 * end invariant checkers
-	 ************************************************/
 }
