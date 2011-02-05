@@ -4,6 +4,8 @@
  */
 
 import edu.washington.cs.cse490h.lib.Node;
+import edu.washington.cs.cse490h.lib.Utility;
+
 import java.util.HashMap;
 import java.util.UUID;
 
@@ -61,10 +63,11 @@ public abstract class RIONode extends Node {
 	@Override
 	public void send(int destAddr, int protocol, byte[] payload) {
 		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
-				+ destAddr + " with payload: " + packetBytesToString(payload));
+				+ destAddr + " with payload: "
+				+ packetBytesToString(payload));
 		super.send(destAddr, protocol, payload);
 	}
-	
+
 	/**
 	 * Send a message using the reliable, in-order delivery layer
 	 */
@@ -138,12 +141,11 @@ public abstract class RIONode extends Node {
 
 	@Override
 	public String packetBytesToString(byte[] bytes) {
-		// TODO: Unpack ACKs so we can log them
 		try {
 			return RIOPacket.unpack(bytes).toString();
 		} catch (Exception e) {
-			// ACKs don't unpack correctly, ignore them
-			return "ACK";
+			// Just turn the bytes into a String for headerless packets
+			return Utility.byteArrayToString(bytes);
 		}
 	}
 

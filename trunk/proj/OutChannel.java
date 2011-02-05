@@ -82,15 +82,11 @@ class OutChannel {
 			resendCounts.remove(packet);
 			unACKedPackets.remove(seqNum);
 
-			/*
-			 * TODO: Rearrange logging so we can call n.printError. Also verify
-			 * that the msg is what we want.
-			 */
 			StringBuilder sb = new StringBuilder();
 			sb.append("Node: ");
 			sb.append(n.addr);
 			sb.append(" Error: TIMEOUT of " + packet.toString());
-			Logger.error(parent.n, sb.toString());
+			parent.n.printError("TIMEOUT on packet: " + packet.toString());
 
 		} else if (unACKedPackets.containsKey(seqNum)) {
 			resendRIOPacket(n, seqNum);
