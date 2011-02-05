@@ -6,7 +6,6 @@
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-
 import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
 import edu.washington.cs.cse490h.lib.Utility;
@@ -33,7 +32,8 @@ public class ReliableFileSystem {
 	 */
 	protected Client n;
 
-	public ReliableFileSystem(Client n, String tempFilename) throws FileNotFoundException, IOException {
+	public ReliableFileSystem(Client n, String tempFilename)
+			throws FileNotFoundException, IOException {
 		this.n = n;
 		this.tempFilename = tempFilename;
 		this.recover();
@@ -89,23 +89,18 @@ public class ReliableFileSystem {
 
 		logAccess(filename, "getting");
 
-		// check if the file exists
 		if (!Utility.fileExists(n, filename)) {
 			throw new FileNotFoundException();
 		} else {
-			// read and return the file if it does
 			StringBuilder contents = new StringBuilder();
 			PersistentStorageReader reader = n.getReader(filename);
 
-			/*
-			 * TODO: This sucks. I'm going to assume all files end w/ newlines
-			 * for now. The readline(), while loop method was writing "null" to
-			 * files. Probably need to use read instead of readLine.
-			 */
 			String inLine;
 			while ((inLine = reader.readLine()) != null) {
 				contents.append(inLine);
-				contents.append(lineSeparator);
+				if (reader.ready()) {
+					contents.append(lineSeparator);
+				}
 			}
 
 			reader.close();
@@ -205,15 +200,10 @@ public class ReliableFileSystem {
 		} else {
 			logAccess(filename, "putting", contents);
 		}
-		
+
 		PersistentStorageWriter writer = n.getWriter(filename, append);
 		writer.write(contents);
 		writer.close();
-	}
-
-	protected void performWriteLine(String filename, boolean append,
-			String contents) throws IOException {
-		performWrite(filename, append, contents + lineSeparator);
 	}
 
 	/**
