@@ -860,16 +860,6 @@ public class Client extends RIONode {
 		this.managerFunctions.receiveTX_ABORT(from);
 	}
 
-	protected void receiveQ(int client, String filename, int receivedProtocol,
-			int responseProtocol, int forwardingProtocol, boolean preserveROs)
-			throws IOException, NotManagerException,
-			InconsistentPrivelageLevelsDetectedException {
-		
-		this.managerFunctions.receiveQ(client, filename, receivedProtocol, responseProtocol,
-				forwardingProtocol, preserveROs);
-	}
-
-
 	/**
 	 * Helper that sends a request for the provided filename to the provided
 	 * client using the provided protocol
@@ -902,8 +892,9 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-
-		receiveQ(client, filename, Protocol.RQ, Protocol.RD, Protocol.RF, true);
+		
+		this.managerFunctions.receiveQ(client, filename, Protocol.RQ, Protocol.RD, 
+				Protocol.RF, true);
 	}
 
 	protected void receiveWQ(int client, String filename)
@@ -913,7 +904,8 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		receiveQ(client, filename, Protocol.WQ, Protocol.WD, Protocol.WF, false);
+		this.managerFunctions.receiveQ(client, filename, Protocol.WQ, Protocol.WD, 
+				Protocol.WF, false);
 	}
 
 	/**
