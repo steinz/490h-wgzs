@@ -16,8 +16,13 @@ import edu.washington.cs.cse490h.lib.Utility;
  *  as well. All should end with a response.
  */
 
-// TODO: HIGH: All exceptions should be handled in the manager public functions, not thrown
 // TODO: HIGH: Log all cache status changes if they're not logged already
+// TODO: HIGH: Should not remove locks on file for clients for all ops in transactions until txcomplete. BUT: If a client tries to write 
+//             to a file that you locked previously, you should be granted automatic RW. 
+// TODO: HIGH: Heartbeat pings, abort clients if they don't respond
+// 		Implicit transactions are handled by cache coherency!
+// TODO: HIGH: Deal with creates and deletes appropriately -  
+// 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
 
 public class ManagerNode {
 
@@ -88,10 +93,13 @@ public class ManagerNode {
 	}
 	
 
-	public void createNewFile(String filename, int from) throws IOException{
+	public void createNewFile(String filename, int from){
 		// local create
-		this.node.fs.createFile(filename);
-
+		try{
+			this.node.fs.createFile(filename);
+		} catch (IOException e){
+			this.node.sendError(from, filename, e.getMessage());
+		}
 		// give RW to the requester for filename
 		cacheRW.put(filename, from);
 
@@ -101,10 +109,13 @@ public class ManagerNode {
 		this.node.sendSuccess(from, Protocol.CREATE, filename);
 	}
 	
-	public void deleteExistingFile(String filename, int from) throws IOException{
+	public void deleteExistingFile(String filename, int from){
 		// delete the file locally
-		this.node.fs.deleteFile(filename);
-
+		try{
+			this.node.fs.deleteFile(filename);
+		} catch (IOException e){
+			this.node.sendError(from, filename, e.getMessage());
+		}
 		// update permissions
 		this.node.printVerbose("marking file " + filename + " as unowned");
 		
@@ -166,10 +177,14 @@ public class ManagerNode {
 		return clients;
 	}
 
-	public void receiveWD_DELETE(int from, String filename) throws IOException, MissingPendingRequestException{
+	public void receiveWD_DELETE(int from, String filename){
 		// delete locally
-		this.node.fs.deleteFile(filename);
-
+		try{
+			this.node.fs.deleteFile(filename);
+		} catch (IOException e)
+		{
+			this.node.sendError(from, filename, e.getMessage());
+		}
 		// remove permissions
 		cacheRW.put(filename, -1);
 		cacheRO.put(filename, new ArrayList<Integer>());
@@ -200,13 +215,16 @@ public class ManagerNode {
 			return;
 		}
 
-		throw new MissingPendingRequestException("file: " + filename);
 	}
 	
-	public void receiveRD(int from, String filename, String contents) throws IOException{
+	public void receiveRD(int from, String filename, String contents){
 
 		// first write the file to save a local copy
-		this.node.fs.writeFile(filename, contents, false);
+		try {
+			this.node.fs.writeFile(filename, contents, false);
+		} catch (IOException e) {
+			this.node.sendError(from, filename, e.getMessage());
+		}
 
 		/*
 		 * send out a RD to anyone requesting this - unlike for WD, this
@@ -215,7 +233,11 @@ public class ManagerNode {
 		 */
 		Integer destAddr = pendingCCPermissionRequests.remove(filename);
 		if (destAddr != null){
-			sendFile(destAddr, filename, Protocol.RD);
+			try {
+				sendFile(destAddr, filename, Protocol.RD);
+			} catch (IOException e) {
+				this.node.sendError(from, filename, e.getMessage());
+			}
 
 			// Add to RO list
 			List<Integer> ro = cacheRO.get(filename);
@@ -226,7 +248,7 @@ public class ManagerNode {
 		
 	}
 
-	public void receiveWD(int from, String filename, String contents) throws IOException, IllegalConcurrentRequestException, MissingPendingRequestException{
+	public void receiveWD(int from, String filename, String contents){
 		
 		/*
 		 * TODO: LOW: No need to do this for deletes or creates (although
@@ -234,7 +256,11 @@ public class ManagerNode {
 		 * nice)
 		 */
 		// first write the file to save a local copy
-		this.node.fs.writeFile(filename, contents, false);
+		try {
+			this.node.fs.writeFile(filename, contents, false);
+		} catch (IOException e) {
+			this.node.sendError(from, filename, e.getMessage());
+		}
 
 		// look for pending request
 		boolean foundPendingRequest = false;
@@ -251,7 +277,7 @@ public class ManagerNode {
 		destAddr = pendingRPCDeleteRequests.remove(filename);
 		if (destAddr != null) {
 			if (foundPendingRequest) {
-				throw new IllegalConcurrentRequestException();
+				this.node.sendError(from, filename, "IllegalConcurrentRequestException!");
 			}
 			foundPendingRequest = true;
 			deleteExistingFile(filename, destAddr);
@@ -261,14 +287,19 @@ public class ManagerNode {
 		destAddr = pendingCCPermissionRequests.remove(filename);
 		if (destAddr != null) {
 			if (foundPendingRequest) {
-				throw new IllegalConcurrentRequestException();
+				this.node.sendError(from, filename, "IllegalConcurrentRequestException!");
 			}
 			foundPendingRequest = true;
-			sendFile(destAddr, filename, Protocol.WD);
+			try {
+				sendFile(destAddr, filename, Protocol.WD);
+			} catch (IOException e) {
+				this.node.sendError(from, filename, e.getMessage());
+			}
 		}
 
 		if (!foundPendingRequest) {
-			throw new MissingPendingRequestException("file: " + filename);
+
+			this.node.sendError(from, filename, "MissingPendingRequestException: file: " + filename);
 		}
 
 		// update the status of the client who sent the WD
@@ -293,36 +324,43 @@ public class ManagerNode {
 		LockedFiles.add(filename);
 	}
 	
-	public void receiveTX_START(int from) throws TransactionException {
+	public void receiveTX_START(int from) {
 		
 		if (managerTransactionsInProgress.contains(from)) {
-			throw new TransactionException("tx already in progress on client "
-					+ from);
+			this.node.sendError(from, "", "tx already in progress on client");
 		}
 
 		managerTransactionsInProgress.add(from);
 	}
 	
-	public void receiveTX_COMMIT(int from) throws TransactionException, IOException {
+	public void receiveTX_COMMIT(int from){
 		if (!managerTransactionsInProgress.contains(from)) {
-			throw new TransactionException("tx not in progress on client "
-					+ from);
+			this.node.sendError(from, "", "tx not in progress on client");
 		}
 
-		this.node.fs.commitTransaction(from);
+		try {
+			this.node.fs.commitTransaction(from);
+		} catch (IOException e) {
+			this.node.sendError(from, "", e.getMessage());
+		} catch (TransactionException e) {
+			this.node.sendError(from, "", e.getMessage());
+		}
 		managerTransactionsInProgress.remove(from);
 		this.node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
 	}
 
-	public void receiveTX_ABORT(int from) throws TransactionException, IOException {
+	public void receiveTX_ABORT(int from){
 		if (!managerTransactionsInProgress.contains(from)) {
-			throw new TransactionException("tx not in progress on client "
-					+ from);
+			this.node.sendError(from, "", "tx not in progress on client");
 		}
-
-		this.node.fs.abortTransaction(from);
+		try {
+			this.node.fs.abortTransaction(from);
+		} catch (TransactionException e) {
+			this.node.sendError(from, "", e.getMessage());
+		} catch (IOException e) {
+			this.node.sendError(from, "", e.getMessage());
+		}
 		managerTransactionsInProgress.remove(from);
-		this.node.RIOSend(from, Protocol.TX_FAILURE, Client.emptyPayload);
 		
 	}
 	
@@ -350,11 +388,8 @@ public class ManagerNode {
 	/**
 	 * Create RPC
 	 * 
-	 * @throws IOException
-	 * @throws NotManagerException 
 	 */
-	public void receiveCreate(int client, String filename)
-			throws IOException, NotManagerException {
+	public void receiveCreate(int client, String filename) {
 
 		if (queueRequestIfLocked(client, Protocol.CREATE, filename)) {
 			return;
@@ -378,7 +413,7 @@ public class ManagerNode {
 		
 	}
 
-	public void receiveDelete(int from, String filename) throws IOException, PrivilegeLevelDisagreementException {
+	public void receiveDelete(int from, String filename) {
 		if (queueRequestIfLocked(from, Protocol.DELETE, filename)) {
 			return;
 		}
@@ -396,8 +431,7 @@ public class ManagerNode {
 		// add to pending ICs
 		if (rw != null && rw == from) {
 			// Requester should have RW
-			throw new PrivilegeLevelDisagreementException(
-					"Got delete request from client with RW");
+			this.node.sendError(from, "", "Got delete request from client with RW");
 		} else if (rw != null && rw != from) {
 			// Someone other than the requester has RW status, get updates
 			this.node.sendRequest(rw, filename, Protocol.WF);
@@ -424,7 +458,7 @@ public class ManagerNode {
 	}
 
 	public void receiveQ(int from, String filename, int receivedProtocol, 
-			int responseProtocol, int forwardingProtocol, boolean preserveROs) throws InconsistentPrivelageLevelsDetectedException, IOException{
+			int responseProtocol, int forwardingProtocol, boolean preserveROs){
 		
 		// check if locked
 		if (queueRequestIfLocked(from, receivedProtocol, filename)) {
@@ -444,9 +478,8 @@ public class ManagerNode {
 		}
 
 		if (rw != null && ro.size() > 0) {
-			throw new InconsistentPrivelageLevelsDetectedException(
-					"simultaneous RW (" + rw + ") and ROs (" + ro.toString()
-							+ ") detected on file: " + filename);
+			this.node.sendError(from, filename, "simultaneous RW (" + rw + ") and ROs (" + ro.toString()
+					+ ") detected on file: " + filename);
 		}
 
 		if (rw != null) { // someone has RW
@@ -467,7 +500,11 @@ public class ManagerNode {
 			 */
 
 			// send file to requester
-			sendFile(from, filename, responseProtocol);
+			try {
+				sendFile(from, filename, responseProtocol);
+			} catch (IOException e) {
+				this.node.sendError(from, filename, e.getMessage());
+			}
 			// unlock and priveleges updated by C message handlers
 		}
 	}
@@ -479,11 +516,8 @@ public class ManagerNode {
 	 * @param filename
 	 *            Should be the file name. Throws an error if we were not
 	 *            waiting for an IC from this node for this file
-	 * @throws NotManagerException
-	 * @throws IOException
 	 */
-	public void receiveIC(Integer from, String filename)
-			throws NotManagerException, IOException {
+	public void receiveIC(Integer from, String filename) {
 
 		/*
 		 * TODO: Maybe different messages for the first two vs. the last
@@ -495,7 +529,6 @@ public class ManagerNode {
 		if (!pendingICs.containsKey(filename) || 
 				!pendingICs.get(filename).contains(from)) {
 			this.node.sendError(from, Protocol.ERROR, filename, ErrorCode.UnknownError);
-			throw new NotManagerException();
 		} else {
 
 			// update the status of the client who sent the IC
@@ -524,7 +557,11 @@ public class ManagerNode {
 				if (pendingCCPermissionRequests.containsKey(filename)) {
 					destAddr = pendingCCPermissionRequests
 							.remove(filename);
-					sendFile(destAddr, filename, Protocol.WD);
+					try {
+						sendFile(destAddr, filename, Protocol.WD);
+					} catch (IOException e) {
+						this.node.sendError(from, filename, e.getMessage());
+					}
 				} else {
 					destAddr = pendingRPCDeleteRequests.remove(filename);
 					this.node.sendSuccess(destAddr, Protocol.DELETE, filename);
