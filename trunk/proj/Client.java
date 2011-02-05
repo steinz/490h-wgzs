@@ -6,17 +6,14 @@
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.Set;
 import java.util.StringTokenizer;
-import java.util.Map.Entry;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -266,64 +263,11 @@ public class Client extends RIONode {
 	 * end client data structures
 	 ************************************************/
 
-	/*************************************************
-	 * begin manager only data structures
-	 ************************************************/
-
 	/**
-	 * List of files whose requests are currently being worked out.
-	 */
-	protected Set<String> managerLockedFiles;
-
-	/*
-	 * TODO: This might be cleaner if it was two Maps:
 	 * 
-	 * Map<String, Integer> managerCacheRW;
-	 * 
-	 * Map<String, List<Integer>> managerCacheRO;
 	 */
-
-	/**
-	 * Status of cached files for all clients.
-	 */
-	protected Map<String, Map<Integer, CacheStatuses>> managerCacheStatuses;
-
-	/**
-	 * List of nodes the manager is waiting for ICs from.
-	 */
-	protected Map<String, List<Integer>> managerPendingICs;
-
-	/**
-	 * Save requests on locked files
-	 */
-	private Map<String, Queue<QueuedFileRequest>> managerQueuedFileRequests;
-
-	/**
-	 * Status of who is waiting for permission for this file
-	 */
-	private Map<String, Integer> managerPendingCCPermissionRequests;
-
-	/**
-	 * Status of who is waiting to delete this file via RPC
-	 */
-	private Map<String, Integer> managerPendingRPCDeleteRequests;
-
-	/**
-	 * Status of who is waiting to create this file via RPC
-	 */
-	private Map<String, Integer> managerPendingRPCCreateRequests;
-
-	/**
-	 * A set of node addresses currently performing transactions
-	 * 
-	 * TODO: HIGH: Could be pushed down into the TransactionalFileSystem
-	 */
-	protected Set<Integer> managerTransactionsInProgress;
-
-	/*************************************************
-	 * end manager only data structures
-	 ************************************************/
-
+	protected ManagerNode managerFunctions;
+	
 	/**
 	 * FS for this node
 	 */
@@ -376,13 +320,8 @@ public class Client extends RIONode {
 			printInfo("promoted to manager");
 
 			this.isManager = true;
-			this.managerLockedFiles = new HashSet<String>();
-			this.managerCacheStatuses = new HashMap<String, Map<Integer, CacheStatuses>>();
-			this.managerPendingICs = new HashMap<String, List<Integer>>();
-			this.managerQueuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
-			this.managerPendingCCPermissionRequests = new HashMap<String, Integer>();
-			this.managerPendingRPCDeleteRequests = new HashMap<String, Integer>();
-			this.managerPendingRPCCreateRequests = new HashMap<String, Integer>();
+
+			this.managerFunctions = new ManagerNode(this);
 		} else {
 			printInfo("already manager");
 		}
@@ -694,8 +633,7 @@ public class Client extends RIONode {
 		}
 
 		if (isManager && !cmd.equals("manager")) {
-			printError("unsupported command called on manager (manager is not a client): "
-					+ line);
+			printError("unsupported command called on manager (manager is not a client): " + line);
 			return;
 		}
 
@@ -875,55 +813,7 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		if (managerQueueRequestIfLocked(client, Protocol.CREATE, filename)) {
-			return;
-		}
-
-		if (managerCacheStatuses.containsKey(filename)
-				&& managerCacheStatuses.get(filename).size() > 0) {
-
-			// Find out if anyone has RW
-			Integer rw = null;
-			Map<Integer, CacheStatuses> cacheStatuses = managerCacheStatuses
-					.get(filename);
-			for (Entry<Integer, CacheStatuses> entry : cacheStatuses.entrySet()) {
-				if (entry.getValue() == CacheStatuses.ReadWrite) {
-					rw = entry.getKey();
-				}
-			}
-
-			if (rw == null) {
-				// everyone has RO, so file must exist
-				sendError(client, Protocol.ERROR, filename,
-						ErrorCode.FileAlreadyExists);
-			} else {
-				// owner could have deleted the file, WF them
-				sendRequest(rw, filename, Protocol.WF);
-				managerPendingRPCCreateRequests.put(filename, client);
-				managerLockFile(filename);
-			}
-
-		} else { // file not in system
-			createNewFile(filename, client);
-		}
-	}
-
-	/**
-	 * receiveCreate helper called when filename is not in the system
-	 * 
-	 * @throws IOException
-	 * @throws NotManagerException
-	 */
-	protected void createNewFile(String filename, int client)
-			throws IOException, NotManagerException {
-		// local create
-		fs.createFile(filename);
-
-		// give RW to the requester for filename
-		managerUpdateCacheStatus(CacheStatuses.ReadWrite, client, filename);
-
-		// send success to requester
-		sendSuccess(client, Protocol.CREATE, filename);
+		this.managerFunctions.receiveCreate(client, filename);
 	}
 
 	/**
@@ -942,80 +832,6 @@ public class Client extends RIONode {
 			throw new NotManagerException();
 		}
 
-		if (managerQueueRequestIfLocked(from, Protocol.DELETE, filename)) {
-			return;
-		}
-
-		// Check if anyone has RW or RO status on this file
-		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
-				.get(filename);
-
-		if (clientStatuses == null || clientStatuses.size() < 1) {
-			// File doesn't exist, send an error to the requester
-			sendError(from, Protocol.DELETE, filename,
-					ErrorCode.FileDoesNotExist);
-			return;
-		}
-
-		Integer rw = null;
-		ArrayList<Integer> ro = new ArrayList<Integer>();
-
-		/*
-		 * TODO: clean this up, comment what's going on - could model after
-		 * receiveQ's loop / factor that loop out into a helper
-		 */
-
-		// check for nodes with permissions on this file currently
-		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
-			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
-				if (rw != null) {
-					throw new InconsistentPrivelageLevelsDetectedException(
-							"Detected multiple owners on file: " + filename);
-				}
-				rw = entry.getKey();
-			}
-			if (entry.getValue().equals(CacheStatuses.ReadOnly)) {
-				if (rw != null) {
-					throw new InconsistentPrivelageLevelsDetectedException(
-							"Detected clients with simultaneous RW and RO on file: "
-									+ filename);
-				}
-				if (entry.getKey() != from) {
-					ro.add(entry.getKey());
-				}
-			}
-		}
-
-		boolean waitingForResponses = false;
-
-		// add to pending ICs
-		if (rw != null && rw == from) {
-			// Requester should have RW
-			throw new PrivilegeLevelDisagreementException(
-					"Got delete request from client with RW");
-		} else if (rw != null && rw != from) {
-			// Someone other than the requester has RW status, get updates
-			sendRequest(rw, filename, Protocol.WF);
-			waitingForResponses = true;
-		} else if (ro.size() != 0) {
-			managerPendingICs.put(filename, ro);
-			for (Integer i : ro) {
-				/*
-				 * Send invalidate requests to everyone with RO (doesn't include
-				 * the requester)
-				 */
-				sendRequest(i, filename, Protocol.IV);
-			}
-			waitingForResponses = true;
-		}
-
-		if (waitingForResponses) {
-			// track pending request
-			managerPendingRPCDeleteRequests.put(filename, from);
-			managerLockFile(filename);
-		} else {
-			deleteExistingFile(filename, from);
-		}
 	}
 
 	protected void receiveTX_START(int from) throws TransactionException,
@@ -1023,12 +839,7 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-		if (managerTransactionsInProgress.contains(from)) {
-			throw new TransactionException("tx already in progress on client "
-					+ from);
-		}
-
-		managerTransactionsInProgress.add(from);
+		this.managerFunctions.receiveTX_START(from);
 	}
 
 	protected void receiveTX_COMMIT(int from) throws TransactionException,
@@ -1036,14 +847,8 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-		if (!managerTransactionsInProgress.contains(from)) {
-			throw new TransactionException("tx not in progress on client "
-					+ from);
-		}
-
-		fs.commitTransaction(from);
-		managerTransactionsInProgress.remove(from);
-		RIOSend(from, Protocol.TX_SUCCESS, emptyPayload);
+		
+		this.managerFunctions.receiveTX_COMMIT(from);
 	}
 
 	protected void receiveTX_ABORT(int from) throws NotManagerException,
@@ -1051,166 +856,18 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-		if (!managerTransactionsInProgress.contains(from)) {
-			throw new TransactionException("tx not in progress on client "
-					+ from);
-		}
-
-		fs.abortTransaction(from);
-		managerTransactionsInProgress.remove(from);
-		RIOSend(from, Protocol.TX_FAILURE, emptyPayload);
-	}
-
-	/**
-	 * receiveDelete helper called when the file is in the system.
-	 * 
-	 * @throws IOException
-	 */
-	protected void deleteExistingFile(String filename, int from)
-			throws IOException {
-		// delete the file locally
-		fs.deleteFile(filename);
-
-		// update permissions
-		printVerbose("marking file " + filename + " as unowned");
-		managerCacheStatuses.get(filename).clear();
-
-		// no one had permissions, so send success
-		sendSuccess(from, Protocol.DELETE, filename);
-	}
-
-	/**
-	 * Queues the given request if the file is locked and returns true. Returns
-	 * false if the file isn't locked.
-	 */
-	protected boolean managerQueueRequestIfLocked(int client, int protocol,
-			String filename) {
-		if (managerLockedFiles.contains(filename)) {
-			Queue<QueuedFileRequest> requests = managerQueuedFileRequests
-					.get(filename);
-			if (requests == null) {
-				requests = new LinkedList<QueuedFileRequest>();
-				managerQueuedFileRequests.put(filename, requests);
-			}
-			requests.add(new QueuedFileRequest(client, protocol, Utility
-					.stringToByteArray(filename)));
-			return true;
-		} else {
-			return false;
-		}
-	}
-
-	/**
-	 * Helper the manager should use to lock a file
-	 * 
-	 * @param filename
-	 */
-	protected void managerLockFile(String filename) {
-		/**
-		 * TODO: Detect if client is performing operations out of order during
-		 * transaction.
-		 */
-
-		printVerbose("manager locking file: " + filename);
-		logSynopticEvent("MANAGER-LOCK");
-		managerLockedFiles.add(filename);
+		this.managerFunctions.receiveTX_ABORT(from);
 	}
 
 	protected void receiveQ(int client, String filename, int receivedProtocol,
 			int responseProtocol, int forwardingProtocol, boolean preserveROs)
 			throws IOException, NotManagerException,
 			InconsistentPrivelageLevelsDetectedException {
-		// check if locked
-		if (managerQueueRequestIfLocked(client, receivedProtocol, filename)) {
-			return;
-		}
-
-		// lock
-		managerLockFile(filename);
-
-		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
-				.get(filename);
-
-		// check if the file exists in the system
-		if (clientStatuses == null || clientStatuses.size() == 0) {
-			sendError(client, Protocol.ERROR, filename,
-					ErrorCode.FileDoesNotExist);
-			return;
-		}
-
-		// address of node w/ rw or null
-		Integer rw = null;
-		// list of nodes w/ ro
-		List<Integer> ros = new ArrayList<Integer>();
-
-		// populate rw and ros
-		for (Entry<Integer, CacheStatuses> entry : clientStatuses.entrySet()) {
-			if (entry.getValue().equals(CacheStatuses.ReadWrite)) {
-				if (rw != null) {
-					throw new InconsistentPrivelageLevelsDetectedException(
-							"multiple owners " + "(" + rw + " and "
-									+ entry.getKey() + ") detected on file: "
-									+ filename);
-				}
-				rw = entry.getKey();
-			} else if (entry.getValue().equals(CacheStatuses.ReadOnly)
-					&& entry.getKey() != client) {
-				// ros will not containg the requester (if has RO wants RW)
-				ros.add(entry.getKey());
-			}
-		}
-
-		if (rw != null && ros.size() > 0) {
-			throw new InconsistentPrivelageLevelsDetectedException(
-					"simultaneous RW (" + rw + ") and ROs (" + ros.toString()
-							+ ") detected on file: " + filename);
-		}
-
-		if (rw != null) { // someone has RW
-			// Get updates
-			sendRequest(rw, filename, forwardingProtocol);
-			managerPendingCCPermissionRequests.put(filename, client);
-		} else if (!preserveROs && ros.size() > 0) { // someone(s) have RO
-			managerPendingICs.put(filename, ros);
-			for (int i : ros) {
-				// Invalidate all ROs
-				sendRequest(i, filename, Protocol.IV);
-			}
-			managerPendingCCPermissionRequests.put(filename, client);
-		} else { // no one has RW or RO
-			/*
-			 * TODO: Should this be an error - I think it currently sends
-			 * whatever is on disk?
-			 */
-
-			// send file to requester
-			managerSendFile(client, filename, responseProtocol);
-			// unlock and privelages updated by C message handlers
-		}
+		
+		this.managerFunctions.receiveQ(client, filename, receivedProtocol, responseProtocol,
+				forwardingProtocol, preserveROs);
 	}
 
-	/**
-	 * Helper that sends the contents of filename to to with protocol protocol.
-	 * Should only be used by the manager.
-	 * 
-	 * @throws IOException
-	 */
-	protected void managerSendFile(int to, String filename, int protocol)
-			throws IOException {
-		StringBuilder sendMsg = new StringBuilder();
-
-		if (!Utility.fileExists(this, filename)) {
-			// Manager doesn't have the file
-			sendError(to, Protocol.ERROR, filename, ErrorCode.FileDoesNotExist);
-		} else {
-			sendMsg.append(filename);
-			sendMsg.append(delimiter);
-			sendMsg.append(fs.getFile(filename));
-		}
-
-		byte[] payload = Utility.stringToByteArray(sendMsg.toString());
-		RIOSend(to, protocol, payload);
-	}
 
 	/**
 	 * Helper that sends a request for the provided filename to the provided
@@ -1231,27 +888,12 @@ public class Client extends RIONode {
 	 * existing one keeps the transacting client's operations in order - the new
 	 * one would be the delayed lock keeping other clients from accessing the
 	 * file until the transaction completes.
+	 *
 	 * 
+	 * We shouldn't lock files we get but don't write unless someone else requests RW on that file. If so,
+	 * we should abort one of them.
 	 */
-
-	/**
-	 * Unlocks filename and checks if there is another request to service
-	 */
-	protected void managerUnlockFile(String filename) {
-		printVerbose("manager unlocking file: " + filename);
-		logSynopticEvent("MANAGER-UNLOCK");
-		managerLockedFiles.remove(filename);
-
-		Queue<QueuedFileRequest> outstandingRequests = managerQueuedFileRequests
-				.get(filename);
-		if (outstandingRequests != null) {
-			QueuedFileRequest nextRequest = outstandingRequests.poll();
-			if (nextRequest != null) {
-				onRIOReceive(nextRequest.from, nextRequest.protocol,
-						nextRequest.msg);
-			}
-		}
-	}
+	
 
 	protected void receiveRQ(int client, String filename)
 			throws NotManagerException, IOException,
@@ -1287,9 +929,7 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-
-		managerUpdateCacheStatus(CacheStatuses.ReadWrite, client, filename);
-		managerUnlockFile(filename);
+		this.managerFunctions.receiveWC(client, filename);
 	}
 
 	/**
@@ -1306,96 +946,20 @@ public class Client extends RIONode {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-
-		printVerbose("Changing client: " + client + " to RO");
-		managerUnlockFile(filename);
+		this.managerFunctions.receiveRC(client, filename);
+		
 	}
-
-	protected void managerUpdateCacheStatus(CacheStatuses val, int client,
-			String filename) throws NotManagerException {
-		Map<Integer, CacheStatuses> clientStatuses = managerCacheStatuses
-				.get(filename);
-		if (clientStatuses == null) {
-			clientStatuses = new HashMap<Integer, CacheStatuses>();
-			managerCacheStatuses.put(filename, clientStatuses);
-		}
-
-		// TODO: verify val prints string not int
-		printVerbose("changing client: " + client + " to " + val);
-		clientStatuses.put(client, val);
-	}
-
-	/**
-	 * 
-	 * @param from
-	 *            The node this IC was received from.
-	 * @param filename
-	 *            Should be the file name. Throws an error if we were not
-	 *            waiting for an IC from this node for this file
-	 * @throws NotManagerException
-	 * @throws IOException
-	 */
-	protected void receiveIC(Integer from, String filename)
-			throws NotManagerException, IOException {
+	
+	protected void receiveIC(int client, String filename) throws NotManagerException, IOException{
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-
-		/*
-		 * TODO: Maybe different messages for the first two vs. the last
-		 * scenario (node is manager but not expecting IC from this node for
-		 * this file)?
-		 */
-
-		int destAddr;
-		if (!managerPendingICs.containsKey(filename) || !isManager
-				|| !managerPendingICs.get(filename).contains(from)) {
-			sendError(from, Protocol.ERROR, filename, ErrorCode.UnknownError);
-			throw new NotManagerException();
-		} else {
-
-			// update the status of the client who sent the IC
-			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
-			m.remove(from);
-			printVerbose("Changing client: " + from + " to IV");
-			managerCacheStatuses.put(filename, m);
-
-			List<Integer> waitingForICsFrom = managerPendingICs.get(filename);
-
-			waitingForICsFrom.remove(from);
-			if (waitingForICsFrom.isEmpty()) {
-				/*
-				 * If the pending ICs are now empty, someone's waiting for a WD,
-				 * so check for that and send
-				 */
-
-				/*
-				 * TODO: this should just clear to prevent reinitialization
-				 * maybe, although this way could save some memory... Anyway,
-				 * check that whatever assumption is made holds
-				 */
-				managerPendingICs.remove(filename);
-
-				if (managerPendingCCPermissionRequests.containsKey(filename)) {
-					destAddr = managerPendingCCPermissionRequests
-							.remove(filename);
-					managerSendFile(destAddr, filename, Protocol.WD);
-				} else {
-					destAddr = managerPendingRPCDeleteRequests.remove(filename);
-					sendSuccess(destAddr, Protocol.DELETE, filename);
-				}
-			} else {
-				// still waiting for more ICs
-				List<Integer> waitingFor = managerPendingICs.get(filename);
-				StringBuilder waiting = new StringBuilder();
-				waiting.append("Received IC but waiting for IC from clients : ");
-				for (int i : waitingFor) {
-					waiting.append(i + " ");
-				}
-				printVerbose(waiting.toString());
-			}
-		}
+		this.managerFunctions.receiveIC(client, filename);
 	}
+	
+
+
+
 
 	/*************************************************
 	 * end manager-only cache coherency functions
@@ -1557,40 +1121,7 @@ public class Client extends RIONode {
 			throw new NotManagerException(
 					"WD_DELETE should only be received by the manager");
 		}
-
-		// delete locally
-		fs.deleteFile(filename);
-
-		// remove permissions
-		managerCacheStatuses.get(filename).clear();
-
-		// look for pending requests
-
-		// check for a create
-		Integer requester = managerPendingRPCCreateRequests.remove(filename);
-		if (requester != null) {
-			// create the file which was deleted by the owner
-			createNewFile(filename, requester);
-			managerUnlockFile(filename);
-			return;
-		}
-
-		requester = managerPendingRPCDeleteRequests.remove(filename);
-		if (requester != null) {
-			// file was previously deleted by owner
-			sendError(requester, Protocol.DELETE, filename,
-					ErrorCode.FileDoesNotExist);
-			return;
-		}
-
-		requester = managerPendingCCPermissionRequests.remove(filename);
-		if (requester != null) {
-			// file was deleted by owner
-			sendError(requester, filename, ErrorCode.FileDoesNotExist);
-			return;
-		}
-
-		throw new MissingPendingRequestException("file: " + filename);
+		this.managerFunctions.receiveWD_DELETE(from, filename);
 	}
 
 	/**
@@ -1657,52 +1188,7 @@ public class Client extends RIONode {
 
 		} else { // Manager receives WD
 
-			/*
-			 * TODO: LOW: No need to do this for deletes or creates (although
-			 * for creates it might give us a newer file version, which might be
-			 * nice)
-			 */
-			// first write the file to save a local copy
-			fs.writeFile(filename, contents, false);
-
-			// look for pending request
-			boolean foundPendingRequest = false;
-
-			// check creates
-			Integer destAddr = managerPendingRPCCreateRequests.remove(filename);
-			if (destAddr != null) {
-				foundPendingRequest = true;
-				sendError(destAddr, Protocol.CREATE, filename,
-						ErrorCode.FileAlreadyExists);
-			}
-
-			// check deletes
-			destAddr = managerPendingRPCDeleteRequests.remove(filename);
-			if (destAddr != null) {
-				if (foundPendingRequest) {
-					throw new IllegalConcurrentRequestException();
-				}
-				foundPendingRequest = true;
-				deleteExistingFile(filename, destAddr);
-			}
-
-			// check CC
-			destAddr = managerPendingCCPermissionRequests.remove(filename);
-			if (destAddr != null) {
-				if (foundPendingRequest) {
-					throw new IllegalConcurrentRequestException();
-				}
-				foundPendingRequest = true;
-				managerSendFile(destAddr, filename, Protocol.WD);
-			}
-
-			if (!foundPendingRequest) {
-				throw new MissingPendingRequestException("file: " + filename);
-			}
-
-			// update the status of the client who sent the WD
-			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
-			m.remove(from);
+			this.managerFunctions.receiveWD(from, filename, contents);
 		}
 	}
 
@@ -1743,21 +1229,7 @@ public class Client extends RIONode {
 			printVerbose("sending rc to manager for " + filename);
 			sendToManager(Protocol.RC, Utility.stringToByteArray(filename));
 		} else {
-
-			// first write the file to save a local copy
-			fs.writeFile(filename, contents, false);
-
-			/*
-			 * send out a RD to anyone requesting this - unlike for WD, this
-			 * shouldn't be a create or delete (which require RW, so send W{F,D}
-			 * messages instead)
-			 */
-			int destAddr = managerPendingCCPermissionRequests.remove(filename);
-			managerSendFile(destAddr, filename, Protocol.RD);
-
-			// update the status of the client who sent the WD
-			Map<Integer, CacheStatuses> m = managerCacheStatuses.get(filename);
-			m.put(from, CacheStatuses.ReadOnly);
+			this.managerFunctions.receiveRD(from, msgString, contents);
 		}
 	}
 
