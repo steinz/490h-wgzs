@@ -11,25 +11,24 @@ import java.util.Set;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
-/**
- *  TODO: HIGH: All manager public functions need to take care of responding to client and logging
- *  as well. All should end with a response.
- */
+//NOTE: Implicit transactions are handled by cache coherency!
 
 // TODO: HIGH: Log all cache status changes if they're not logged already
 // TODO: HIGH: Should not remove locks on file for clients for all ops in transactions until txcomplete. BUT: If a client tries to write 
 //             to a file that you locked previously, you should be granted automatic RW. 
 // TODO: HIGH: Heartbeat pings, abort clients if they don't respond
-// 		Implicit transactions are handled by cache coherency!
 // TODO: HIGH: Deal with creates and deletes appropriately -  
 // 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
+// TODO: HIGH: In the case where the file doesn't exist, etc. should send an abort if client is in the middle of a tx.
+// TODO: HIGH: Need to handle aborts, failures, and successes
+// TODO: HIGH: Send txFailure in the case of errors (e.g. filenotfound)
 
 public class ManagerNode {
 
 	/**
 	 * A list of locked files (cache coherency)
 	 */
-	private Set<String> LockedFiles;
+	private Map<String, Integer> LockedFiles;
 	
 	/**
 	 * A map of queued file requests, from filename -> Client request
@@ -67,29 +66,25 @@ public class ManagerNode {
 	 */
 	private Map<String, Integer> pendingRPCCreateRequests;
 	
-	/**
-	 * Files that are locked by transactions currently, mapped from filename -> destAddr
-	 */
-	private Map<String, Integer> transactionLockedFiles;
 
 	/**
 	 * A set of node addresses currently performing transactions
 	 * 
 	 * TODO: HIGH: Could be pushed down into the TransactionalFileSystem
 	 */
-	protected Set<Integer> managerTransactionsInProgress;
+	protected Set<Integer> transactionsInProgress;
 	
 	
 	public ManagerNode(Client n)
 	{
 		node = n;
-		this.LockedFiles = new HashSet<String>();
+		this.LockedFiles = new HashMap<String, Integer>();
 		this.pendingICs = new HashMap<String, List<Integer>>();
 		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
 		this.pendingCCPermissionRequests = new HashMap<String, Integer>();
 		this.pendingRPCDeleteRequests = new HashMap<String, Integer>();
 		this.pendingRPCCreateRequests = new HashMap<String, Integer>();
-		this.transactionLockedFiles = new HashMap<String, Integer>();
+		this.transactionsInProgress = new HashSet<Integer>();
 	}
 	
 
@@ -131,7 +126,7 @@ public class ManagerNode {
 	 */
 	public boolean queueRequestIfLocked(int client, int protocol,
 			String filename) {
-		if (LockedFiles.contains(filename)) {
+		if (LockedFiles.containsKey(filename)) {
 			Queue<QueuedFileRequest> requests = queuedFileRequests
 					.get(filename);
 			if (requests == null) {
@@ -313,7 +308,7 @@ public class ManagerNode {
 	 * 
 	 * @param filename
 	 */
-	protected void lockFile(String filename) {
+	protected void lockFile(String filename, Integer from) {
 		/**
 		 * TODO: Detect if client is performing operations out of order during
 		 * transaction.
@@ -321,20 +316,20 @@ public class ManagerNode {
 
 		this.node.printVerbose("manager locking file: " + filename);
 		this.node.logSynopticEvent("MANAGER-LOCK");
-		LockedFiles.add(filename);
+		LockedFiles.put(filename, from);
 	}
 	
 	public void receiveTX_START(int from) {
 		
-		if (managerTransactionsInProgress.contains(from)) {
+		if (transactionsInProgress.contains(from)) {
 			this.node.sendError(from, "", "tx already in progress on client");
 		}
 
-		managerTransactionsInProgress.add(from);
+		transactionsInProgress.add(from);
 	}
 	
 	public void receiveTX_COMMIT(int from){
-		if (!managerTransactionsInProgress.contains(from)) {
+		if (!transactionsInProgress.contains(from)) {
 			this.node.sendError(from, "", "tx not in progress on client");
 		}
 
@@ -345,12 +340,12 @@ public class ManagerNode {
 		} catch (TransactionException e) {
 			this.node.sendError(from, "", e.getMessage());
 		}
-		managerTransactionsInProgress.remove(from);
+		transactionsInProgress.remove(from);
 		this.node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
 	}
 
 	public void receiveTX_ABORT(int from){
-		if (!managerTransactionsInProgress.contains(from)) {
+		if (!transactionsInProgress.contains(from)) {
 			this.node.sendError(from, "", "tx not in progress on client");
 		}
 		try {
@@ -360,7 +355,7 @@ public class ManagerNode {
 		} catch (IOException e) {
 			this.node.sendError(from, "", e.getMessage());
 		}
-		managerTransactionsInProgress.remove(from);
+		transactionsInProgress.remove(from);
 		
 	}
 	
@@ -370,7 +365,7 @@ public class ManagerNode {
 	 */
 	public boolean managerQueueRequestIfLocked(int client, int protocol,
 			String filename) {
-		if (LockedFiles.contains(filename)) {
+		if (LockedFiles.containsKey(filename)) {
 			Queue<QueuedFileRequest> requests = queuedFileRequests
 					.get(filename);
 			if (requests == null) {
@@ -402,7 +397,7 @@ public class ManagerNode {
 		if (rw != null) {
 			this.node.sendRequest(rw, filename, Protocol.WF);
 			pendingRPCCreateRequests.put(filename, client);
-			lockFile(filename);
+			lockFile(filename, client);
 		} else if (ro.size() != 0)
 		{
 			// Someone has RO, so throw an error that the file exists already
@@ -451,7 +446,7 @@ public class ManagerNode {
 		if (waitingForResponses) {
 			// track pending request
 			pendingRPCDeleteRequests.put(filename, from);
-			lockFile(filename);
+			lockFile(filename, from);
 		} else {
 			deleteExistingFile(filename, from);
 		}
@@ -466,7 +461,7 @@ public class ManagerNode {
 		}
 
 		// lock
-		lockFile(filename);
+		lockFile(filename, from);
 		
 		// address of node w/ rw or null
 		Integer rw = checkRWClients(filename);
@@ -588,7 +583,8 @@ public class ManagerNode {
 			cacheRW.put(filename, -1);
 		
 		// check if someone's in the middle of a transaction with this file. if so, don't do anything.
-		if (!transactionLockedFiles.containsKey(filename))
+		if (!LockedFiles.containsKey(filename) || 
+				!transactionsInProgress.contains(LockedFiles.get(filename)))
 			unlockFile(filename);
 		
 	}
@@ -599,7 +595,8 @@ public class ManagerNode {
 		cacheRW.put(filename, from);
 		
 		// check if someone's in the middle of a transaction with this file. if so, don't do anything.
-		if (!transactionLockedFiles.containsKey(filename))
+		if (!LockedFiles.containsKey(filename) || 
+				!transactionsInProgress.contains(LockedFiles.get(filename)))
 			unlockFile(filename);
 	}
 	
