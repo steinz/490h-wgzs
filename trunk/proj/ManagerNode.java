@@ -15,7 +15,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 
 // TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
-// TODO: HIGH: Heartbeat pings, abort clients if they don't respond
+// TODO: HIGH: TEST: Heartbeat pings, abort clients if they don't respond
 // TODO: HIGH: Deal with creates and deletes appropriately -  
 // 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
 // TODO: HIGH: In the case where the file doesn't exist, etc. should send an abort if client is in the middle of a tx.
@@ -350,6 +350,7 @@ public class ManagerNode {
 		}
 
 		transactionsInProgress.add(from);
+		this.node.send(from, Protocol.HEARTBEAT, Utility.stringToByteArray(""));
 	}
 
 	public void receiveTX_COMMIT(int from) {
@@ -374,6 +375,9 @@ public class ManagerNode {
 		}
 		
 		this.node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
+		
+		
+		// stop doing heartbeat pings
 	}
 
 	public void receiveTX_ABORT(int from) {
@@ -740,4 +744,33 @@ public class ManagerNode {
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(from, Protocol.ERROR, payload);
 	}
+
+	/**
+	 * This packet timed out and was a heartbeat packet. It may have been acked, or it may
+	 * not have - it's irrelevant from the point of view of the manager.
+	 * @param destAddr the destination address for the heartbeat packet
+	 */
+	public void heartbeatTimeout(int destAddr) {
+		if (transactionsInProgress.contains(destAddr))
+			this.node.RIOSend(destAddr, Protocol.HEARTBEAT, Utility.stringToByteArray(""));
+		
+	}
+	
+	/**
+	 * This node didn't respond to a packet even after the maximum number of tries. If this client
+	 * was in the middle of the transaction, they're now aborted and all locks on files they
+	 * own are released
+	 * @param destAddr
+	 */
+	public void killNode(int destAddr){
+		// might as well send a txabort just in case this node is alive
+		this.node.RIOSend(destAddr, Protocol.TX_ABORT, Utility.stringToByteArray(""));
+		transactionsInProgress.remove(destAddr);
+		for (Entry<String, Integer> entry : LockedFiles.entrySet())
+		{
+			if (entry.getValue().equals(destAddr))
+				unlockFile(entry.getKey());
+		}
+	}
+
 }

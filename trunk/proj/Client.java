@@ -324,6 +324,9 @@ public class Client extends RIONode {
 			case Protocol.NOOP:
 				printInfo("received noop from " + from);
 				break;
+			case Protocol.HEARTBEAT:
+				printInfo("received heartbeat from " + from);
+				break;
 			case Protocol.IC:
 				receiveIC(from, msgString);
 				break;
@@ -713,5 +716,24 @@ public class Client extends RIONode {
 			throw new NotClientException();
 		}
 		clientFunctions.receiveTX_FAILURE();
+	}
+	
+	/**
+	 * This packet timed out and was a heartbeat packet. It may have been acked, or it may
+	 * not have - it's irrelevant from the point of view of the manager.
+	 * @param destAddr the destination address for the heartbeat packet
+	 * @throws NotManagerException 
+	 */
+	public void heartbeatTimeout(int destAddr) throws NotManagerException{
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+		this.managerFunctions.heartbeatTimeout(destAddr);
+	}
+	
+	public void killNode(int destAddr){
+		if (isManager){
+			this.managerFunctions.killNode(destAddr);
+		}
 	}
 }
