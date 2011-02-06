@@ -7,14 +7,14 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.Map.Entry;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
 //NOTE: Implicit transactions are handled by cache coherency!
 
-// TODO: HIGH: Log all cache status changes if they're not logged already
-// TODO: HIGH: Should not remove locks on file for clients for all ops in transactions until txcomplete. BUT: If a client tries to write 
-//             to a file that you locked previously, you should be granted automatic RW. 
+
+// TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
 // TODO: HIGH: Heartbeat pings, abort clients if they don't respond
 // TODO: HIGH: Deal with creates and deletes appropriately -  
 // 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
@@ -91,6 +91,7 @@ public class ManagerNode {
 			sendError(from, filename, e.getMessage());
 		}
 		// give RW to the requester for filename
+		this.node.printVerbose("Changing status of client: " + from + " to RW for file: " + filename);
 		cacheRW.put(filename, from);
 
 		// send success to requester
@@ -109,6 +110,8 @@ public class ManagerNode {
 		// update permissions
 		this.node.printVerbose("marking file " + filename + " as unowned");
 
+
+		this.node.printVerbose("Blanking all permissions for file: " + filename);
 		cacheRO.put(filename, new ArrayList<Integer>());
 		cacheRW.put(filename, -1);
 
@@ -116,13 +119,24 @@ public class ManagerNode {
 		sendSuccess(from, Protocol.DELETE, filename);
 	}
 
+
+	/**
+	 * NOTE for why this returns false if the file is locked by the client:
+	 * If the client is the one locking the file, then it's fine to give them permission and not queue the request, because this patient probably has an exclusive lock on the file.
+	 * This also means that even if someone else has RO on the file, then it's a good idea to just return and allow them to proceed as normal (since they'll revoke someone else's access
+	 * if they're requesting ownership).
+	 */
 	/**
 	 * Queues the given request if the file is locked and returns true. Returns
-	 * false if the file isn't locked.
+	 * false if the file isn't locked. Also returns false if the file is locked by the requesting client (i.e. the client is the one locking the file).
 	 */
 	public boolean queueRequestIfLocked(int client, int protocol,
 			String filename) {
 		if (LockedFiles.containsKey(filename)) {
+			
+			if (LockedFiles.get(filename).equals(client))
+				return false;
+			
 			Queue<QueuedFileRequest> requests = queuedFileRequests
 					.get(filename);
 			if (requests == null) {
@@ -186,6 +200,8 @@ public class ManagerNode {
 			sendError(from, filename, e.getMessage());
 		}
 		// remove permissions
+
+		this.node.printVerbose("Blanking permissions for file: " + filename);
 		cacheRW.put(filename, -1);
 		cacheRO.put(filename, new ArrayList<Integer>());
 
@@ -211,7 +227,7 @@ public class ManagerNode {
 		requester = pendingCCPermissionRequests.remove(filename);
 		if (requester != null) {
 			// file was deleted by owner
-			sendError(requester, filename, ErrorCode.FileDoesNotExist);
+			sendError(requester, Protocol.DELETE, filename, ErrorCode.FileDoesNotExist);
 			return;
 		}
 
@@ -305,8 +321,10 @@ public class ManagerNode {
 		// update the status of the client who sent the WD
 		if (checkRWClients(filename) != from) {
 			// TODO: HIGH: Throw error, send error, something
-		} else
+		} else{
+			this.node.printVerbose("Blanking ownership permissions for file: " + filename);
 			cacheRW.put(filename, -1);
+		}
 	}
 
 	/**
@@ -347,7 +365,14 @@ public class ManagerNode {
 			sendError(from, "", e.getMessage());
 		}
 		transactionsInProgress.remove(from); // remove from tx
+		
 		// unlock files
+		for (Entry<String, Integer> entry: LockedFiles.entrySet()) {
+			if (entry.getValue() == from){
+				unlockFile(entry.getKey());
+			}
+		}
+		
 		this.node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
 	}
 
@@ -465,6 +490,11 @@ public class ManagerNode {
 
 		// check if locked
 		if (queueRequestIfLocked(from, receivedProtocol, filename)) {
+			/**
+			 *  If the person who locked the file was the requester, then give them automatic
+			 *  RW anyway.
+			 */
+			
 			return;
 		}
 
@@ -537,6 +567,7 @@ public class ManagerNode {
 			// update the status of the client who sent the IC
 			List<Integer> ro = checkROClients(filename);
 			ro.remove(filename);
+			this.node.printVerbose("Changing status of client: " + from + " to RO for file: " + filename);
 			cacheRO.put(filename, ro);
 
 			this.node.printVerbose("Changing client: " + from + " to IV");
@@ -586,8 +617,10 @@ public class ManagerNode {
 
 		List<Integer> ro = cacheRO.get(filename);
 		ro.add(from);
-		if (checkRWClients(filename) == from)
+		if (checkRWClients(filename) == from){
+			this.node.printVerbose("Blanking ownership permissions for file: " + filename);
 			cacheRW.put(filename, -1);
+		}
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -600,6 +633,7 @@ public class ManagerNode {
 	public void receiveWC(int from, String filename) {
 
 		// TODO: Check if someone has RW already, throw error if so
+		this.node.printVerbose("Changing status of client: " + from + " to RW for file: " + filename);
 		cacheRW.put(filename, from);
 
 		// check if someone's in the middle of a transaction with this file. if
@@ -678,12 +712,6 @@ public class ManagerNode {
 				+ message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(destAddr, Protocol.SUCCESS, payload);
-	}
-
-	protected void sendError(int destAddr, String filename, int errorcode) {
-		String msg = filename + Client.delimiter + ErrorCode.lookup(errorcode);
-		byte[] payload = Utility.stringToByteArray(msg);
-		this.node.RIOSend(destAddr, Protocol.ERROR, payload);
 	}
 
 	/**
