@@ -153,5 +153,14 @@ public abstract class RIONode extends Node {
 	public String toString() {
 		return "RIONode|SessionID:" + ID + "|RIOLayer:" + RIOLayer.toString();
 	}
+	
+	/**
+	 * This packet timed out and was a heartbeat packet. It may have been acked, or it may
+	 * not have - it's irrelevant from the point of view of the manager.
+	 * @param destAddr the destination address for the heartbeat packet
+	 * @throws NotManagerException 
+	 */
+	public abstract void heartbeatTimeout(int destAddr) throws NotManagerException;
 
+	public abstract void killNode(int destAddr);
 }

@@ -44,6 +44,7 @@ public class Protocol {
 	// Transactions - Sent to client
 	public static final int TX_SUCCESS = 23;
 	public static final int TX_FAILURE = 24;
+	public static final int HEARTBEAT = 25;
 
 	// Command Status Result Types
 	public static final int SUCCESS = 125;
