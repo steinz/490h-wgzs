@@ -31,7 +31,7 @@ public class PerfectInitializedClient extends PerfectClient {
 		}
 
 		// Setup manager info / data structures
-		this.managerAddr = 0;
+		this.clientFunctions.managerAddr = 0;
 		if (this.addr == 0) {
 			String line = "manager";
 			StringTokenizer tokens = new StringTokenizer(line);
