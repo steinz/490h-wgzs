@@ -96,6 +96,22 @@ public class Client extends RIONode {
 	protected static final String logFilename = ".log";
 
 	/**
+	 * Name of the temp file used when purging the log
+	 */
+	protected static final String logTempFilename = ".log.temp";
+
+	/**
+	 * Purge the log every fsPurgeFrequency commits/aborts
+	 */
+	protected static final int fsPurgeFrequency = 5;
+
+	/**
+	 * The maximum number of commands the client will queue before timing out
+	 * and restarting the node
+	 */
+	protected static int clientMaxWaitingForCommitQueueSize = 10;
+
+	/**
 	 * Static empty payload for use by messages that don't have payloads
 	 */
 	protected static final byte[] emptyPayload = new byte[0];
@@ -121,18 +137,40 @@ public class Client extends RIONode {
 	protected TransactionalFileSystem fs;
 
 	/**
-	 * Cleans up failed puts if necessary
+	 * Wipe the log and restart the client
 	 */
 	public void start() {
-		this.isManager = false;
-
-		this.clientFunctions = new ClientNode(this);
-
 		// Wipe the server log
 		Logger.eraseLog(this);
 
+		restart();
+	}
+
+	/**
+	 * fs instantiation cleans up failed puts and redoes committed transactions
+	 * in the log
+	 * 
+	 * Called by start and when things get really messed up; currently when:
+	 * 
+	 * client fails aborting/committing a transaction (can't write changes to
+	 * disk)
+	 * 
+	 * client doesn't hear a response back from the server after sending a
+	 * commit request
+	 * 
+	 * TODO: HIGH: think about restart
+	 */
+	public void restart() {
+		printInfo("CLIENT (RE)STARTING");
+
+		this.isManager = false;
+
+		this.clientFunctions = new ClientNode(this,
+				clientMaxWaitingForCommitQueueSize);
+
 		try {
-			fs = new TransactionalFileSystem(this, tempFilename, logFilename);
+			fs = new TransactionalFileSystem(this, tempFilename, logFilename,
+					logTempFilename, fsPurgeFrequency);
 		} catch (IOException e) {
 			printError(e);
 		}
@@ -582,16 +620,5 @@ public class Client extends RIONode {
 		if (isManager) {
 			this.managerFunctions.killNode(destAddr);
 		}
-	}
-
-	/**
-	 * Called when things get really messed up, currently when:
-	 * 
-	 * client fails aborting/committing a transaction (can't write changes to
-	 * disk)
-	 */
-	public void restart() {
-		// TODO: HIGH: Implement restart
-		printInfo("RECEIVED UNIMPLEMENTED RESTART REQUEST");
 	}
 }

@@ -148,8 +148,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 						contents.append(reader.readLine());
 						contents.append(lineSeparator);
 					}
-					return new PendingOperation(client, op, filename, contents
-							.toString());
+					return new PendingOperation(client, op, filename,
+							contents.toString());
 				} else {
 					return new PendingOperation(client, op, filename);
 				}
@@ -168,6 +168,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		protected String logFilename;
 
+		protected String logTempFilename;
+
 		protected TransactionalFileSystem fs;
 
 		/**
@@ -176,17 +178,42 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 */
 		Map<Integer, Queue<PendingOperation>> queuedOperations;
 
-		public TransactionCache(TransactionalFileSystem fs, String logFilename) {
+		public TransactionCache(TransactionalFileSystem fs, String logFilename,
+				String logTempFilename) {
 			this.fs = fs;
 			this.logFilename = logFilename;
 			queuedOperations = new HashMap<Integer, Queue<PendingOperation>>();
 		}
 
 		/**
-		 * Blindly creates a new queue for client
+		 * Blindly clears the queue for client
 		 */
-		public void createQueue(int client) {
-			queuedOperations.put(client, new LinkedList<PendingOperation>());
+		public void abortQueue(int client) {
+			queuedOperations.get(client).clear();
+		}
+
+		/**
+		 * Apply the given operation to the RFS
+		 * 
+		 * @throws IOException
+		 */
+		protected void apply(PendingOperation op) throws IOException {
+			switch (op.op) {
+			case CREATE:
+				fs.createFile(op.filename);
+				break;
+			case DELETE:
+				fs.deleteFile(op.filename);
+				break;
+			case PUT:
+				fs.writeFile(op.filename, op.contents, false);
+				break;
+			case APPEND:
+				fs.writeFile(op.filename, op.contents, true);
+				break;
+			default:
+				throw new TransactionLogException("attemp to apply tx op");
+			}
 		}
 
 		/**
@@ -206,25 +233,87 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		}
 
 		/**
-		 * Blindly clears the queue for client
+		 * Blindly creates a new queue for client
 		 */
-		public void abortQueue(int client) {
-			queuedOperations.get(client).clear();
+		public void createQueue(int client) {
+			queuedOperations.put(client, new LinkedList<PendingOperation>());
 		}
 
 		/**
+		 * Add a new operation to the given client's queue
+		 * 
+		 * @throws TransactionException
+		 */
+		public void enque(int client, PendingOperation op)
+				throws TransactionException {
+			Queue<PendingOperation> clientQueue = queuedOperations.get(client);
+			if (clientQueue == null) {
+				throw new TransactionException(
+						"client hasn't started a transaction (transaction queue uninitialized)");
+			}
+			clientQueue.add(op);
+		}
+
+		/**
+		 * Remove all operations in the log for each client up to and including
+		 * the latest commit or abort
+		 * 
+		 * Writes the full log to logTempFile first in case of failure
+		 * 
 		 * @throws IOException
 		 */
-		public void recover() throws IOException {
-			if (!Utility.fileExists(fs.n, logFilename)) {
-				// no log, so nothing to do
-				return;
+		public void purgeLog() throws IOException {
+			// make a copy of the log first in case we fail during purge
+			String logContents = fs.getFile(logFilename);
+			fs.performWrite(logTempFilename, false, logContents);
+
+			// read through the log, building up PendingOperation lists
+			Map<Integer, List<PendingOperation>> oldTxs = queueFromLog();
+
+			// clear the current log on disk
+			fs.performWrite(logFilename, false, "");
+
+			/*
+			 * TODO: This could be done more efficiently by traversing the log
+			 * in reverse
+			 */
+			// build up batches that haven't been committed / aborted yet
+			for (Entry<Integer, List<PendingOperation>> entry : oldTxs
+					.entrySet()) {
+				List<PendingOperation> batch = new ArrayList<PendingOperation>();
+				for (PendingOperation nextOp : entry.getValue()) {
+					if (nextOp.op == Operation.TXCOMMIT
+							|| nextOp.op == Operation.TXABORT) {
+						batch.clear();
+					} else {
+						batch.add(nextOp);
+					}
+				}
+
+				/*
+				 * rewrite the latest batch of ops that hasn't yet been
+				 * committed / aborted
+				 */
+				for (PendingOperation op : batch) {
+					fs.performWrite(logFilename, true, op.toLogString());
+				}
 			}
 
+			// delete the copy
+			fs.deleteFile(logTempFilename);
+		}
+
+		/**
+		 * Parse the log file on disk
+		 * 
+		 * @throws FileNotFoundException
+		 */
+		protected Map<Integer, List<PendingOperation>> queueFromLog()
+				throws FileNotFoundException {
 			Map<Integer, List<PendingOperation>> oldTxs = new HashMap<Integer, List<PendingOperation>>();
 
 			// read log from disk, parsing lines into PendingOperation objects
-			PersistentStorageReader reader = this.fs.n.getReader(logFilename);
+			PersistentStorageReader reader = fs.n.getReader(logFilename);
 			PendingOperation op = PendingOperation.fromLog(reader);
 			while (op != null) {
 				List<PendingOperation> clientQueue = oldTxs.get(op.client);
@@ -235,6 +324,36 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				clientQueue.add(op);
 				op = PendingOperation.fromLog(reader);
 			}
+
+			return oldTxs;
+		}
+
+		/**
+		 * Recover tempLogFilename into logFilename if needed
+		 * 
+		 * @throws IOException
+		 */
+		public void recoverTempLog() throws IOException {
+			if (!Utility.fileExists(fs.n, logTempFilename)) {
+				// no temp log, so nothing to do
+				return;
+			}
+
+			String tempLog = fs.getFile(logTempFilename);
+			fs.performWrite(logFilename, false, tempLog);
+			fs.deleteFile(logTempFilename);
+		}
+
+		/**
+		 * @throws IOException
+		 */
+		public void redoLog() throws IOException {
+			if (!Utility.fileExists(fs.n, logFilename)) {
+				// no log, so nothing to do
+				return;
+			}
+
+			Map<Integer, List<PendingOperation>> oldTxs = queueFromLog();
 
 			// reapply txs
 			for (Entry<Integer, List<PendingOperation>> entry : oldTxs
@@ -265,45 +384,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			}
 		}
 
-		/**
-		 * Add a new operation to the given client's queue
-		 * 
-		 * @throws TransactionException
-		 */
-		public void enque(int client, PendingOperation op)
-				throws TransactionException {
-			Queue<PendingOperation> clientQueue = queuedOperations.get(client);
-			if (clientQueue == null) {
-				throw new TransactionException(
-						"client hasn't started a transaction (transaction queue uninitialized)");
-			}
-			clientQueue.add(op);
-		}
-
-		/**
-		 * Apply the given operation to the RFS
-		 * 
-		 * @throws IOException
-		 */
-		protected void apply(PendingOperation op) throws IOException {
-			switch (op.op) {
-			case CREATE:
-				fs.createFile(op.filename);
-				break;
-			case DELETE:
-				fs.deleteFile(op.filename);
-				break;
-			case PUT:
-				fs.writeFile(op.filename, op.contents, false);
-				break;
-			case APPEND:
-				fs.writeFile(op.filename, op.contents, true);
-				break;
-			default:
-				throw new TransactionLogException("attemp to apply tx op");
-			}
-
-		}
 	}
 
 	/**
@@ -311,7 +391,20 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	 */
 	protected String logFilename;
 
+	/**
+	 * Name of the temp file used when purging the log
+	 */
 	protected String logTempFilename;
+
+	/**
+	 * How many commits / aborts to perform before purging the log
+	 */
+	protected int purgeFrequency;
+
+	/**
+	 * The number of commits / aborts performed since the last purge
+	 */
+	protected int purgeFrequencyCounter = 0;
 
 	/**
 	 * Logged operations yet to be committed
@@ -319,17 +412,23 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	protected TransactionCache txCache;
 
 	public TransactionalFileSystem(Client n, String tempFilename,
-			String logFilename) throws IOException, TransactionLogException {
+			String logFilename, String logTempFilename, int purgeFrequency)
+			throws IOException, TransactionLogException {
 		// setup ReliableFileSystem
 		super(n, tempFilename);
 
 		// setup log file state
 		this.logFilename = logFilename;
-		this.txCache = new TransactionCache(this, this.logFilename);
+		this.logTempFilename = logTempFilename;
+		this.txCache = new TransactionCache(this, this.logFilename,
+				this.tempFilename);
 
 		// recover RFS and from the log if necessary
 		this.recover();
-		txCache.recover();
+		txCache.recoverTempLog();
+		txCache.redoLog();
+
+		this.purgeFrequency = purgeFrequency;
 
 		// create or clear the log file on disk
 		if (Utility.fileExists(n, logFilename)) {
@@ -470,7 +569,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		performWrite(logFilename, true, op.toLogString());
 		txCache.abortQueue(client);
 
-		// TODO: Cleanup log on disk
+		purgeLogIfNecessary();
 	}
 
 	public void commitTransaction(int client) throws IOException {
@@ -478,7 +577,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		performWrite(logFilename, true, op.toLogString());
 		txCache.commitQueue(client);
 
-		// TODO: Cleanup log on disk
+		purgeLogIfNecessary();
 	}
 
 	public void startTransaction(int client) throws IOException {
@@ -487,4 +586,16 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		txCache.createQueue(client);
 	}
 
+	/**
+	 * Update the purgeFrequencyCounter and purge the log if it is time
+	 * 
+	 * @throws IOException
+	 */
+	protected void purgeLogIfNecessary() throws IOException {
+		purgeFrequencyCounter++;
+		if (purgeFrequencyCounter >= purgeFrequency) {
+			txCache.purgeLog();
+			purgeFrequencyCounter = 0;
+		}
+	}
 }
