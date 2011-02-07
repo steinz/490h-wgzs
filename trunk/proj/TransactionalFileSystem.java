@@ -148,8 +148,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 						contents.append(reader.readLine());
 						contents.append(lineSeparator);
 					}
-					return new PendingOperation(client, op, filename,
-							contents.toString());
+					return new PendingOperation(client, op, filename, contents
+							.toString());
 				} else {
 					return new PendingOperation(client, op, filename);
 				}
@@ -197,8 +197,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 * @throws IOException
 		 * @throws TransactionException
 		 */
-		public void commitQueue(int client) throws IOException,
-				TransactionException {
+		public void commitQueue(int client) throws IOException {
 			Queue<PendingOperation> clientQueue = queuedOperations.get(client);
 			for (PendingOperation op : clientQueue) {
 				apply(op);
@@ -276,7 +275,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			Queue<PendingOperation> clientQueue = queuedOperations.get(client);
 			if (clientQueue == null) {
 				throw new TransactionException(
-						"client transaction queue uninitialized");
+						"client hasn't started a transaction (transaction queue uninitialized)");
 			}
 			clientQueue.add(op);
 		}
@@ -438,15 +437,13 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		txCache.enque(client, op);
 	}
 
-	public void startTransaction(int client) throws IOException,
-			TransactionException {
+	public void startTransaction(int client) throws IOException {
 		PendingOperation op = new PendingOperation(client, Operation.TXSTART);
 		performWrite(logFilename, true, op.toLogString());
 		txCache.createQueue(client);
 	}
 
-	public void commitTransaction(int client) throws IOException,
-			TransactionException {
+	public void commitTransaction(int client) throws IOException {
 		PendingOperation op = new PendingOperation(client, Operation.TXCOMMIT);
 		performWrite(logFilename, true, op.toLogString());
 		txCache.commitQueue(client);
@@ -454,8 +451,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		// TODO: Cleanup log on disk
 	}
 
-	public void abortTransaction(int client) throws TransactionException,
-			IOException {
+	public void abortTransaction(int client) throws IOException {
 		PendingOperation op = new PendingOperation(client, Operation.TXABORT);
 		performWrite(logFilename, true, op.toLogString());
 		txCache.abortQueue(client);
