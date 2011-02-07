@@ -119,8 +119,15 @@ public class ClientNode {
 	 */
 	protected Queue<String> waitingForCommitQueue;
 
-	public ClientNode(Client n) {
+	/**
+	 * The maximum number of commands the client will queue before timing out
+	 * and restarting the node
+	 */
+	protected int maxWaitingForCommitQueueSize;
+
+	public ClientNode(Client n, int maxWaitingForCommitQueueSize) {
 		this.node = n;
+		this.maxWaitingForCommitQueueSize = maxWaitingForCommitQueueSize;
 
 		this.cacheStatus = new HashMap<String, CacheStatuses>();
 		this.pendingOperations = new HashMap<String, PendingClientOperation>();
@@ -143,13 +150,17 @@ public class ClientNode {
 			return;
 		}
 
-		/*
-		 * TODO: The client could hang here if the server never responds to
-		 * their COMMIT request - they should just restart the node if they get
-		 * stuck here too long
-		 */
-		if (waitingForCommitSuccess) {
+		if (waitingForCommitSuccess
+				&& waitingForCommitQueue.size() > maxWaitingForCommitQueueSize) {
+			/*
+			 * TODO: figure out what we need to do to kill this object after the
+			 * node restarts, or if we should even restart the node at all
+			 */
+			node.restart();
+			return;
+		} else if (waitingForCommitSuccess) {
 			waitingForCommitQueue.add(line);
+			return;
 		}
 
 		/*
@@ -325,8 +336,8 @@ public class ClientNode {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = node.getID().toString();
 		node.printInfo("sending handshake to " + server);
-		node.RIOSend(server, Protocol.HANDSHAKE, Utility
-				.stringToByteArray(payload));
+		node.RIOSend(server, Protocol.HANDSHAKE,
+				Utility.stringToByteArray(payload));
 	}
 
 	/**
@@ -406,6 +417,11 @@ public class ClientNode {
 			sendToManager(Protocol.TX_ABORT);
 		}
 	}
+
+	/*
+	 * TODO: HIGH: What happens if I have RW but I fail? I'm the only one with
+	 * the newest version of the file...
+	 */
 
 	/**
 	 * Sends a TX_COMMIT if performing a transaction
@@ -510,16 +526,16 @@ public class ClientNode {
 	 * Perform a create RPC to the given address
 	 */
 	public void createRPC(int address, String filename) {
-		node.RIOSend(address, Protocol.CREATE, Utility
-				.stringToByteArray(filename));
+		node.RIOSend(address, Protocol.CREATE,
+				Utility.stringToByteArray(filename));
 	}
 
 	/**
 	 * Perform a delete RPC to the given address
 	 */
 	public void deleteRPC(int address, String filename) {
-		node.RIOSend(address, Protocol.DELETE, Utility
-				.stringToByteArray(filename));
+		node.RIOSend(address, Protocol.DELETE,
+				Utility.stringToByteArray(filename));
 	}
 
 	/**
