@@ -19,7 +19,7 @@ import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /*
- * TODO: EC: In memory file caching - DHT
+ * TODO: EC: More in memory file caching
  */
 
 /*
@@ -28,7 +28,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  */
 
 /*
- * TODO: EC: Keep the log open between writes
+ * TODO: Keep the log open between writes
  */
 
 /**
@@ -280,6 +280,11 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			clientQueue.add(op);
 		}
 
+		/**
+		 * Apply the given operation to the RFS
+		 * 
+		 * @throws IOException
+		 */
 		protected void apply(PendingOperation op) throws IOException {
 			switch (op.op) {
 			case CREATE:
@@ -334,9 +339,51 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		}
 	}
 
+	/*
+	 * The below methods all log what they are doing to disk and in the txCache
+	 */
+
+	public void createFileTX(int client, String filename)
+			throws TransactionException, IOException {
+
+		boolean exists = fileExistsTX(client, filename);
+		if (exists) {
+			throw new FileAlreadyExistsException();
+		}
+
+		PendingOperation op = new PendingOperation(client, Operation.CREATE,
+				filename);
+		performWrite(logFilename, true, op.toLogString());
+		txCache.enque(client, op);
+	}
+
+	public void deleteFileTX(int client, String filename) throws IOException,
+			TransactionException {
+		boolean exists = fileExistsTX(client, filename);
+		if (!exists) {
+			throw new FileNotFoundException();
+		}
+
+		PendingOperation op = new PendingOperation(client, Operation.DELETE,
+				filename);
+		performWrite(logFilename, true, op.toLogString());
+		txCache.enque(client, op);
+	}
+
+	public boolean fileExistsTX(int client, String filename) {
+		boolean exists = Utility.fileExists(n, filename);
+		for (PendingOperation op : txCache.queuedOperations.get(client)) {
+			if (op.op == Operation.DELETE) {
+				exists = false;
+			} else if (op.op == Operation.CREATE) {
+				exists = true;
+			}
+		}
+		return exists;
+	}
+
 	public String getFileTX(int client, String filename) throws IOException {
 		// Look through op queue for ops in this tx that altered this file
-
 		String putContents = null;
 		Queue<String> appendsQueue = new LinkedList<String>();
 		boolean deleted = false;
@@ -367,9 +414,14 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			// file deleted during this tx
 			throw new FileNotFoundException("file deleted during this tx");
 		} else {
+
 			// file has been put or appeneded to
 			StringBuilder result = new StringBuilder();
-			result.append(putContents);
+			if (putContents == null) {
+				result.append(getFile(filename));
+			} else {
+				result.append(putContents);
+			}
 			for (String appendContents : appendsQueue) {
 				result.append(appendContents);
 			}
@@ -394,36 +446,12 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 */
 	}
 
-	/*
-	 * The below methods all log what they are doing to disk and in the txCache
-	 */
-
-	public void createFileTX(int client, String filename)
-			throws TransactionException, IOException {
-		/**
-		 * TODO: HIGH: Check that client is transacting here, or in Client?
-		 */
-
-		PendingOperation op = new PendingOperation(client, Operation.CREATE,
-				filename);
-		performWrite(logFilename, true, op.toLogString());
-		txCache.enque(client, op);
-	}
-
-	public void deleteFileTX(int client, String filename) throws IOException,
-			TransactionException {
-		PendingOperation op = new PendingOperation(client, Operation.DELETE,
-				filename);
-		performWrite(logFilename, true, op.toLogString());
-		txCache.enque(client, op);
-	}
-
 	public void writeFileTX(int client, String filename, String contents,
 			boolean append) throws IOException, TransactionException {
-		/*
-		 * TODO: HIGH: throw a FNFException if the file isn't on disk / has been
-		 * deleted during this tx
-		 */
+		boolean exists = fileExistsTX(client, filename);
+		if (!exists) {
+			throw new FileNotFoundException();
+		}
 
 		PendingOperation op;
 		if (append) {
@@ -437,10 +465,12 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		txCache.enque(client, op);
 	}
 
-	public void startTransaction(int client) throws IOException {
-		PendingOperation op = new PendingOperation(client, Operation.TXSTART);
+	public void abortTransaction(int client) throws IOException {
+		PendingOperation op = new PendingOperation(client, Operation.TXABORT);
 		performWrite(logFilename, true, op.toLogString());
-		txCache.createQueue(client);
+		txCache.abortQueue(client);
+
+		// TODO: Cleanup log on disk
 	}
 
 	public void commitTransaction(int client) throws IOException {
@@ -451,11 +481,10 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		// TODO: Cleanup log on disk
 	}
 
-	public void abortTransaction(int client) throws IOException {
-		PendingOperation op = new PendingOperation(client, Operation.TXABORT);
+	public void startTransaction(int client) throws IOException {
+		PendingOperation op = new PendingOperation(client, Operation.TXSTART);
 		performWrite(logFilename, true, op.toLogString());
-		txCache.abortQueue(client);
-
-		// TODO: Cleanup log on disk
+		txCache.createQueue(client);
 	}
+
 }
