@@ -27,7 +27,7 @@ public class ManagerNode {
 	/**
 	 * A list of locked files (cache coherency)
 	 */
-	private Map<String, Integer> LockedFiles;
+	private Map<String, Integer> lockedFiles;
 
 	/**
 	 * A map of queued file requests, from filename -> Client request
@@ -74,7 +74,7 @@ public class ManagerNode {
 
 	public ManagerNode(Client n) {
 		node = n;
-		this.LockedFiles = new HashMap<String, Integer>();
+		this.lockedFiles = new HashMap<String, Integer>();
 		this.pendingICs = new HashMap<String, List<Integer>>();
 		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
 		this.pendingCCPermissionRequests = new HashMap<String, Integer>();
@@ -132,9 +132,9 @@ public class ManagerNode {
 	 */
 	public boolean queueRequestIfLocked(int client, int protocol,
 			String filename) {
-		if (LockedFiles.containsKey(filename)) {
+		if (lockedFiles.containsKey(filename)) {
 			
-			if (LockedFiles.get(filename).equals(client))
+			if (lockedFiles.get(filename).equals(client))
 				return false;
 			
 			Queue<QueuedFileRequest> requests = queuedFileRequests
@@ -342,7 +342,7 @@ public class ManagerNode {
 
 		this.node.printVerbose("manager locking file: " + filename);
 		this.node.logSynopticEvent("MANAGER-LOCK");
-		LockedFiles.put(filename, from);
+		lockedFiles.put(filename, from);
 	}
 
 	public void receiveTX_START(int from) {
@@ -368,7 +368,7 @@ public class ManagerNode {
 		transactionsInProgress.remove(from); // remove from tx
 		
 		// unlock files
-		for (Entry<String, Integer> entry: LockedFiles.entrySet()) {
+		for (Entry<String, Integer> entry: lockedFiles.entrySet()) {
 			if (entry.getValue() == from){
 				unlockFile(entry.getKey());
 			}
@@ -399,7 +399,7 @@ public class ManagerNode {
 	 */
 	public boolean managerQueueRequestIfLocked(int client, int protocol,
 			String filename) {
-		if (LockedFiles.containsKey(filename)) {
+		if (lockedFiles.containsKey(filename)) {
 			Queue<QueuedFileRequest> requests = queuedFileRequests
 					.get(filename);
 			if (requests == null) {
@@ -626,8 +626,8 @@ public class ManagerNode {
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
-		if (!LockedFiles.containsKey(filename)
-				|| !transactionsInProgress.contains(LockedFiles.get(filename)))
+		if (!lockedFiles.containsKey(filename)
+				|| !transactionsInProgress.contains(lockedFiles.get(filename)))
 			unlockFile(filename);
 
 	}
@@ -640,8 +640,8 @@ public class ManagerNode {
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
-		if (!LockedFiles.containsKey(filename)
-				|| !transactionsInProgress.contains(LockedFiles.get(filename)))
+		if (!lockedFiles.containsKey(filename)
+				|| !transactionsInProgress.contains(lockedFiles.get(filename)))
 			unlockFile(filename);
 	}
 
@@ -677,7 +677,7 @@ public class ManagerNode {
 
 		this.node.printVerbose("manager unlocking file: " + filename);
 		this.node.logSynopticEvent("MANAGER-UNLOCK");
-		LockedFiles.remove(filename);
+		lockedFiles.remove(filename);
 
 		Queue<QueuedFileRequest> outstandingRequests = queuedFileRequests
 				.get(filename);
@@ -764,7 +764,7 @@ public class ManagerNode {
 		// might as well send a txabort just in case this node is alive
 		this.node.RIOSend(destAddr, Protocol.TX_ABORT, Utility.stringToByteArray(""));
 		transactionsInProgress.remove(destAddr);
-		for (Entry<String, Integer> entry : LockedFiles.entrySet())
+		for (Entry<String, Integer> entry : lockedFiles.entrySet())
 		{
 			if (entry.getValue().equals(destAddr))
 				unlockFile(entry.getKey());

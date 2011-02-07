@@ -63,7 +63,8 @@ public class Client extends RIONode {
 	 */
 
 	/*
-	 * TODO: EC: Only send file diffs for big files
+	 * TODO: EC: Only send file diffs for big files, keep multiple versions of
+	 * files
 	 */
 
 	/*
@@ -72,7 +73,7 @@ public class Client extends RIONode {
 	 */
 
 	/*
-	 * TODO: EC: Multiple TX for clients at the same time
+	 * TODO: EC: Multiple TXs for clients at the same time
 	 */
 
 	/*
@@ -138,7 +139,7 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * TODO: LOW: Associate a unique command_id with every operation to make
+	 * TODO: Associate a unique command_id with every operation to make
 	 * Synoptic's trace mapping easier
 	 */
 
@@ -251,7 +252,7 @@ public class Client extends RIONode {
 			default:
 				printError("received invalid/deprecated packet type");
 			}
-		} catch (Exception e) {
+		} catch (NotManagerException e) {
 
 			/*
 			 * TODO: HIGH: All errors should be caught and dealt w/ by their
@@ -267,9 +268,12 @@ public class Client extends RIONode {
 			 * 
 			 * EXCEPT: If someone gets a message type meant only for the other
 			 * type of node, the demultiplexing methods below will throw an
-			 * exception up here - we can just print an error in this case
+			 * exception up here - we can just print an error in this case since
+			 * something has to be pretty messed up for this to happen
 			 */
 
+			printError(e);
+		} catch (NotClientException e) {
 			printError(e);
 		}
 	}
@@ -493,8 +497,7 @@ public class Client extends RIONode {
 	 * @throws TransactionException
 	 * @throws IOException
 	 */
-	protected void receiveTX_FAILURE() throws NotClientException,
-			TransactionException, IOException {
+	protected void receiveTX_FAILURE() throws NotClientException {
 		if (isManager) {
 			throw new NotClientException();
 		}
