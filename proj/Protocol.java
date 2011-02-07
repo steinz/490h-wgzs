@@ -12,14 +12,18 @@ import java.lang.reflect.Field;
 public class Protocol {
 
 	// Base RIO Types
+	@Deprecated
 	public static final int DATA = 0;
 	public static final int ACK = 1;
 
 	// FS RPC Commands
 	public static final int CREATE = 2;
 	public static final int DELETE = 3;
+	@Deprecated
 	public static final int GET = 4;
+	@Deprecated
 	public static final int PUT = 5;
+	@Deprecated
 	public static final int APPEND = 6;
 	public static final int HANDSHAKE = 7;
 	public static final int NOOP = 8;

@@ -1,4 +1,6 @@
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -10,8 +12,13 @@ import java.util.StringTokenizer;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
-// Implicit transactions are handled by CC
-
+/**
+ * Implicit transactions do the right thing by CC
+ * 
+ * IMPORTANT: Methods names should not end in Handler unless they are meant to
+ * handle commands passed in by onCommand - onCommand dynamically dispatches
+ * commands to the method named <cmdName>Handler.
+ */
 public class ClientNode {
 
 	/**
@@ -44,14 +51,6 @@ public class ClientNode {
 		protected String content;
 
 		/**
-		 * Create an intent for an op that has no content
-		 */
-		public PendingClientOperation(ClientOperation operation) {
-			this.operation = operation;
-			this.content = null;
-		}
-
-		/**
 		 * Create an intent for an op that has content
 		 */
 		public PendingClientOperation(ClientOperation type, String content) {
@@ -61,57 +60,119 @@ public class ClientNode {
 	}
 
 	/**
-	 * Status of cached files on disk. Keys are filenames.
+	 * Status of cached files on disk. Keys are filenames. Files not in here
+	 * should be considered Invalid.
 	 */
-	protected Map<String, CacheStatuses> clientCacheStatus;
+	protected Map<String, CacheStatuses> cacheStatus;
 
 	/**
 	 * Map from filenames to the operation we want to do on them later
 	 */
-	protected Map<String, PendingClientOperation> clientPendingOperations;
+	protected Map<String, PendingClientOperation> pendingOperations;
 
 	/*
-	 * TODO: Abstract into some kind of Locker class so you're forced to use
-	 * helpers to access this that we can log
+	 * TODO: HIGH: Verify we need client side locking. I think the below case
+	 * will be handled better if we have it:
+	 * 
+	 * 1 put test hello
+	 * 
+	 * 1 delete test
+	 * 
+	 * I won't have RW yet on the delete, so I'll ask the manager for it, which
+	 * the manager will currently send an error on. Alternatively, the manager
+	 * could send me a RW, I send a RD, he sends an RD, I do the delete - but
+	 * this is a lot of messages compared to the zero sent if I just wait.
 	 */
 
 	/**
 	 * List of files locked on the client's side
 	 */
-	protected Set<String> clientLockedFiles;
+	protected Set<String> lockedFiles;
 
 	/**
 	 * Saves commands on client side locked files
 	 */
-	protected Map<String, Queue<String>> clientQueuedCommands;
+	protected Map<String, Queue<String>> queuedCommands;
 
 	/**
 	 * Whether or not the client is currently performing a transaction
 	 */
-	protected boolean clientTransacting;
+	protected boolean transacting;
 
 	/**
 	 * Whether or not the client is waiting for a response to it's txcommit
 	 */
-	protected boolean clientWaitingForCommitSuccess;
+	protected boolean waitingForCommitSuccess;
 
 	/**
 	 * Commands queued because the client is waiting for a commit result
 	 */
-	protected Queue<String> clientWaitingForCommitQueue;
+	protected Queue<String> waitingForCommitQueue;
+
+	/**
+	 * The address of the manager node.
+	 */
+	protected int managerAddr;
 
 	protected Client node;
 
 	public ClientNode(Client n) {
 		this.node = n;
 
-		this.clientCacheStatus = new HashMap<String, CacheStatuses>();
-		this.clientPendingOperations = new HashMap<String, PendingClientOperation>();
-		this.clientLockedFiles = new HashSet<String>();
-		this.clientQueuedCommands = new HashMap<String, Queue<String>>();
-		this.clientTransacting = false;
-		this.clientWaitingForCommitSuccess = false;
-		this.clientWaitingForCommitQueue = new LinkedList<String>();
+		this.cacheStatus = new HashMap<String, CacheStatuses>();
+		this.pendingOperations = new HashMap<String, PendingClientOperation>();
+		this.lockedFiles = new HashSet<String>();
+		this.queuedCommands = new HashMap<String, Queue<String>>();
+		this.transacting = false;
+		this.waitingForCommitSuccess = false;
+		this.waitingForCommitQueue = new LinkedList<String>();
+		this.managerAddr = -1;
+	}
+
+	public void onCommand(String line) {
+		// Create a tokenizer and get the first token (the actual cmd)
+		StringTokenizer tokens = new StringTokenizer(line, " ");
+		String cmd = "";
+		try {
+			cmd = tokens.nextToken().toLowerCase();
+		} catch (NoSuchElementException e) {
+			node.printError("no command found in: " + line);
+			return;
+		}
+
+		/*
+		 * TODO: The client could hang here if the server never responsds to
+		 * their COMMIT request - they should just restart the node if they get
+		 * stuck here too long
+		 */
+		if (waitingForCommitSuccess) {
+			waitingForCommitQueue.add(line);
+		}
+
+		/*
+		 * Dynamically call <cmd>Command, passing off the tokenizer and the full
+		 * command string
+		 */
+		try {
+			Class<?>[] paramTypes = { StringTokenizer.class, String.class };
+			Method handler = this.getClass().getMethod(cmd + "Handler",
+					paramTypes);
+			Object[] args = { tokens, line };
+			handler.invoke(this, args);
+		} catch (NoSuchMethodException e) {
+			node.printError("invalid command:" + line);
+		} catch (IllegalAccessException e) {
+			node.printError("invalid command:" + line);
+		} catch (InvocationTargetException e) {
+			node.printError(e);
+			if (transacting) {
+				abortCurrentTransaction();
+			}
+			/*
+			 * Since locks are the last thing that happen in handlers, nothing
+			 * was locked so there's nothing to unlock here
+			 */
+		}
 	}
 
 	/**
@@ -139,8 +200,8 @@ public class ClientNode {
 	 * Used for project2 to tell a node the address of the manager.
 	 */
 	public void managerisHandler(StringTokenizer tokens, String line) {
-		node.managerAddr = Integer.parseInt(tokens.nextToken());
-		node.printInfo("setting manager address to " + node.managerAddr);
+		managerAddr = Integer.parseInt(tokens.nextToken());
+		node.printInfo("setting manager address to " + managerAddr);
 	}
 
 	/**
@@ -148,14 +209,14 @@ public class ClientNode {
 	 * if the file is locked and return true. Otherwise return false.
 	 */
 	protected boolean clientQueueLineIfLocked(String filename, String line) {
-		if (clientLockedFiles.contains(filename)) {
+		if (lockedFiles.contains(filename)) {
 			node.printVerbose("queueing command on locked file: " + filename
 					+ ", " + line);
 
-			Queue<String> requests = clientQueuedCommands.get(filename);
+			Queue<String> requests = queuedCommands.get(filename);
 			if (requests == null) {
 				requests = new LinkedList<String>();
-				clientQueuedCommands.put(filename, requests);
+				queuedCommands.put(filename, requests);
 			}
 			requests.add(line);
 
@@ -167,11 +228,14 @@ public class ClientNode {
 
 	/**
 	 * Lock the provided filename and print a message
+	 * 
+	 * This should be the last thing done in a Handler so that we don't have to
+	 * figure out what file to unlock if the handler throws an exception
 	 */
 	protected void clientLockFile(String filename) {
 		node.printVerbose("client locking file: " + filename);
 		node.logSynopticEvent("CLIENT-LOCK");
-		clientLockedFiles.add(filename);
+		lockedFiles.add(filename);
 	}
 
 	/**
@@ -187,21 +251,21 @@ public class ClientNode {
 
 		if (clientQueueLineIfLocked(filename, line)) {
 			return;
-		} else if (clientCacheStatus.containsKey(filename)
-				&& (clientCacheStatus.get(filename) == CacheStatuses.ReadWrite)) {
+		} else if (cacheStatus.containsKey(filename)
+				&& (cacheStatus.get(filename) == CacheStatuses.ReadWrite)) {
 			// have permissions
-			if (clientTransacting) {
+			if (transacting) {
 				node.fs.createFileTX(node.addr, filename);
 			} else {
 				node.fs.createFile(filename);
 			}
 		} else {
 			// lock and perform rpc
-			if (node.managerAddr == -1) {
+			if (managerAddr == -1) {
 				throw new UnknownManagerException();
 			} else {
+				createRPC(managerAddr, filename);
 				clientLockFile(filename);
-				createRPC(node.managerAddr, filename);
 			}
 		}
 	}
@@ -219,21 +283,21 @@ public class ClientNode {
 
 		if (clientQueueLineIfLocked(filename, line)) {
 			return;
-		} else if (clientCacheStatus.containsKey(filename)
-				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		} else if (cacheStatus.containsKey(filename)
+				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// have permissions
-			if (clientTransacting) {
+			if (transacting) {
 				node.fs.deleteFileTX(node.addr, filename);
 			} else {
 				node.fs.deleteFile(filename);
 			}
 		} else {
 			// lock and perform rpc
-			if (node.managerAddr == -1) {
+			if (managerAddr == -1) {
 				throw new UnknownManagerException();
 			} else {
+				deleteRPC(managerAddr, filename);
 				clientLockFile(filename);
-				deleteRPC(node.managerAddr, filename);
 			}
 		}
 	}
@@ -250,10 +314,10 @@ public class ClientNode {
 
 		if (clientQueueLineIfLocked(filename, line)) {
 			return;
-		} else if (clientCacheStatus.containsKey(filename)) {
+		} else if (cacheStatus.containsKey(filename)) {
 			// have permissions
 			String content;
-			if (clientTransacting) {
+			if (transacting) {
 				content = node.fs.getFileTX(node.addr, filename);
 			} else {
 				content = node.fs.getFile(filename);
@@ -262,9 +326,9 @@ public class ClientNode {
 			node.printInfo(content);
 		} else {
 			// lock and get permissions
-			clientLockFile(filename);
 			node.printVerbose("requesting read access for " + filename);
 			sendToManager(Protocol.RQ, Utility.stringToByteArray(filename));
+			clientLockFile(filename);
 		}
 	}
 
@@ -282,22 +346,20 @@ public class ClientNode {
 
 		if (clientQueueLineIfLocked(filename, line)) {
 			return;
-		} else if (clientCacheStatus.containsKey(filename)
-				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		} else if (cacheStatus.containsKey(filename)
+				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// have ownership - writeFile verifies existence
-			if (clientTransacting) {
+			if (transacting) {
 				node.fs.writeFileTX(node.addr, filename, content, false);
 			} else {
 				node.fs.writeFile(filename, content, false);
 			}
 		} else {
 			// lock and request ownership
-			clientLockFile(filename);
-			node.printVerbose("requesting ownership of " + filename);
 			sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
-			clientPendingOperations.put(filename, new PendingClientOperation(
+			pendingOperations.put(filename, new PendingClientOperation(
 					ClientOperation.PUT, content));
-
+			clientLockFile(filename);
 		}
 	}
 
@@ -318,22 +380,20 @@ public class ClientNode {
 
 		if (clientQueueLineIfLocked(filename, line)) {
 			return;
-		} else if (clientCacheStatus.containsKey(filename)
-				&& clientCacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		} else if (cacheStatus.containsKey(filename)
+				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
 			// have ownership - writeFile verifies existence
-			if (clientTransacting) {
+			if (transacting) {
 				node.fs.writeFileTX(node.addr, filename, content, true);
 			} else {
 				node.fs.writeFile(filename, content, true);
 			}
 		} else {
 			// lock and request ownership
-			clientLockFile(filename);
-			node.printVerbose("requesting ownership of " + filename);
 			sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
-			clientPendingOperations.put(filename, new PendingClientOperation(
+			pendingOperations.put(filename, new PendingClientOperation(
 					ClientOperation.APPEND, content));
-
+			clientLockFile(filename);
 		}
 	}
 
@@ -356,8 +416,8 @@ public class ClientNode {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = node.getID().toString();
 		node.printInfo("sending handshake to " + server);
-		node.RIOSend(server, Protocol.HANDSHAKE,
-				Utility.stringToByteArray(payload));
+		node.RIOSend(server, Protocol.HANDSHAKE, Utility
+				.stringToByteArray(payload));
 	}
 
 	/**
@@ -377,11 +437,11 @@ public class ClientNode {
 	 */
 	public void txstartHandler(StringTokenizer tokens, String line)
 			throws TransactionException, UnknownManagerException, IOException {
-		if (clientTransacting) {
+		if (transacting) {
 			throw new TransactionException(
 					"client already performing a transaction");
 		} else {
-			clientTransacting = true;
+			transacting = true;
 			node.fs.startTransaction(node.addr);
 			sendToManager(Protocol.TX_START);
 		}
@@ -396,12 +456,12 @@ public class ClientNode {
 	 */
 	public void txcommitHandler(StringTokenizer tokens, String line)
 			throws TransactionException, UnknownManagerException, IOException {
-		if (!clientTransacting) {
+		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
 		} else {
-			// clientTransacting is updated when a response is received
-			clientWaitingForCommitSuccess = true;
+			// transacting is updated when a response is received
+			waitingForCommitSuccess = true;
 			sendToManager(Protocol.TX_COMMIT);
 		}
 	}
@@ -415,12 +475,12 @@ public class ClientNode {
 	 */
 	public void txabortHandler(StringTokenizer tokens, String line)
 			throws UnknownManagerException, TransactionException, IOException {
-		if (!clientTransacting) {
+		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
 		} else {
 			node.fs.abortTransaction(node.addr);
-			clientTransacting = false;
+			transacting = false;
 			sendToManager(Protocol.TX_ABORT);
 		}
 
@@ -430,16 +490,16 @@ public class ClientNode {
 	 * Perform a create RPC to the given address
 	 */
 	public void createRPC(int address, String filename) {
-		node.RIOSend(address, Protocol.CREATE,
-				Utility.stringToByteArray(filename));
+		node.RIOSend(address, Protocol.CREATE, Utility
+				.stringToByteArray(filename));
 	}
 
 	/**
 	 * Perform a delete RPC to the given address
 	 */
 	public void deleteRPC(int address, String filename) {
-		node.RIOSend(address, Protocol.DELETE,
-				Utility.stringToByteArray(filename));
+		node.RIOSend(address, Protocol.DELETE, Utility
+				.stringToByteArray(filename));
 	}
 
 	/*************************************************
@@ -448,7 +508,9 @@ public class ClientNode {
 
 	// TODO: HIGH: Cleanup state after {R,W}{Q,D,F} etc fails
 
-	// TODO: HIGH: Probably should check isManager in Client instead of here
+	// TODO: HIGH: Verify checking isManager in Client instead of here
+
+	// TODO: HIGH: Verify calling fsTX methods where necessary
 
 	/**
 	 * Client receives IV as a notification to mark a cached file invalid
@@ -456,14 +518,12 @@ public class ClientNode {
 	 * @throws NotClientException
 	 * @throws UnknownManagerException
 	 */
-	protected void receiveIV(String msgString) throws NotClientException,
-			UnknownManagerException {
-		// If we're the manager and we received and IV, something bad happened
-		if (node.isManager) {
-			throw new NotClientException();
+	protected void receiveIV(String msgString) {
+		if (managerUnknown()) {
+			return;
 		}
 
-		clientCacheStatus.remove(msgString);
+		cacheStatus.remove(msgString);
 		node.printVerbose("marking invalid " + msgString);
 
 		node.printVerbose("sending ic to manager for file: " + msgString);
@@ -471,16 +531,26 @@ public class ClientNode {
 	}
 
 	/**
+	 * Helper that just checks if managerAddr is still -1
+	 */
+	protected boolean managerUnknown() {
+		if (managerAddr == -1) {
+			node.printError(new UnknownManagerException());
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	/**
 	 * Client receives {W,R}F as a request to propagate their changes
-	 * 
-	 * @throws UnknownManagerException
-	 * @throws IOException
-	 * @throws PrivilegeLevelDisagreementException
 	 */
 	protected void receiveF(String msgString, String RForWF,
-			int responseProtocol, boolean keepRO)
-			throws UnknownManagerException, IOException,
-			PrivilegeLevelDisagreementException {
+			int responseProtocol, boolean keepRO) {
+		if (managerUnknown()) {
+			return;
+		}
+
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
 
@@ -503,38 +573,32 @@ public class ClientNode {
 
 		// update permissions
 		if (keepRO) {
-			clientCacheStatus.put(filename, CacheStatuses.ReadOnly);
+			cacheStatus.put(filename, CacheStatuses.ReadOnly);
 			node.printVerbose("changed permission level to ReadOnly on file: "
 					+ filename);
 		} else {
-			clientCacheStatus.remove(filename);
+			cacheStatus.remove(filename);
 			node.printVerbose("losing permissions on file: " + filename);
 		}
 	}
 
 	/**
-	 * Convenience wrapper of RIOSend that sends a message to the manager if
-	 * their address is known and throws an UnknownManagerException if not
-	 * 
-	 * @throws UnknownManagerException
+	 * Convenience wrapper of RIOSend that sends a message with an empty payload
+	 * to the manager and assumes that it is known. Use managerUnknown to check
+	 * if the manager is really known at the beginning of your handler before
+	 * calling this.
 	 */
-	protected void sendToManager(int protocol) throws UnknownManagerException {
+	protected void sendToManager(int protocol) {
 		sendToManager(protocol, Client.emptyPayload);
 	}
 
 	/**
-	 * Convenience wrapper of RIOSend that sends a message to the manager if
-	 * their address is known and throws an UnknownManagerException if not
-	 * 
-	 * @throws UnknownManagerException
+	 * Convenience wrapper of RIOSend that sends a message to the manager and
+	 * assumes that it is known. Use managerUnknown to check if the manager is
+	 * really known at the beginning of your handler before calling this.
 	 */
-	protected void sendToManager(int protocol, byte[] payload)
-			throws UnknownManagerException {
-		if (node.managerAddr == -1) {
-			throw new UnknownManagerException();
-		} else {
-			node.RIOSend(node.managerAddr, protocol, payload);
-		}
+	protected void sendToManager(int protocol, byte[] payload) {
+		node.RIOSend(managerAddr, protocol, payload);
 	}
 
 	/*************************************************
@@ -548,19 +612,16 @@ public class ClientNode {
 	/**
 	 * @param msgString
 	 *            <filename> <contents> ex) test hello world
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 * @throws IllegalConcurrentRequestException
-	 * @throws MissingPendingRequestException
 	 */
-	protected void receiveWD(int from, String filename, String contents)
-			throws IOException, UnknownManagerException,
-			IllegalConcurrentRequestException, MissingPendingRequestException {
+	protected void receiveWD(int from, String filename, String contents) {
+		if (managerUnknown()) {
+			return;
+		}
 
 		// has RW!
 		// TODO: Make/use a helper for this that takes care of the logging
 		node.printVerbose("got ReadWrite on " + filename);
-		clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
+		cacheStatus.put(filename, CacheStatuses.ReadWrite);
 
 		// TODO: HIGH: THIS SHOULD USE THE RFS - MANAGER IS GOD
 
@@ -574,9 +635,8 @@ public class ClientNode {
 
 		// do what you originally intended with the file
 		// TODO: HIGH: THIS SHOULD USE THE TFS
-		if (clientPendingOperations.containsKey(filename)) {
-			PendingClientOperation intent = clientPendingOperations
-					.get(filename);
+		if (pendingOperations.containsKey(filename)) {
+			PendingClientOperation intent = pendingOperations.get(filename);
 			switch (intent.operation) {
 			case PUT:
 				node.fs.writeFile(filename, intent.content, false);
@@ -594,23 +654,24 @@ public class ClientNode {
 					+ filename);
 		}
 
-		// unlock for local use
-		clientUnlockFile(filename);
-
 		// send wc
 		node.printVerbose("sending wc to manager for " + filename);
 		sendToManager(Protocol.WC, Utility.stringToByteArray(filename));
+
+		// unlock for local use
+		clientUnlockFile(filename);
 	}
 
 	/**
 	 * @param msgString
-	 * @throws IOException
-	 * @throws UnknownManagerException
 	 */
-	protected void receiveRD(int from, String filename, String contents)
-			throws IOException, UnknownManagerException {
+	protected void receiveRD(int from, String filename, String contents) {
+		if (managerUnknown()) {
+			return;
+		}
+
 		// has RO
-		clientCacheStatus.put(filename, CacheStatuses.ReadOnly);
+		cacheStatus.put(filename, CacheStatuses.ReadOnly);
 		node.printVerbose("got ReadOnly on " + filename);
 
 		// update in cache
@@ -623,12 +684,12 @@ public class ClientNode {
 		node.printInfo("Got file, contents below:");
 		node.printInfo(contents);
 
-		// unlock the file for local use
-		clientUnlockFile(filename);
-
 		// send rc
 		node.printVerbose("sending rc to manager for " + filename);
 		sendToManager(Protocol.RC, Utility.stringToByteArray(filename));
+
+		// unlock the file for local use
+		clientUnlockFile(filename);
 	}
 
 	/*************************************************
@@ -637,15 +698,16 @@ public class ClientNode {
 
 	/**
 	 * RPC Error
-	 * 
-	 * @throws NotClientException
 	 */
-	protected void receiveError(Integer from, String msgString)
-			throws NotClientException {
-
-		// TODO: HIGH: Not sure what do we do here
+	protected void receiveError(Integer from, String msgString) {
+		/*
+		 * TODO: HIGH: Not sure what do we do here - have i been aborted? I
+		 * think the manager should have aborted me, so I'll assume that.
+		 */
 
 		node.printError(msgString);
+
+		abortCurrentTransaction();
 
 		String filename = msgString.split("")[0];
 		clientUnlockFile(filename);
@@ -654,18 +716,16 @@ public class ClientNode {
 
 	/**
 	 * RPC Successful (only received after successful Create or Delete)
-	 * 
-	 * @throws Exception
 	 */
-	protected void receiveSuccessful(int from, String msgString)
-			throws Exception {
+	protected void receiveSuccessful(int from, String msgString) {
 
 		String[] split = msgString.split(Client.delimiter);
 		String cmd = split[0];
-		if (split.length > 1) {
-			String filename = split[1];
 
-			if (cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
+		try {
+			if (split.length > 1
+					&& cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
+				String filename = split[1];
 				if (!Utility.fileExists(node, filename)) {
 					node.fs.createFile(filename);
 				} else {
@@ -675,76 +735,124 @@ public class ClientNode {
 					 */
 					node.fs.writeFile(filename, "", false);
 				}
+				cacheStatus.put(filename, CacheStatuses.ReadWrite);
 				clientUnlockFile(filename);
-				clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
-			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
+			} else if (split.length > 1
+					&& cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
+				String filename = split[1];
 				if (Utility.fileExists(node, filename)) {
 					// migh not exist here
 					node.fs.deleteFile(filename);
 				}
+				cacheStatus.put(filename, CacheStatuses.ReadWrite);
 				clientUnlockFile(filename);
-				clientCacheStatus.put(filename, CacheStatuses.ReadWrite);
+
 			} else {
-				// TODO: figure out what this exception really should be
-				throw new Exception("receiveSuccessful got unknown packet cmd");
+				node.printError("received empty "
+						+ Protocol.protocolToString(Protocol.SUCCESS)
+						+ " packet");
 			}
+		} catch (IOException e) {
+			node.printError(e);
+			abortCurrentTransaction();
+			// TODO: unlock something
 		}
 	}
 
 	/**
 	 * Transaction succeeded
-	 * 
-	 * @throws NotClientException
-	 * @throws TransactionException
-	 * @throws IOException
 	 */
-	protected void receiveTX_SUCCESS() throws NotClientException, IOException,
-			TransactionException {
+	protected void receiveTX_SUCCESS() {
+		commitCurrentTransaction();
+		processWaitingForCommitQueue();
+	}
 
-		if (!clientTransacting || !clientWaitingForCommitSuccess) {
-			throw new TransactionException("unexpected "
-					+ Protocol.protocolToString(Protocol.TX_SUCCESS)
-					+ " received");
-		}
+	/**
+	 * Transaction failed
+	 */
+	protected void receiveTX_FAILURE() {
+		abortCurrentTransaction();
+		processWaitingForCommitQueue();
+	}
 
-		// commit tx locally
-		node.fs.commitTransaction(node.addr);
-		clientTransacting = false;
-
-		// process pending commands
-		clientWaitingForCommitSuccess = false;
-		for (String line : clientWaitingForCommitQueue) {
+	/**
+	 * Updates internal waiting flag and trys to handle all queued commands
+	 */
+	protected void processWaitingForCommitQueue() {
+		waitingForCommitSuccess = false;
+		for (String line : waitingForCommitQueue) {
 			node.onCommand(line);
 		}
 	}
 
 	/**
-	 * Transaction failed
+	 * Tells the node's fs to commit the current transaction and upates internal
+	 * transacting flag
 	 * 
-	 * @throws NotClientException
-	 * @throws TransactionException
-	 * @throws IOException
+	 * If this fails, the Client will restart, meaning all references to this
+	 * will be lost, so this should probably be the last thing called (although
+	 * unlocks still need to be after this, in which case the node might end up
+	 * printing some garbage to its log)
 	 */
-	protected void receiveTX_FAILURE() throws NotClientException,
-			TransactionException, IOException {
-		node.fs.abortTransaction(node.addr);
-		clientTransacting = false;
+	protected void commitCurrentTransaction() {
+		try {
+			node.printVerbose("committing transaction");
+			node.fs.commitTransaction(node.addr);
+			transacting = false;
+		} catch (IOException e) {
+			/*
+			 * Failed to write the commit to the log or a change to disk - if we
+			 * keep going, we could corrupt the log (since txs don't have ids)
+			 */
+			node.restart();
+		}
 	}
 
 	/**
-	 * Unlock the filename and service and queued requests on it.
+	 * Tells the node's fs to abort the current transaction and updates internal
+	 * transacting flag
+	 * 
+	 * If this fails, the Client will restart, meaning all references to this
+	 * will be lost, so this should probably be the last thing called (although
+	 * unlocks still need to be after this, in which case the node might end up
+	 * printing some garbage to its log)
+	 * 
+	 * @throws TransactionException
+	 * @throws IOException
+	 */
+	protected void abortCurrentTransaction() {
+		if (!transacting) {
+			return;
+		}
+
+		try {
+			node.printVerbose("aborting transaction");
+			node.fs.abortTransaction(node.addr);
+			transacting = false;
+		} catch (IOException e) {
+			/*
+			 * Failed to write an abort to the log - if we keep going, we could
+			 * corrupt the log (since txs don't have ids)
+			 */
+			node.restart();
+		}
+	}
+
+	/**
+	 * Unlock the filename and service and queued requests on it - because this
+	 * services the next requests in the queue immediately, calling it should be
+	 * the last thing you do after mutating state for your current op
 	 */
 	protected void clientUnlockFile(String filename) {
 		node.printVerbose("client unlocking file: " + filename);
 		node.logSynopticEvent("CLIENT-UNLOCK");
-		clientLockedFiles.remove(filename);
+		lockedFiles.remove(filename);
 
-		// TODO: LOW: I think this needs a monad
-		Queue<String> queuedRequests = clientQueuedCommands.get(filename);
+		Queue<String> queuedRequests = queuedCommands.get(filename);
 		if (queuedRequests != null) {
-			String request = queuedRequests.poll();
-			if (request != null) {
-				node.onCommand(request);
+			while (queuedRequests.size() > 0) {
+				String request = queuedRequests.poll();
+				onCommand(request);
 			}
 		}
 	}

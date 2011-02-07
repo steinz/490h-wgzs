@@ -150,7 +150,7 @@ public class Logger {
 			r.flush();
 			r.close();
 		} catch (IOException e) {
-			e.printStackTrace();
+			error(n, e);
 		}
 	}
 }

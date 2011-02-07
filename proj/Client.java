@@ -4,12 +4,13 @@
  */
 
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 
 import edu.washington.cs.cse490h.lib.Utility;
+
+/*
+ * TODO: HIGH: Verify methods declare that they thow the right exceptions throughout the project
+ */
 
 /**
  * Extension to the RIONode class that adds support basic file system operations
@@ -19,75 +20,10 @@ import edu.washington.cs.cse490h.lib.Utility;
  * layer can also be used by sending using the regular send() method and
  * overriding the onReceive() method to include a call to super.onReceive()
  * 
- * IMPORTANT: Methods names should not end in Handler unless they are meant to
- * handle commands passed in by onCommand - onCommand dynamically dispatches
- * commands to the method named <cmdName>Handler.
- * 
- * TODO: Managers and Clients are distinct in our implementation. That is, a
- * manager is not also a client. We should change the receive methods so that
- * the manager acts as a client when it should and as manager otherwise. This
- * might require splitting existing messages types that both node types can
- * receive (WD) into two distinct messages types (WD_TO_SERVER and
- * WD_TO_CLIENT).
- * 
  * Event-Drive Framework + Reliable in Order Messaging + Reliable FS + RPC + IVY
  * CacheCoherencey (Extended w/ Create and Delete) + 2PC Transactions
  */
 public class Client extends RIONode {
-
-	/*
-	 * TODO: ASK: During a tx, consider:
-	 * 
-	 * put test hello
-	 * 
-	 * txstart
-	 * 
-	 * create test
-	 * 
-	 * put test world
-	 * 
-	 * get test
-	 * 
-	 * txcommit
-	 * 
-	 * Would "get test" return "hello" or "world"? That is, do operations in the
-	 * transaction occur in order? If so, we have to either write commands done
-	 * during a transaction to disk so the existing code works, or have
-	 * fs.getFile check it's in memory data structures for files that could have
-	 * been changed by this transaction but haven't been written to disk yet -
-	 * checking in memory data structures shouldn't be too hard implement.
-	 * 
-	 * A similar question is whether or not:
-	 * 
-	 * txstart
-	 * 
-	 * create test
-	 * 
-	 * get test
-	 * 
-	 * txcommit
-	 * 
-	 * fails during the get (because test does not exist yet). I think the
-	 * general question is "can a client mutate a file twice in a commit?"
-	 * 
-	 * put test hello
-	 * 
-	 * txstart
-	 * 
-	 * append test _world
-	 * 
-	 * get test -> display to user
-	 * 
-	 * txcommit
-	 * 
-	 * The above transaction would not behave as expected if we don't check
-	 * logged but not committed files for changes within a transaction.
-	 * 
-	 * As an aside, does the get call return to the user before the transaction
-	 * commits? I'm not sure how that would be implemented, but it seems a
-	 * little unintuitive that the client will get feedback from part of their
-	 * transaction before committing it.
-	 */
 
 	/*
 	 * TODO: ASK: I don't understand how all of this is going to get called from
@@ -119,10 +55,6 @@ public class Client extends RIONode {
 	 */
 
 	/*
-	 * TODO: Separate the Client and Manager code into two modules
-	 */
-
-	/*
 	 * TODO: LOW/EC: Let clients exchange files w/o sending them to the manager
 	 */
 
@@ -141,6 +73,10 @@ public class Client extends RIONode {
 
 	/*
 	 * TODO: EC: Multiple TX for clients at the same time
+	 */
+
+	/*
+	 * TODO: EC: Let managers function as clients too
 	 */
 
 	/**
@@ -169,11 +105,6 @@ public class Client extends RIONode {
 	protected boolean isManager;
 
 	/**
-	 * The address of the manager node.
-	 */
-	protected int managerAddr;
-
-	/**
 	 * Encapsulates manager functionality
 	 */
 	protected ManagerNode managerFunctions;
@@ -193,7 +124,6 @@ public class Client extends RIONode {
 	 */
 	public void start() {
 		this.isManager = false;
-		this.managerAddr = -1;
 
 		this.clientFunctions = new ClientNode(this);
 
@@ -217,53 +147,11 @@ public class Client extends RIONode {
 	 * internal use.
 	 */
 	public void onCommand(String line) {
-		// Create a tokenizer and get the first token (the actual cmd)
-		StringTokenizer tokens = new StringTokenizer(line, " ");
-		String cmd = "";
-		try {
-			cmd = tokens.nextToken().toLowerCase();
-		} catch (NoSuchElementException e) {
-			printError("no command found in: " + line);
-			return;
-		}
-
-		if (isManager && !cmd.equals("manager")) {
-			printError("unsupported command called on manager (manager is not a client): "
-					+ line);
-			return;
-		}
-
-		/*
-		 * TODO: HIGH: process this queue after receiving
-		 * TX_{SUCCESSFUL,FAILURE}
-		 */
-		if (clientFunctions.clientWaitingForCommitSuccess) {
-			clientFunctions.clientWaitingForCommitQueue.add(line);
-		}
-
-		// Dynamically call <cmd>Command, passing off the tokenizer and the full
-		// command string
-		try {
-			Class<?>[] paramTypes = { StringTokenizer.class, String.class };
-			Method handler = clientFunctions.getClass().getMethod(
-					cmd + "Handler", paramTypes);
-			Object[] args = { tokens, line };
-			handler.invoke(clientFunctions, args);
-		} catch (NoSuchMethodException e) {
-			printError("invalid command:" + line);
-		} catch (IllegalArgumentException e) {
-			printError("invalid command:" + line);
-		} catch (IllegalAccessException e) {
-			printError("invalid command:" + line);
-		} catch (InvocationTargetException e) {
-			/*
-			 * TODO: HIGH: Command failed, abort tx if in progress
-			 */
-			if (clientFunctions.clientTransacting) {
-
-			}
-
-			printError(e);
+		if (!isManager) {
+			clientFunctions.onCommand(line);
+		} else {
+			// managerFunctions.onCommand(line);
+			printError("manager currently supports no commands");
 		}
 	}
 
@@ -290,11 +178,7 @@ public class Client extends RIONode {
 
 		String msgString = Utility.byteArrayToString(msg);
 
-		/*
-		 * TODO: HIGH: Replace massive switch w/ dynamic dispatch and
-		 * client/manager side receive helpers. Maybe prepend manager only
-		 * receive function names "managerReceiveWQ" etc.
-		 */
+		// TODO: HIGH: Replace massive switch w/ dynamic dispatch.
 
 		try {
 			switch (protocol) {
@@ -303,23 +187,6 @@ public class Client extends RIONode {
 				break;
 			case Protocol.DELETE:
 				receiveDelete(from, msgString);
-				break;
-			case Protocol.GET:
-				printError("received deprecated "
-						+ Protocol.protocolToString(Protocol.GET) + " packet");
-				break;
-			case Protocol.PUT:
-				printError("received deprecated "
-						+ Protocol.protocolToString(Protocol.PUT) + " packet");
-				break;
-			case Protocol.APPEND:
-				printError("received deprecated "
-						+ Protocol.protocolToString(Protocol.APPEND)
-						+ " packet");
-				break;
-			case Protocol.DATA:
-				printError("received deprecated "
-						+ Protocol.protocolToString(Protocol.DATA) + " packet");
 				break;
 			case Protocol.NOOP:
 				printInfo("received noop from " + from);
@@ -382,12 +249,13 @@ public class Client extends RIONode {
 				receiveSuccessful(from, msgString);
 				break;
 			default:
-				printError("received invalid packet");
+				printError("received invalid/deprecated packet type");
 			}
 		} catch (Exception e) {
 
 			/*
-			 * TODO: HIGH: All errors should be caught and dealt w/ here
+			 * TODO: HIGH: All errors should be caught and dealt w/ by their
+			 * respective receive methods
 			 * 
 			 * Manager side: respond by sendError(from) or send TX_FAILURE
 			 * 
@@ -396,6 +264,10 @@ public class Client extends RIONode {
 			 * removes the client from it's transacting set an abort shouldn't
 			 * be necessary and the manager needs to know what to do with it
 			 * (ignore it probably)
+			 * 
+			 * EXCEPT: If someone gets a message type meant only for the other
+			 * type of node, the demultiplexing methods below will throw an
+			 * exception up here - we can just print an error in this case
 			 */
 
 			printError(e);
@@ -406,11 +278,6 @@ public class Client extends RIONode {
 	 * begin manager-only cache coherency functions
 	 ************************************************/
 
-	/*
-	 * TODO: HIGH: Are these needed now that the response handlers always send
-	 * responses (and handle their own exceptions)?
-	 */
-
 	/**
 	 * Create RPC
 	 * 
@@ -418,7 +285,7 @@ public class Client extends RIONode {
 	 * @throws IOException
 	 */
 	protected void receiveCreate(int client, String filename)
-			throws NotManagerException, IOException {
+			throws NotManagerException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
@@ -434,85 +301,24 @@ public class Client extends RIONode {
 	 * @throws InconsistentPrivelageLevelsDetectedException
 	 */
 	protected void receiveDelete(int from, String filename)
-			throws NotManagerException, IOException,
-			PrivilegeLevelDisagreementException,
-			InconsistentPrivelageLevelsDetectedException {
+			throws NotManagerException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
 		this.managerFunctions.receiveDelete(from, filename);
 	}
 
-	protected void receiveTX_START(int from) throws TransactionException,
-			NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveTX_START(from);
-	}
-
-	protected void receiveTX_COMMIT(int from) throws TransactionException,
-			NotManagerException, IOException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveTX_COMMIT(from);
-	}
-
-	protected void receiveTX_ABORT(int from) throws NotManagerException,
-			TransactionException, IOException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveTX_ABORT(from);
-	}
-
-	protected void receiveRQ(int client, String filename)
-			throws NotManagerException, IOException,
-			InconsistentPrivelageLevelsDetectedException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-
-		this.managerFunctions.receiveQ(client, filename, Protocol.RQ,
-				Protocol.RD, Protocol.RF, true);
-	}
-
-	protected void receiveWQ(int client, String filename)
-			throws NotManagerException, IOException,
-			InconsistentPrivelageLevelsDetectedException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-
-		this.managerFunctions.receiveQ(client, filename, Protocol.WQ,
-				Protocol.WD, Protocol.WF, false);
-	}
-
-	/**
-	 * Changes the status of this client from IV or RW
-	 * 
-	 * @param client
-	 *            The client to change
-	 * @param filename
-	 *            The filename
-	 * @throws NotManagerException
-	 */
-	protected void receiveWC(int client, String filename)
+	protected void receiveIC(int client, String filename)
 			throws NotManagerException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-		this.managerFunctions.receiveWC(client, filename);
+		this.managerFunctions.receiveIC(client, filename);
 	}
 
 	/**
 	 * Receives an RC and changes this client's status from IV or RW to RO.
 	 * 
-	 * @param client
-	 *            The client to change
-	 * @param filename
-	 *            The filename
 	 * @throws NotManagerException
 	 */
 	protected void receiveRC(int client, String filename)
@@ -524,12 +330,67 @@ public class Client extends RIONode {
 
 	}
 
-	protected void receiveIC(int client, String filename)
-			throws NotManagerException, IOException {
+	protected void receiveRQ(int client, String filename)
+			throws NotManagerException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
-		this.managerFunctions.receiveIC(client, filename);
+
+		this.managerFunctions.receiveQ(client, filename, Protocol.RQ,
+				Protocol.RD, Protocol.RF, true);
+	}
+
+	protected void receiveTX_ABORT(int from) throws NotManagerException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+		this.managerFunctions.receiveTX_ABORT(from);
+	}
+
+	protected void receiveTX_COMMIT(int from) throws NotManagerException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+		this.managerFunctions.receiveTX_COMMIT(from);
+	}
+
+	protected void receiveTX_START(int from) throws NotManagerException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+		this.managerFunctions.receiveTX_START(from);
+	}
+
+	/**
+	 * Changes the status of this client from IV or RW
+	 * 
+	 * @throws NotManagerException
+	 */
+	protected void receiveWC(int client, String filename)
+			throws NotManagerException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+		this.managerFunctions.receiveWC(client, filename);
+	}
+
+	protected void receiveWD_DELETE(int from, String filename)
+			throws NotManagerException {
+		if (!isManager) {
+			throw new NotManagerException(
+					"WD_DELETE should only be received by the manager");
+		}
+		this.managerFunctions.receiveWD_DELETE(from, filename);
+	}
+
+	protected void receiveWQ(int client, String filename)
+			throws NotManagerException {
+		if (!isManager) {
+			throw new NotManagerException();
+		}
+
+		this.managerFunctions.receiveQ(client, filename, Protocol.WQ,
+				Protocol.WD, Protocol.WF, false);
 	}
 
 	/*************************************************
@@ -546,8 +407,7 @@ public class Client extends RIONode {
 	 * @throws NotClientException
 	 * @throws UnknownManagerException
 	 */
-	protected void receiveIV(String msgString) throws NotClientException,
-			UnknownManagerException {
+	protected void receiveIV(String msgString) throws NotClientException {
 		if (isManager) {
 			throw new NotClientException();
 		}
@@ -563,9 +423,7 @@ public class Client extends RIONode {
 	 * @throws UnknownManagerException
 	 * @throws PrivilegeLevelDisagreementException
 	 */
-	protected void receiveRF(String msgString) throws NotClientException,
-			UnknownManagerException, IOException,
-			PrivilegeLevelDisagreementException {
+	protected void receiveRF(String msgString) throws NotClientException {
 		if (isManager) {
 			throw new NotClientException();
 		}
@@ -581,13 +439,66 @@ public class Client extends RIONode {
 	 * @throws UnknownManagerException
 	 * @throws PrivilegeLevelDisagreementException
 	 */
-	protected void receiveWF(String msgString) throws NotClientException,
-			UnknownManagerException, IOException,
-			PrivilegeLevelDisagreementException {
+	protected void receiveWF(String msgString) throws NotClientException {
 		if (isManager) {
 			throw new NotClientException();
 		}
 		clientFunctions.receiveF(msgString, "WF", Protocol.WD, false);
+	}
+
+	/**
+	 * RPC Error
+	 * 
+	 * @throws NotClientException
+	 */
+	protected void receiveError(Integer from, String msgString)
+			throws NotClientException {
+		if (isManager) {
+			throw new NotClientException();
+		}
+		clientFunctions.receiveError(from, msgString);
+	}
+
+	/**
+	 * RPC Successful (only received after successful Create or Delete)
+	 * 
+	 * @throws Exception
+	 */
+	protected void receiveSuccessful(int from, String msgString)
+			throws NotClientException {
+		if (isManager) {
+			throw new NotClientException();
+		}
+		clientFunctions.receiveSuccessful(from, msgString);
+	}
+
+	/**
+	 * Transaction succeeded
+	 * 
+	 * @throws NotClientException
+	 * @throws TransactionException
+	 * @throws IOException
+	 */
+	protected void receiveTX_SUCCESS() throws NotClientException {
+		if (isManager) {
+			throw new NotClientException();
+		}
+		clientFunctions.receiveTX_SUCCESS();
+	}
+
+	/**
+	 * Transaction failed
+	 * 
+	 * @throws NotClientException
+	 * @throws TransactionException
+	 * @throws IOException
+	 */
+	protected void receiveTX_FAILURE() throws NotClientException,
+			TransactionException, IOException {
+		if (isManager) {
+			throw new NotClientException();
+		}
+		clientFunctions.receiveTX_FAILURE();
 	}
 
 	/*************************************************
@@ -598,17 +509,6 @@ public class Client extends RIONode {
 	 * begin client and manager cache coherency functions
 	 ************************************************/
 
-	// TODO: Relocate
-	protected void receiveWD_DELETE(int from, String filename)
-			throws NotManagerException, IOException,
-			MissingPendingRequestException {
-		if (!isManager) {
-			throw new NotManagerException(
-					"WD_DELETE should only be received by the manager");
-		}
-		this.managerFunctions.receiveWD_DELETE(from, filename);
-	}
-
 	/**
 	 * @param msgString
 	 *            <filename> <contents> for ex) test hello world
@@ -617,9 +517,7 @@ public class Client extends RIONode {
 	 * @throws IllegalConcurrentRequestException
 	 * @throws MissingPendingRequestException
 	 */
-	protected void receiveWD(int from, String msgString) throws IOException,
-			UnknownManagerException, IllegalConcurrentRequestException,
-			MissingPendingRequestException {
+	protected void receiveWD(int from, String msgString) {
 
 		// parse packet
 		StringTokenizer tokens = new StringTokenizer(msgString);
@@ -641,8 +539,7 @@ public class Client extends RIONode {
 	 * @throws IOException
 	 * @throws UnknownManagerException
 	 */
-	protected void receiveRD(int from, String msgString) throws IOException,
-			UnknownManagerException {
+	protected void receiveRD(int from, String msgString) {
 		// parse packet
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
@@ -663,77 +560,35 @@ public class Client extends RIONode {
 	 ************************************************/
 
 	/**
-	 * RPC Error
+	 * This packet timed out and was a heartbeat packet. It may have been acked,
+	 * or it may not have - it's irrelevant from the point of view of the
+	 * manager.
 	 * 
-	 * @throws NotClientException
+	 * @param destAddr
+	 *            the destination address for the heartbeat packet
+	 * @throws NotManagerException
 	 */
-	protected void receiveError(Integer from, String msgString)
-			throws NotClientException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveError(from, msgString);
-	}
-
-	/**
-	 * RPC Successful (only received after successful Create or Delete)
-	 * 
-	 * @throws Exception
-	 */
-	protected void receiveSuccessful(int from, String msgString)
-			throws Exception {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveSuccessful(from, msgString);
-	}
-
-	/**
-	 * Transaction succeeded
-	 * 
-	 * @throws NotClientException
-	 * @throws TransactionException
-	 * @throws IOException
-	 */
-	protected void receiveTX_SUCCESS() throws NotClientException, IOException,
-			TransactionException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveTX_SUCCESS();
-	}
-
-	/**
-	 * Transaction failed
-	 * 
-	 * @throws NotClientException
-	 * @throws TransactionException
-	 * @throws IOException
-	 */
-	protected void receiveTX_FAILURE() throws NotClientException,
-			TransactionException, IOException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveTX_FAILURE();
-	}
-	
-	/**
-	 * This packet timed out and was a heartbeat packet. It may have been acked, or it may
-	 * not have - it's irrelevant from the point of view of the manager.
-	 * @param destAddr the destination address for the heartbeat packet
-	 * @throws NotManagerException 
-	 */
-	public void heartbeatTimeout(int destAddr) throws NotManagerException{
+	public void heartbeatTimeout(int destAddr) throws NotManagerException {
 		if (!isManager) {
 			throw new NotManagerException();
 		}
 		this.managerFunctions.heartbeatTimeout(destAddr);
 	}
-	
-	public void killNode(int destAddr){
-		if (isManager){
+
+	public void killNode(int destAddr) {
+		if (isManager) {
 			this.managerFunctions.killNode(destAddr);
 		}
+	}
+
+	/**
+	 * Called when things get really messed up, currently when:
+	 * 
+	 * client fails aborting/committing a transaction (can't write changes to
+	 * disk)
+	 */
+	public void restart() {
+		// TODO: HIGH: Implement restart
+		printInfo("RECEIVED UNIMPLEMENTED RESTART REQUEST");
 	}
 }

@@ -183,10 +183,12 @@ public class ManagerNode {
 	 *         one has RO status.
 	 */
 	public List<Integer> checkROClients(String filename) {
-		List<Integer> clients = new ArrayList<Integer>();
+		List<Integer> clients;
 
 		if (cacheRO.containsKey(filename)) {
 			clients = cacheRO.get(filename);
+		} else {
+			clients = new ArrayList<Integer>();
 		}
 
 		return clients;
@@ -362,8 +364,6 @@ public class ManagerNode {
 			this.node.fs.commitTransaction(from);
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
-		} catch (TransactionException e) {
-			sendError(from, "", e.getMessage());
 		}
 		transactionsInProgress.remove(from); // remove from tx
 		
@@ -386,8 +386,6 @@ public class ManagerNode {
 		}
 		try {
 			this.node.fs.abortTransaction(from);
-		} catch (TransactionException e) {
-			sendError(from, "", e.getMessage());
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
 		}
@@ -683,7 +681,7 @@ public class ManagerNode {
 
 		Queue<QueuedFileRequest> outstandingRequests = queuedFileRequests
 				.get(filename);
-		while (outstandingRequests != null) {
+		while (outstandingRequests != null) { //TODO: size > 0 check?
 			QueuedFileRequest nextRequest = outstandingRequests.poll();
 			if (nextRequest != null) {
 				this.node.onRIOReceive(nextRequest.from, nextRequest.protocol,
