@@ -154,7 +154,8 @@ public class ClientNode {
 				&& waitingForCommitQueue.size() > maxWaitingForCommitQueueSize) {
 			/*
 			 * TODO: figure out what we need to do to kill this object after the
-			 * node restarts, or if we should even restart the node at all
+			 * node restarts, or if we should even restart the node at all - at
+			 * this point we don't know whether or not or TX succeeded
 			 */
 			node.restart();
 			return;
@@ -420,7 +421,31 @@ public class ClientNode {
 
 	/*
 	 * TODO: HIGH: What happens if I have RW but I fail? I'm the only one with
-	 * the newest version of the file...
+	 * the newest version of the file, so the server has to block while it waits
+	 * for me to come back up - the only way to make this non-blocking is to
+	 * replicate the file to other clients/managers before responding, so that
+	 * the manager can still find the newest version of the file if I'm down
+	 * 
+	 * For example, if we have 5 clients we could replicate twice as follows:
+	 * 
+	 * 1 -> 3, 5
+	 * 
+	 * 2 -> 4, 1
+	 * 
+	 * 3 -> 5, 2
+	 * 
+	 * 4 -> 1, 3
+	 * 
+	 * 5 -> 2, 4
+	 * 
+	 * If I've crashed and lost RW and the manager asks for a file I can just
+	 * get it from one of my replicas and then send it back to the manager
+	 * 
+	 * Is it safe for my transaction to just be lost? Aka, if I fail, the
+	 * manager just uses whatever it has, which will be everything before my RWs
+	 * in my latest transaction. I'm worried that someone could get ownership of
+	 * one but not all of the files I mutated, leaving the system in an
+	 * inconsistent state
 	 */
 
 	/**
