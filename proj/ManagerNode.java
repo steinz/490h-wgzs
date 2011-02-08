@@ -483,7 +483,7 @@ public class ManagerNode {
 					ErrorCode.FileAlreadyExists);
 		} else { // File not in system
 			// decide what to do based on transaction status
-			if (transactionsInProgress.contains(client))
+			if (transactionsInProgress.contains(client)){
 				try {
 					this.node.fs.createFileTX(client, filename);
 					this.sendSuccess(client, Protocol.CREATE, filename);
@@ -494,8 +494,11 @@ public class ManagerNode {
 					this.node.printError(e);
 					this.sendError(client, filename, e.getMessage());
 				}
-			else
+			}
+			else{
 				createNewFile(filename, client);
+				this.sendSuccess(client, Protocol.CREATE, filename);
+			}
 		}
 
 	}
