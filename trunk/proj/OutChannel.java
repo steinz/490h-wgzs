@@ -15,7 +15,6 @@ import edu.washington.cs.cse490h.lib.Callback;
 class OutChannel {
 	private HashMap<Integer, RIOPacket> unACKedPackets;
 	private HashMap<RIOPacket, Integer> resendCounts;
-	private HashMap<Integer, RIOPacket> clientPulses; 
 	private int lastSeqNumSent;
 	private ReliableInOrderMsgLayer parent;
 	private int destAddr;
@@ -26,7 +25,6 @@ class OutChannel {
 		lastSeqNumSent = -1;
 		unACKedPackets = new HashMap<Integer, RIOPacket>();
 		resendCounts = new HashMap<RIOPacket, Integer>();
-		clientPulses = new HashMap<Integer, RIOPacket>();
 		this.parent = parent;
 		this.destAddr = destAddr;
 	}
@@ -51,9 +49,6 @@ class OutChannel {
 			RIOPacket newPkt = new RIOPacket(protocol, ++lastSeqNumSent,
 					payload, ID);
 			unACKedPackets.put(lastSeqNumSent, newPkt);
-			// heartbeat pings
-			if (protocol == Protocol.HEARTBEAT)
-				clientPulses.put(lastSeqNumSent, newPkt);
 
 			resendCounts.put(newPkt, 0);
 
@@ -77,15 +72,6 @@ class OutChannel {
 	 *            The sequence number of the unACKed packet
 	 */
 	public void onTimeout(RIONode n, Integer seqNum) {
-		// let the node decide if it should send a heartbeat ping
-		if (clientPulses.containsKey(seqNum)) {
-			clientPulses.remove(seqNum);
-			try {
-				n.heartbeatTimeout(destAddr);
-			} catch (NotManagerException e) {
-				n.printVerbose(e.getMessage());
-			}
-		}
 		
 		if (!unACKedPackets.containsKey(seqNum)) {
 			return;
