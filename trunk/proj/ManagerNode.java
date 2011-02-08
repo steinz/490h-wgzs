@@ -16,7 +16,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 //NOTE: Implicit transactions are handled by cache coherency!
 
 // TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
-// TODO: HIGH: Add to cache status for all files requested
+// TODO: HIGH: TEST: Add to cache status for all files requested
 // TODO: HIGH: TEST: Deal with creates and deletes appropriately -  
 // 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
 // TODO: HIGH: Need to handle aborts, failures, and successes
@@ -478,13 +478,12 @@ public class ManagerNode {
 
 		// Find out if anyone has RW
 		Integer rw = cacheRW.get(filename);
-		List<Integer> ro = checkROClients(filename);
 
 		if (rw != null) {
 			sendRequest(rw, filename, Protocol.WF);
 			pendingRPCCreateRequests.put(filename, client);
 			lockFile(filename, client);
-		} else if (checkCacheExistence(filename)) {
+		} else if (!checkCacheExistence(filename)) {
 			// Someone has RO, so throw an error that the file exists already
 			sendError(client, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
@@ -517,7 +516,7 @@ public class ManagerNode {
 		Integer rw = checkRWClients(filename);
 		List<Integer> ro = checkROClients(filename);
 
-		if (checkCacheExistence(filename)) {
+		if (!checkCacheExistence(filename)) {
 			// File doesn't exist, send an error to the requester
 			sendError(from, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
@@ -608,7 +607,7 @@ public class ManagerNode {
 		Integer rw = cacheRW.get(filename);
 		List<Integer> ro = checkROClients(filename);
 
-		if (checkCacheExistence(filename)) {
+		if (!checkCacheExistence(filename)) {
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileDoesNotExist);
 		}
