@@ -21,7 +21,8 @@ import edu.washington.cs.cse490h.lib.Utility;
  * overriding the onReceive() method to include a call to super.onReceive()
  * 
  * Event-Drive Framework + Reliable in Order Messaging + Reliable FS + RPC + IVY
- * CacheCoherencey (Extended w/ Create and Delete) + 2PC Transactions
+ * CacheCoherencey (Extended w/ Create and Delete) + 2PC Transactions + Paxos
+ * Primary Manager Election + Failover
  */
 public class Client extends RIONode {
 
@@ -141,7 +142,7 @@ public class Client extends RIONode {
 	 */
 	public void start() {
 		// Wipe the server log
-		Logger.eraseLog(this);
+		// Logger.eraseLog(this);
 
 		restart();
 	}
@@ -186,6 +187,8 @@ public class Client extends RIONode {
 	 * internal use.
 	 */
 	public void onCommand(String line) {
+		printVerbose("received command: " + line);
+
 		if (!isManager) {
 			clientFunctions.onCommand(line);
 		} else {
@@ -198,6 +201,11 @@ public class Client extends RIONode {
 	public void onReceive(Integer from, int protocol, byte[] msg) {
 		printVerbose("received " + Protocol.protocolToString(protocol)
 				+ " from Universe, giving to RIOLayer");
+		
+		if (protocol == Protocol.HANDSHAKE) {
+			clientFunctions.unlockAll();
+		}
+		
 		super.onReceive(from, protocol, msg);
 	}
 
@@ -592,7 +600,7 @@ public class Client extends RIONode {
 		if (!isManager) {
 			clientFunctions.receiveRD(from, filename, contents);
 		} else {
-			this.managerFunctions.receiveRD(from, msgString, contents);
+			this.managerFunctions.receiveRD(from, filename, contents);
 		}
 	}
 

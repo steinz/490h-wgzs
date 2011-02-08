@@ -78,7 +78,7 @@ public class Logger {
 		errorPrintln(n, str);
 	}
 
-	public static void error(Node n, Exception e) {
+	public static void error(Node n, Throwable e) {
 		if (printError) {
 			errorPrintln(n, e.toString());
 			StackTraceElement[] trace = e.getStackTrace();

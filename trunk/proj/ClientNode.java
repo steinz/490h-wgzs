@@ -426,26 +426,15 @@ public class ClientNode {
 	 * replicate the file to other clients/managers before responding, so that
 	 * the manager can still find the newest version of the file if I'm down
 	 * 
-	 * For example, if we have 5 clients we could replicate twice as follows:
-	 * 
-	 * 1 -> 3, 5
-	 * 
-	 * 2 -> 4, 1
-	 * 
-	 * 3 -> 5, 2
-	 * 
-	 * 4 -> 1, 3
-	 * 
-	 * 5 -> 2, 4
-	 * 
-	 * If I've crashed and lost RW and the manager asks for a file I can just
-	 * get it from one of my replicas and then send it back to the manager
+	 * The next node address will be my replica
 	 * 
 	 * Is it safe for my transaction to just be lost? Aka, if I fail, the
 	 * manager just uses whatever it has, which will be everything before my RWs
 	 * in my latest transaction. I'm worried that someone could get ownership of
 	 * one but not all of the files I mutated, leaving the system in an
 	 * inconsistent state
+	 * 
+	 * Send changes to replica before committing anything to manager
 	 */
 
 	/**
@@ -668,6 +657,13 @@ public class ClientNode {
 	}
 
 	/**
+	 * Unlocks all files locally
+	 */
+	public void unlockAll() {
+		lockedFiles.clear();
+	}
+
+	/**
 	 * Unlock the filename and service and queued requests on it - because this
 	 * services the next requests in the queue immediately, calling it should be
 	 * the last thing you do after mutating state for your current op
@@ -708,16 +704,10 @@ public class ClientNode {
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
 
-		if (cacheStatus.get(filename) != CacheStatuses.ReadWrite) {
-			/*
-			 * I don't think I have RW so something is wrong. For example, I
-			 * could have done a WQ previously, gotten a WD and then failed
-			 * writing it to disk, in which case I don't have the newest version
-			 * to return to the manager.
-			 */
-			return;
-			// TODO: It would be better to say I don't know then just be silent
-		}
+		/*
+		 * No reason to check CacheStatus since anything on my disk was
+		 * committed to the manager
+		 */
 
 		String payload = null;
 

@@ -111,7 +111,7 @@ public abstract class RIONode extends Node {
 	/**
 	 * Prints node name and then exception via logger
 	 */
-	public void printError(Exception e) {
+	public void printError(Throwable e) {
 		StringBuilder sb = appendNodeAddress();
 		sb.append("caught exception (see below)");
 		Logger.error(this, e);
