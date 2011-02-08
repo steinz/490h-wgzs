@@ -73,6 +73,8 @@ public class ManagerNode {
 	 */
 	private Map<Integer, Integer> replicaNode;
 
+	private static final Integer TIMEOUT = 5;
+	
 	/**
 	 * A set of node addresses currently performing transactions
 	 * 
@@ -396,22 +398,7 @@ public class ManagerNode {
 			this.node.printError(e1);
 		}
 		// callback setup
-		String[] params = { "java.lang.Integer" };
-		Method cbMethod = null;
-
-		try {
-			cbMethod = Callback.getMethod("heartbeatTimeout", this, params);
-		} catch (SecurityException e) {
-			this.node.printError(e);
-		} catch (ClassNotFoundException e) {
-			this.node.printError(e);
-		} catch (NoSuchMethodException e) {
-			this.node.printError(e);
-			e.printStackTrace();
-		}
-		Object[] args = { from };
-		Callback cb = new Callback(cbMethod, this, args);
-		this.node.addTimeout(cb, 3);
+		addHeartbeatTimeout(from);
 
 	}
 
@@ -499,10 +486,13 @@ public class ManagerNode {
 			if (transactionsInProgress.contains(client))
 				try {
 					this.node.fs.createFileTX(client, filename);
+					this.sendSuccess(client, Protocol.CREATE, filename);
 				} catch (TransactionException e) {
 					this.node.printError(e);
+					this.sendError(client, filename, e.getMessage());
 				} catch (IOException e) {
 					this.node.printError(e);
+					this.sendError(client, filename, e.getMessage());
 				}
 			else
 				createNewFile(filename, client);
@@ -844,13 +834,18 @@ public class ManagerNode {
 	 *            the destination address for the heartbeat packet
 	 */
 	public void heartbeatTimeout(Integer destAddr) {
-		
-		Method cbMethod = null;
-		
+				
 		if (transactionsInProgress.contains(destAddr)) {
 			this.node
 					.RIOSend(destAddr, Protocol.HEARTBEAT, Client.emptyPayload);
 		}
+		addHeartbeatTimeout(destAddr);
+
+	}
+	
+	public void addHeartbeatTimeout(Integer destAddr){
+		
+		Method cbMethod = null;
 		try {
 			String[] params = { "java.lang.Integer" };
 			cbMethod = Callback.getMethod("heartbeatTimeout", this, params);
@@ -864,7 +859,7 @@ public class ManagerNode {
 		}
 		Integer[] args = { destAddr };
 		Callback cb = new Callback(cbMethod, this, args);
-		this.node.addTimeout(cb, 3);
+		this.node.addTimeout(cb, TIMEOUT);
 	}
 
 	/**
