@@ -1,4 +1,5 @@
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,13 +15,21 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 //NOTE: Implicit transactions are handled by cache coherency!
 
+
 // TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
-// TODO: HIGH: TEST: Heartbeat pings, abort clients if they don't respond
-// TODO: HIGH: Deal with creates and deletes appropriately -  
+// TODO: HIGH: TEST: Heartbeat pings, abort clients if they don't respond, MOVE TO node.addtimeout
+// TODO: HIGH: TEST: Deal with creates and deletes appropriately -  
 // 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
-// TODO: HIGH: In the case where the file doesn't exist, etc. should send an abort if client is in the middle of a tx.
 // TODO: HIGH: Need to handle aborts, failures, and successes
-// TODO: HIGH: Send txFailure in the case of errors (e.g. filenotfound)
+// TODO: HIGH: TEST: Replicas - if client <x> goes down, and someone is requesting this file, we should request a copy from its replica
+/**
+ * Replica scheme:
+ * 1 -> 2
+ * 2 -> 3
+ * 3 -> 4
+ * 4 -> 5
+ * 5 -> 1
+ */
 
 public class ManagerNode {
 
@@ -66,6 +75,11 @@ public class ManagerNode {
 	private Map<String, Integer> pendingRPCCreateRequests;
 
 	/**
+	 * A map detailing who replicates who, for example, replicaNode.get(1) = 2
+	 */
+	private Map<Integer, Integer> replicaNode;
+	
+	/**
 	 * A set of node addresses currently performing transactions
 	 * 
 	 * TODO: HIGH: Could be pushed down into the TransactionalFileSystem
@@ -73,16 +87,19 @@ public class ManagerNode {
 	protected Set<Integer> transactionsInProgress;
 
 	public ManagerNode(Client n) {
+		node = n;
 		this.lockedFiles = new HashMap<String, Integer>();
-		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
-		this.cacheRW = new HashMap<String, Integer>();
-		this.cacheRO = new HashMap<String, List<Integer>>();
-		this.node = n;
 		this.pendingICs = new HashMap<String, List<Integer>>();
+		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
 		this.pendingCCPermissionRequests = new HashMap<String, Integer>();
 		this.pendingRPCDeleteRequests = new HashMap<String, Integer>();
 		this.pendingRPCCreateRequests = new HashMap<String, Integer>();
 		this.transactionsInProgress = new HashSet<Integer>();
+		this.replicaNode = new HashMap<Integer, Integer>();
+		
+		for (int i = 1; i < 6; i++){
+			replicaNode.put(i, (i%5 + 1));
+		}
 	}
 
 	public void createNewFile(String filename, int from) {
@@ -93,8 +110,7 @@ public class ManagerNode {
 			sendError(from, filename, e.getMessage());
 		}
 		// give RW to the requester for filename
-		this.node.printVerbose("Changing status of client: " + from
-				+ " to RW for file: " + filename);
+		this.node.printVerbose("Changing status of client: " + from + " to RW for file: " + filename);
 		cacheRW.put(filename, from);
 
 		// send success to requester
@@ -113,8 +129,8 @@ public class ManagerNode {
 		// update permissions
 		this.node.printVerbose("marking file " + filename + " as unowned");
 
-		this.node
-				.printVerbose("Blanking all permissions for file: " + filename);
+
+		this.node.printVerbose("Blanking all permissions for file: " + filename);
 		cacheRO.put(filename, new ArrayList<Integer>());
 		cacheRW.remove(filename);
 
@@ -122,27 +138,24 @@ public class ManagerNode {
 		sendSuccess(from, Protocol.DELETE, filename);
 	}
 
+
 	/**
-	 * NOTE for why this returns false if the file is locked by the client: If
-	 * the client is the one locking the file, then it's fine to give them
-	 * permission and not queue the request, because this patient probably has
-	 * an exclusive lock on the file. This also means that even if someone else
-	 * has RO on the file, then it's a good idea to just return and allow them
-	 * to proceed as normal (since they'll revoke someone else's access if
-	 * they're requesting ownership).
+	 * NOTE for why this returns false if the file is locked by the client:
+	 * If the client is the one locking the file, then it's fine to give them permission and not queue the request, because this patient probably has an exclusive lock on the file.
+	 * This also means that even if someone else has RO on the file, then it's a good idea to just return and allow them to proceed as normal (since they'll revoke someone else's access
+	 * if they're requesting ownership).
 	 */
 	/**
 	 * Queues the given request if the file is locked and returns true. Returns
-	 * false if the file isn't locked. Also returns false if the file is locked
-	 * by the requesting client (i.e. the client is the one locking the file).
+	 * false if the file isn't locked. Also returns false if the file is locked by the requesting client (i.e. the client is the one locking the file).
 	 */
 	public boolean queueRequestIfLocked(int client, int protocol,
 			String filename) {
 		if (lockedFiles.containsKey(filename)) {
-
+			
 			if (lockedFiles.get(filename).equals(client))
 				return false;
-
+			
 			Queue<QueuedFileRequest> requests = queuedFileRequests
 					.get(filename);
 			if (requests == null) {
@@ -155,6 +168,29 @@ public class ManagerNode {
 		} else {
 			return false;
 		}
+	}
+
+	/**
+	 * Returns who has current ownership of the file.
+	 * 
+	 * @param filename
+	 *            The filename
+	 * @return The client who owns this file, -1 if no one currently owns this
+	 *         file.
+	 * 
+	 *         TODO: HIGH: I'd suggest returning null instead of -1 if nobody
+	 *         has RW, some of the other code assumes it.
+	 */
+	public Integer checkRWClients(String filename) {
+
+		Integer clientNumber = -1; // Return -1 if no clients have ownership of
+									// this file
+
+		if (cacheRW.containsKey(filename)) {
+			clientNumber = cacheRW.get(filename);
+		}
+
+		return clientNumber;
 	}
 
 	/**
@@ -180,7 +216,16 @@ public class ManagerNode {
 	public void receiveWD_DELETE(int from, String filename) {
 		// delete locally
 		try {
-			this.node.fs.deleteFile(filename);
+			if (transactionsInProgress.contains(from))
+				try {
+					this.node.fs.createFileTX(from, filename);
+				} catch (TransactionException e) {
+					this.node.printVerbose("TransactionException on manager for file: " + filename);
+				} catch (IOException e) {
+					this.node.printVerbose("IOException on manager for file: " + filename);
+			}
+			else
+				this.node.fs.deleteFile(filename);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
 		}
@@ -212,8 +257,7 @@ public class ManagerNode {
 		requester = pendingCCPermissionRequests.remove(filename);
 		if (requester != null) {
 			// file was deleted by owner
-			sendError(requester, Protocol.DELETE, filename,
-					ErrorCode.FileDoesNotExist);
+			sendError(requester, Protocol.DELETE, filename, ErrorCode.FileDoesNotExist);
 			return;
 		}
 
@@ -225,7 +269,7 @@ public class ManagerNode {
 		try {
 			this.node.fs.writeFile(filename, contents, false);
 		} catch (IOException e) {
-			sendError(from, filename, e.getMessage()); // sending to the wrong node
+			sendError(from, filename, e.getMessage());
 		}
 
 		/*
@@ -342,6 +386,25 @@ public class ManagerNode {
 
 		transactionsInProgress.add(from);
 		this.node.send(from, Protocol.HEARTBEAT, Utility.stringToByteArray(""));
+
+		// callback setup
+		String[] params = {"int"};
+		Method cbMethod = null;
+		
+		try {
+			cbMethod = Callback.getMethod("heartbeatTimeout", this, params);
+		} catch (SecurityException e) {
+			this.node.printError(e);
+		} catch (ClassNotFoundException e) {
+			this.node.printError(e);
+		} catch (NoSuchMethodException e) {
+			this.node.printError(e);
+			e.printStackTrace();
+		}
+		Callback cb = new Callback(cbMethod, this, new Object[from]);
+		this.node.addTimeout(cb, 3);
+
+	
 	}
 
 	public void receiveTX_COMMIT(int from) {
@@ -355,17 +418,17 @@ public class ManagerNode {
 			sendError(from, "", e.getMessage());
 		}
 		transactionsInProgress.remove(from); // remove from tx
-
+		
 		// unlock files
-		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
-			if (entry.getValue() == from) {
+		for (Entry<String, Integer> entry: lockedFiles.entrySet()) {
+			if (entry.getValue() == from){
 				unlockFile(entry.getKey());
 			}
 		}
-
+		
 		this.node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
-
-		// stop doing heartbeat pings
+		
+	
 	}
 
 	public void receiveTX_ABORT(int from) {
@@ -425,7 +488,17 @@ public class ManagerNode {
 			sendError(client, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
 		} else { // File not in system
-			createNewFile(filename, client);
+			// decide what to do based on transaction status
+			if (transactionsInProgress.contains(client))
+				try {
+					this.node.fs.createFileTX(client, filename);
+				} catch (TransactionException e) {
+					this.node.printVerbose("TransactionException on manager for file: " + filename);
+				} catch (IOException e) {
+					this.node.printVerbose("IOException on manager for file: " + filename);
+				}
+			else
+				createNewFile(filename, client);
 		}
 
 	}
@@ -435,7 +508,7 @@ public class ManagerNode {
 			return;
 		}
 
-		Integer rw = cacheRW.get(filename);
+		Integer rw = checkRWClients(filename);
 		List<Integer> ro = checkROClients(filename);
 
 		if (rw == null && ro.size() == 0) {
@@ -471,7 +544,16 @@ public class ManagerNode {
 			pendingRPCDeleteRequests.put(filename, from);
 			lockFile(filename, from);
 		} else {
-			deleteExistingFile(filename, from);
+			if (transactionsInProgress.contains(from))
+				try {
+					this.node.fs.deleteFileTX(from, filename);
+				} catch (TransactionException e) {
+					this.node.printVerbose("TransactionException on manager for file: " + filename);
+				} catch (IOException e) {
+					this.node.printVerbose("IOException on manager for file: " + filename);
+			}
+			else
+				deleteExistingFile(filename, from);
 		}
 	}
 
@@ -481,10 +563,10 @@ public class ManagerNode {
 		// check if locked
 		if (queueRequestIfLocked(from, receivedProtocol, filename)) {
 			/**
-			 * If the person who locked the file was the requester, then give
-			 * them automatic RW anyway.
+			 *  If the person who locked the file was the requester, then give them automatic
+			 *  RW anyway.
 			 */
-
+			
 			return;
 		}
 
@@ -557,8 +639,7 @@ public class ManagerNode {
 			// update the status of the client who sent the IC
 			List<Integer> ro = checkROClients(filename);
 			ro.remove(filename);
-			this.node.printVerbose("Changing status of client: " + from
-					+ " to RO for file: " + filename);
+			this.node.printVerbose("Changing status of client: " + from + " to RO for file: " + filename);
 			cacheRO.put(filename, ro);
 
 			this.node.printVerbose("Changing client: " + from + " to IV");
@@ -630,8 +711,7 @@ public class ManagerNode {
 	public void receiveWC(int from, String filename) {
 
 		// TODO: Check if someone has RW already, throw error if so
-		this.node.printVerbose("Changing status of client: " + from
-				+ " to RW for file: " + filename);
+		this.node.printVerbose("Changing status of client: " + from + " to RW for file: " + filename);
 		cacheRW.put(filename, from);
 
 		// check if someone's in the middle of a transaction with this file. if
@@ -677,7 +757,7 @@ public class ManagerNode {
 
 		Queue<QueuedFileRequest> outstandingRequests = queuedFileRequests
 				.get(filename);
-		while (outstandingRequests != null) { // TODO: size > 0 check?
+		while (outstandingRequests != null) { //TODO: size > 0 check?
 			QueuedFileRequest nextRequest = outstandingRequests.poll();
 			if (nextRequest != null) {
 				this.node.onRIOReceive(nextRequest.from, nextRequest.protocol,
@@ -731,44 +811,54 @@ public class ManagerNode {
 				+ ErrorCode.lookup(errorcode);
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(destAddr, Protocol.ERROR, payload);
+		this.node.RIOSend(destAddr, Protocol.TX_FAILURE, Utility.stringToByteArray(""));
 	}
 
 	public void sendError(int from, String filename, String message) {
 		String msg = filename + Client.delimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(from, Protocol.ERROR, payload);
+		this.node.RIOSend(from, Protocol.TX_FAILURE, Utility.stringToByteArray(""));
 	}
 
 	/**
-	 * This packet timed out and was a heartbeat packet. It may have been acked,
-	 * or it may not have - it's irrelevant from the point of view of the
-	 * manager.
-	 * 
-	 * @param destAddr
-	 *            the destination address for the heartbeat packet
+	 * This packet timed out and was a heartbeat packet. It may have been acked, or it may
+	 * not have - it's irrelevant from the point of view of the manager.
+	 * @param destAddr the destination address for the heartbeat packet
 	 */
 	public void heartbeatTimeout(int destAddr) {
 		if (transactionsInProgress.contains(destAddr))
-			this.node.RIOSend(destAddr, Protocol.HEARTBEAT,
-					Utility.stringToByteArray(""));
-
+			this.node.RIOSend(destAddr, Protocol.HEARTBEAT, Utility.stringToByteArray(""));
+		
 	}
-
+	
 	/**
-	 * This node didn't respond to a packet even after the maximum number of
-	 * tries. If this client was in the middle of the transaction, they're now
-	 * aborted and all locks on files they own are released
-	 * 
+	 * This node didn't respond to a packet even after the maximum number of tries. If this client
+	 * was in the middle of the transaction, they're now aborted and all locks on files they
+	 * own are released
 	 * @param destAddr
 	 */
-	public void killNode(int destAddr) {
+	public void killNode(int destAddr){
 		// might as well send a txabort just in case this node is alive
-		this.node.RIOSend(destAddr, Protocol.TX_ABORT,
-				Utility.stringToByteArray(""));
+		this.node.RIOSend(destAddr, Protocol.TX_FAILURE, Utility.stringToByteArray(""));
 		transactionsInProgress.remove(destAddr);
-		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
+		
+		// transfer ownership of files 
+		for (Entry<String, Integer> entry : cacheRW.entrySet()) {
+			Integer newOwner;
+			if (entry.getValue().equals(destAddr)) {
+				newOwner = this.replicaNode.get(destAddr);
+				this.node.printVerbose("Node: " + destAddr + " failed. Transferring ownership" +
+						" of file: " + entry.getKey() + " to replica node: " + newOwner);
+				cacheRW.put(entry.getKey(), newOwner);
+			}
+		}
+		
+		for (Entry<String, Integer> entry : lockedFiles.entrySet())
+		{
 			if (entry.getValue().equals(destAddr))
 				unlockFile(entry.getKey());
 		}
 	}
+
 }
