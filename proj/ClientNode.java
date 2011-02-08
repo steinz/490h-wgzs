@@ -13,6 +13,10 @@ import java.util.StringTokenizer;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /**
+ * TODO: make sure checking transacting and using fs' -TX methods
+ */
+
+/**
  * Implicit transactions do the right thing by CC
  * 
  * IMPORTANT: Methods names should not end in Handler unless they are meant to
@@ -643,11 +647,6 @@ public class ClientNode {
 	 * RPC Error
 	 */
 	protected void receiveError(Integer from, String msgString) {
-		/*
-		 * TODO: HIGH: Not sure what do we do here - have i been aborted? I
-		 * think the manager should have aborted me, so I'll assume that.
-		 */
-
 		node.printError(msgString);
 
 		abortCurrentTransaction();
@@ -827,20 +826,32 @@ public class ClientNode {
 		try {
 			if (cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
 				if (!Utility.fileExists(node, filename)) {
-					node.fs.createFile(filename);
+					if (transacting) {
+						node.fs.createFileTX(node.addr, filename);
+					} else {
+						node.fs.createFile(filename);
+					}
 				} else {
 					/*
 					 * file could have been deleted by someone else, and now I'm
 					 * creating, but I could still have an old copy on disk
 					 */
-					node.fs.writeFile(filename, "", false);
+					if (transacting) {
+						node.fs.writeFileTX(node.addr, filename, "", false);
+					} else {
+						node.fs.writeFile(filename, "", false);
+					}
 				}
 				cacheStatus.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
 			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
 				if (Utility.fileExists(node, filename)) {
 					// migh not exist here
-					node.fs.deleteFile(filename);
+					if (transacting) {
+						node.fs.deleteFileTX(node.addr, filename);
+					} else {
+						node.fs.deleteFile(filename);
+					}
 				}
 				cacheStatus.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
@@ -850,7 +861,7 @@ public class ClientNode {
 						+ Protocol.protocolToString(Protocol.SUCCESS)
 						+ " packet");
 			}
-		} catch (IOException e) {
+		} catch (Exception e) {
 			node.printError(e);
 			abortCurrentTransaction();
 			unlockFile(filename);
