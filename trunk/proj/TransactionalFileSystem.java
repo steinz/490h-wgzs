@@ -113,6 +113,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			sb.append(lineSeparator);
 			if (contents != null) {
 				sb.append(contents.split(lineSeparator).length); // line count
+				sb.append(lineSeparator);
 				sb.append(contents);
 			} else {
 				sb.append(-1);
@@ -182,7 +183,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				String logTempFilename) {
 			this.fs = fs;
 			this.logFilename = logFilename;
-			queuedOperations = new HashMap<Integer, Queue<PendingOperation>>();
+			this.queuedOperations = new HashMap<Integer, Queue<PendingOperation>>();
 		}
 
 		/**
@@ -471,11 +472,14 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 	public boolean fileExistsTX(int client, String filename) {
 		boolean exists = Utility.fileExists(n, filename);
-		for (PendingOperation op : txCache.queuedOperations.get(client)) {
-			if (op.op == Operation.DELETE) {
-				exists = false;
-			} else if (op.op == Operation.CREATE) {
-				exists = true;
+		Queue<PendingOperation> ops = txCache.queuedOperations.get(client);
+		if (ops != null) {
+			for (PendingOperation op : ops) {
+				if (op.op == Operation.DELETE) {
+					exists = false;
+				} else if (op.op == Operation.CREATE) {
+					exists = true;
+				}
 			}
 		}
 		return exists;

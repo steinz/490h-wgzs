@@ -74,7 +74,7 @@ public class ManagerNode {
 	private Map<Integer, Integer> replicaNode;
 
 	private static final Integer TIMEOUT = 5;
-	
+
 	/**
 	 * A set of node addresses currently performing transactions
 	 * 
@@ -391,7 +391,8 @@ public class ManagerNode {
 		}
 
 		transactionsInProgress.add(from);
-		this.node.printVerbose("Added node: " + from + " to list of transactions in progress");
+		this.node.printVerbose("Added node: " + from
+				+ " to list of transactions in progress");
 		try {
 			this.node.fs.startTransaction(from);
 		} catch (IOException e1) {
@@ -483,7 +484,7 @@ public class ManagerNode {
 					ErrorCode.FileAlreadyExists);
 		} else { // File not in system
 			// decide what to do based on transaction status
-			if (transactionsInProgress.contains(client)){
+			if (transactionsInProgress.contains(client)) {
 				try {
 					this.node.fs.createFileTX(client, filename);
 					this.sendSuccess(client, Protocol.CREATE, filename);
@@ -494,8 +495,7 @@ public class ManagerNode {
 					this.node.printError(e);
 					this.sendError(client, filename, e.getMessage());
 				}
-			}
-			else{
+			} else {
 				createNewFile(filename, client);
 				this.sendSuccess(client, Protocol.CREATE, filename);
 			}
@@ -837,7 +837,7 @@ public class ManagerNode {
 	 *            the destination address for the heartbeat packet
 	 */
 	public void heartbeatTimeout(Integer destAddr) {
-				
+
 		if (transactionsInProgress.contains(destAddr)) {
 			this.node
 					.RIOSend(destAddr, Protocol.HEARTBEAT, Client.emptyPayload);
@@ -845,9 +845,9 @@ public class ManagerNode {
 		addHeartbeatTimeout(destAddr);
 
 	}
-	
-	public void addHeartbeatTimeout(Integer destAddr){
-		
+
+	public void addHeartbeatTimeout(Integer destAddr) {
+
 		Method cbMethod = null;
 		try {
 			String[] params = { "java.lang.Integer" };
