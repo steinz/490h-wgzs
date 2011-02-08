@@ -500,12 +500,9 @@ public class ManagerNode {
 				try {
 					this.node.fs.createFileTX(client, filename);
 				} catch (TransactionException e) {
-					this.node
-							.printVerbose("TransactionException on manager for file: "
-									+ filename);
+					this.node.printError(e);
 				} catch (IOException e) {
-					this.node.printVerbose("IOException on manager for file: "
-							+ filename);
+					this.node.printError(e);
 				}
 			else
 				createNewFile(filename, client);
