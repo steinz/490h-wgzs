@@ -390,6 +390,11 @@ public class ManagerNode {
 
 		transactionsInProgress.add(from);
 		this.node.printVerbose("Added node: " + from + " to list of transactions in progress");
+		try {
+			this.node.fs.startTransaction(from);
+		} catch (IOException e1) {
+			this.node.printError(e1);
+		}
 		// callback setup
 		String[] params = { "java.lang.Integer" };
 		Method cbMethod = null;
