@@ -82,6 +82,8 @@ public class ManagerNode {
 
 	public ManagerNode(Client n) {
 		node = n;
+		this.cacheRO = new HashMap<String, List<Integer>>();
+		this.cacheRW = new HashMap<String, Integer>();
 		this.lockedFiles = new HashMap<String, Integer>();
 		this.pendingICs = new HashMap<String, List<Integer>>();
 		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
@@ -387,7 +389,7 @@ public class ManagerNode {
 		}
 
 		transactionsInProgress.add(from);
-
+		this.node.printVerbose("Added node: " + from + " to list of transactions in progress");
 		// callback setup
 		String[] params = { "java.lang.Integer" };
 		Method cbMethod = null;
@@ -840,10 +842,27 @@ public class ManagerNode {
 	 *            the destination address for the heartbeat packet
 	 */
 	public void heartbeatTimeout(Integer destAddr) {
+		
+		Method cbMethod = null;
+		
 		if (transactionsInProgress.contains(destAddr)) {
 			this.node
 					.RIOSend(destAddr, Protocol.HEARTBEAT, Client.emptyPayload);
 		}
+		try {
+			String[] params = { "java.lang.Integer" };
+			cbMethod = Callback.getMethod("heartbeatTimeout", this, params);
+		} catch (SecurityException e) {
+			this.node.printError(e);
+		} catch (ClassNotFoundException e) {
+			this.node.printError(e);
+		} catch (NoSuchMethodException e) {
+			this.node.printError(e);
+			e.printStackTrace();
+		}
+		Integer[] args = { destAddr };
+		Callback cb = new Callback(cbMethod, this, args);
+		this.node.addTimeout(cb, 3);
 	}
 
 	/**
