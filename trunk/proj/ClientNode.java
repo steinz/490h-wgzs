@@ -895,22 +895,20 @@ public class ClientNode {
 			return;
 		}
 
-		if (intent.operation == ClientOperation.APPEND) {
-			try {
-				// Managers version is always correct, so write straight to RFS
-				if (!Utility.fileExists(node, filename)) {
-					node.fs.createFile(filename);
-				}
-				node.fs.writeFile(filename, contents, false);
-			} catch (IOException e) {
-				// TODO: double check doing everything needed
-				if (transacting) {
-					abortCurrentTransaction();
-					sendToManager(Protocol.TX_ABORT);
-					unlockFile(filename);
-				}
-				return;
+		try {
+			// Managers version is always correct, so write straight to RFS
+			if (!Utility.fileExists(node, filename)) {
+				node.fs.createFile(filename);
 			}
+			node.fs.writeFile(filename, contents, false);
+		} catch (IOException e) {
+			// TODO: double check doing everything needed
+			if (transacting) {
+				abortCurrentTransaction();
+				sendToManager(Protocol.TX_ABORT);
+				unlockFile(filename);
+			}
+			return;
 		}
 
 		try {
