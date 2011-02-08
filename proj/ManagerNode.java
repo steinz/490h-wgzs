@@ -16,7 +16,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 //NOTE: Implicit transactions are handled by cache coherency!
 
 // TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
-// TODO: HIGH: TEST: Heartbeat pings, abort clients if they don't respond, MOVE TO node.addtimeout
+// TODO: HIGH: Add to cache status for all files requested
 // TODO: HIGH: TEST: Deal with creates and deletes appropriately -  
 // 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
 // TODO: HIGH: Need to handle aborts, failures, and successes
@@ -47,6 +47,11 @@ public class ManagerNode {
 	 */
 	private Map<String, List<Integer>> cacheRO;
 
+	/**
+	 * NOTE: This is why I was putting -1 in cacheRW for files.
+	 */
+	private Set<String> cachedFiles;
+	
 	private Client node;
 	/**
 	 * List of nodes the manager is waiting for ICs from.
@@ -94,6 +99,7 @@ public class ManagerNode {
 		this.pendingRPCCreateRequests = new HashMap<String, Integer>();
 		this.transactionsInProgress = new HashSet<Integer>();
 		this.replicaNode = new HashMap<Integer, Integer>();
+		this.cachedFiles = new HashSet<String>();
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -478,7 +484,7 @@ public class ManagerNode {
 			sendRequest(rw, filename, Protocol.WF);
 			pendingRPCCreateRequests.put(filename, client);
 			lockFile(filename, client);
-		} else if (ro.size() != 0) {
+		} else if (checkCacheExistence(filename)) {
 			// Someone has RO, so throw an error that the file exists already
 			sendError(client, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
@@ -511,7 +517,7 @@ public class ManagerNode {
 		Integer rw = checkRWClients(filename);
 		List<Integer> ro = checkROClients(filename);
 
-		if (rw == null && ro.size() == 0) {
+		if (checkCacheExistence(filename)) {
 			// File doesn't exist, send an error to the requester
 			sendError(from, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
@@ -560,6 +566,28 @@ public class ManagerNode {
 		}
 	}
 
+	/**
+	 * Checks the existence of this file on the cache first, and the file system second. If the file exists on the file system but not in the cache,
+	 * automatically adds it in.
+	 * @param filename The filename
+	 * @return
+	 */
+	private boolean checkCacheExistence(String filename) {
+		
+		if (cachedFiles.contains(filename))
+			return true;
+		else if (cacheRW.containsKey(filename) || cacheRO.containsKey(filename)){
+			cachedFiles.add(filename);
+			return true;
+		}
+		else if (Utility.fileExists(this.node, filename)){
+			cachedFiles.add(filename);
+			return true;
+		}
+		else
+			return false;
+	}
+
 	public void receiveQ(int from, String filename, int receivedProtocol,
 			int responseProtocol, int forwardingProtocol, boolean preserveROs) {
 
@@ -580,7 +608,7 @@ public class ManagerNode {
 		Integer rw = cacheRW.get(filename);
 		List<Integer> ro = checkROClients(filename);
 
-		if (rw == null && ro.size() == 0) {
+		if (checkCacheExistence(filename)) {
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileDoesNotExist);
 		}
@@ -736,7 +764,7 @@ public class ManagerNode {
 			throws IOException {
 		StringBuilder sendMsg = new StringBuilder();
 
-		if (!Utility.fileExists(this.node, filename)) {
+		if (!checkCacheExistence(filename)) {
 			// Manager doesn't have the file
 			sendError(to, Protocol.ERROR, filename, ErrorCode.FileDoesNotExist);
 		} else {
