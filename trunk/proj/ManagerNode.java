@@ -503,8 +503,8 @@ public class ManagerNode {
 		// update the status of the client who sent the WD
 		Integer rw = cacheRW.get(filename);
 		if (rw == null || rw != from) {
-			// TODO: HIGH: Throw error, send error, something
 			node.printError("WD received from client w/o RW"); // for now
+			sendError(from, Protocol.DELETE, filename, ErrorCode.PrivilegeDisagreement);
 		} else {
 			this.node.printVerbose("Blanking ownership permissions for file: "
 					+ filename);
@@ -810,12 +810,6 @@ public class ManagerNode {
 	 */
 	public void receiveIC(Integer from, String filename) {
 
-		/*
-		 * TODO: Maybe different messages for the first two vs. the last
-		 * scenario (node is manager but not expecting IC from this node for
-		 * this file)?
-		 */
-
 		int destAddr;
 		if (!pendingICs.containsKey(filename)
 				|| !pendingICs.get(filename).contains(from)) {
@@ -882,11 +876,6 @@ public class ManagerNode {
 		}
 		ro.add(from);
 		Integer rw = cacheRW.get(filename);
-		if (rw == from) {
-			this.node.printVerbose("Blanking ownership permissions for file: "
-					+ filename);
-			cacheRW.remove(filename);
-		} // TODO: why do we need to touch RW status here?
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -898,7 +887,9 @@ public class ManagerNode {
 
 	public void receiveWC(int from, String filename) {
 
-		// TODO: Check if someone has RW already, throw error if so
+		if (cacheRW.get(filename) == from){
+			sendError(from, Protocol.WC, filename, ErrorCode.PrivilegeDisagreement);
+		}
 		this.node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
 		cacheRW.put(filename, from);
@@ -974,6 +965,9 @@ public class ManagerNode {
 	 * tx_successful tx_failure at end of all txs (w/ no op specific responses)?
 	 */
 
+	/**
+	 * Sends a successful message for the given protocol from the manager to the client
+	 */
 	protected void sendSuccess(int destAddr, int protocol, String message) {
 		String msg = Protocol.protocolToString(protocol) + Client.delimiter
 				+ message;
