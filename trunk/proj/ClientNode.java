@@ -341,9 +341,14 @@ public class ClientNode {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = node.getID().toString();
 		node.printInfo("sending handshake to " + server);
-		node.RIOSend(server, Protocol.HANDSHAKE,
-				Utility.stringToByteArray(payload));
+		node.RIOSend(server, Protocol.HANDSHAKE, Utility
+				.stringToByteArray(payload));
 	}
+
+	/**
+	 * TODO: HIGH: Broadcast manageris packets to all clients so they don't have
+	 * to execute manageris commands and remove the managerisHandler
+	 */
 
 	/**
 	 * Used for project2 to tell a node it is the manager.
@@ -544,16 +549,16 @@ public class ClientNode {
 	 * Perform a create RPC to the given address
 	 */
 	public void createRPC(int address, String filename) {
-		node.RIOSend(address, Protocol.CREATE,
-				Utility.stringToByteArray(filename));
+		node.RIOSend(address, Protocol.CREATE, Utility
+				.stringToByteArray(filename));
 	}
 
 	/**
 	 * Perform a delete RPC to the given address
 	 */
 	public void deleteRPC(int address, String filename) {
-		node.RIOSend(address, Protocol.DELETE,
-				Utility.stringToByteArray(filename));
+		node.RIOSend(address, Protocol.DELETE, Utility
+				.stringToByteArray(filename));
 	}
 
 	/**
@@ -765,6 +770,8 @@ public class ClientNode {
 
 		sendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
 	}
+
+	// TODO: EC: Send TFS.PendingOp objects here instead of strings
 
 	/**
 	 * @param msgString
