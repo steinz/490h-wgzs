@@ -9,7 +9,8 @@ import java.util.StringTokenizer;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /*
- * TODO: HIGH: Verify methods declare that they thow the right exceptions throughout the project
+ * TODO: HIGH: Verify that methods actually throw the exceptions they declare 
+ * that they do throughout the project
  */
 
 /**
@@ -237,7 +238,7 @@ public class Client extends RIONode {
 
 		String msgString = Utility.byteArrayToString(msg);
 
-		// TODO: HIGH: Replace massive switch w/ dynamic dispatch.
+		// TODO: Replace massive switch w/ dynamic dispatch.
 
 		try {
 			switch (protocol) {
