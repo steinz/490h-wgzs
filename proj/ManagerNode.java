@@ -20,11 +20,13 @@ import edu.washington.cs.cse490h.lib.Utility;
  * them or send them a failure if they don't (see Writeup 3 > FS Semantics > Paragraph 4 )
  */
 
+// TODO: HIGH: I vote for sed s/from/client/g
+
 // TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
 // TODO: HIGH: TEST: Add to cache status for all files requested
 // TODO: HIGH: TEST: Deal with creates and deletes appropriately -  
 // 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
-// TODO: HIGH: Need to handle aborts, failures, and successes
+// TODO: HIGH: Need to handle aborts, failures, and successes - every handler code path should end by sending something to the client (except {W,R,I}C) - this comment should persist
 // TODO: HIGH: TEST: Replicas - if client <x> goes down, and someone is requesting this file, we should request a copy from its replica
 /**
  * Replica scheme: 1 -> 2 2 -> 3 3 -> 4 4 -> 5 5 -> 1
@@ -243,8 +245,19 @@ public class ManagerNode {
 	 * RO on the file, then it's a good idea to just return and allow them to
 	 * proceed as normal (since they'll revoke someone else's access if they're
 	 * requesting ownership).
-	 */
-	/**
+	 * 
+	 * TODO: HIGH: Super glad this exaplanation contains the word "probably"
+	 * 
+	 * Example:
+	 * 
+	 * 1 get test hello
+	 * 
+	 * 1 put test world
+	 * 
+	 * TOOD: HIGH: See Above - I think the second operation needs to be queued
+	 * until the get is resolved (test could have been deleted for example) - do
+	 * we handle this correctly
+	 * 
 	 * Queues the given request if the file is locked and returns true. Returns
 	 * false if the file isn't locked. Also returns false if the file is locked
 	 * by the requesting client (i.e. the client is the one locking the file).
@@ -263,6 +276,8 @@ public class ManagerNode {
 				requests = new LinkedList<QueuedFileRequest>();
 				queuedFileRequests.put(filename, requests);
 			}
+			node.printVerbose("Queuing " + Protocol.protocolToString(protocol)
+					+ " from " + client + " on " + filename);
 			requests.add(new QueuedFileRequest(client, protocol, Utility
 					.stringToByteArray(filename)));
 			return true;
@@ -480,8 +495,8 @@ public class ManagerNode {
 	 */
 	protected void lockFile(String filename, Integer from) {
 		/**
-		 * TODO: HIGH: Detect if client is performing operations out of filename order
-		 * during transaction.
+		 * TODO: HIGH: Detect if client is performing operations out of filename
+		 * order during transaction.
 		 */
 
 		this.node.printVerbose("manager locking file: " + filename);

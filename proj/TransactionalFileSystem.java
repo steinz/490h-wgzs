@@ -19,7 +19,7 @@ import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /*
- * TODO: EC: More in memory file caching
+ * TODO: EC: In memory file content caching
  */
 
 /*
@@ -35,10 +35,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  * Extension of the ReliableFileSystem that adds support for transactions via
  * -TX methods, which write to a redo log and are cached in memory.
  * 
- * The log is purged after initialization
- * 
- * TODO: also purge occasionally after transactions commit or abort (where
- * marked by todos)
+ * The log is purged after initialization and every purgeFrequency txs
  */
 public class TransactionalFileSystem extends ReliableFileSystem {
 
@@ -149,8 +146,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 						contents.append(reader.readLine());
 						contents.append(lineSeparator);
 					}
-					return new PendingOperation(client, op, filename,
-							contents.toString());
+					return new PendingOperation(client, op, filename, contents
+							.toString());
 				} else {
 					return new PendingOperation(client, op, filename);
 				}
@@ -195,9 +192,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		/**
 		 * Apply the given operation to the RFS
-		 * 
-		 * TODO: HIGH: If these ops fail, the tfs is not created for the client.. is that a problem?
-		 * Should it just throw an exception but still create the tfs?
 		 * 
 		 * @throws IOException
 		 */
@@ -270,6 +264,13 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			// make a copy of the log first in case we fail during purge
 			String logContents = fs.getFile(logFilename);
 			fs.performWrite(logTempFilename, false, logContents);
+
+			/*
+			 * TODO: HIGH: This assumes the above write is atomic, which it
+			 * might not be - print some special identifier at the end so that
+			 * we can ensure the entire copy was made during recovery (this
+			 * might also be a problem w/ RFS' recovery of .temp)
+			 */
 
 			// read through the log, building up PendingOperation lists
 			Map<Integer, List<PendingOperation>> oldTxs = queueFromLog();
@@ -357,6 +358,11 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				return;
 			}
 
+			/*
+			 * TODO: Not sure if we are handling any failures reading the log
+			 * file correctly, although I don't think we need to
+			 */
+
 			Map<Integer, List<PendingOperation>> oldTxs = queueFromLog();
 
 			// reapply txs
@@ -417,7 +423,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 	public TransactionalFileSystem(Client n, String tempFilename,
 			String logFilename, String logTempFilename, int purgeFrequency)
-			throws IOException, TransactionLogException {
+			throws IOException {
 		// setup ReliableFileSystem
 		super(n, tempFilename);
 
@@ -427,14 +433,17 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		this.txCache = new TransactionCache(this, this.logFilename,
 				this.tempFilename);
 
-		// recover RFS and from the log if necessary
+		// recover RFS - throws an exception if tempFile recovery fails
 		this.recover();
+		// recover temp log - throws an exception if logTempFile recovery fails
 		txCache.recoverTempLog();
+		// redo everything in the log - throws exception if the log corrupt
 		txCache.redoLog();
 
 		this.purgeFrequency = purgeFrequency;
 
 		// create or clear the log file on disk
+		// this will throw an exception if the log can't be created
 		if (Utility.fileExists(n, logFilename)) {
 			performWrite(logFilename, false, "");
 		} else {
