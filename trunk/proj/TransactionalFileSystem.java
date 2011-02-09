@@ -196,6 +196,9 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		/**
 		 * Apply the given operation to the RFS
 		 * 
+		 * TODO: HIGH: If these ops fail, the tfs is not created for the client.. is that a problem?
+		 * Should it just throw an exception but still create the tfs?
+		 * 
 		 * @throws IOException
 		 */
 		protected void apply(PendingOperation op) throws IOException {
@@ -213,7 +216,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				fs.writeFile(op.filename, op.contents, true);
 				break;
 			default:
-				throw new TransactionLogException("attemp to apply tx op");
+				throw new TransactionLogException("attempt to apply tx op");
 			}
 		}
 

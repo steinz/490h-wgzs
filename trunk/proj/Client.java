@@ -160,6 +160,7 @@ public class Client extends RIONode {
 	 * commit request
 	 * 
 	 * TODO: HIGH: think about restart
+	 * TODO: HIGH: This try/catch pair results in the tfs never being declared if the TFS aborts
 	 */
 	public void restart() {
 		printInfo("CLIENT (RE)STARTING");

@@ -59,10 +59,15 @@ public class ManagerNode {
 	protected Map<String, List<Integer>> pendingICs;
 
 	/**
-	 * Status of who is waiting for permission for this file
+	 * Status of who is waiting for read permission for this file
 	 */
-	private Map<String, Integer> pendingCCPermissionRequests;
+	private Map<String, Integer> pendingReadPermissionRequests;
 
+	/**
+	 * Status of who is waiting for write permission for this file
+	 */
+	private Map<String, Integer> pendingWritePermissionRequests;
+	
 	/**
 	 * Status of who is waiting to delete this file via RPC
 	 */
@@ -94,7 +99,8 @@ public class ManagerNode {
 		this.lockedFiles = new HashMap<String, Integer>();
 		this.pendingICs = new HashMap<String, List<Integer>>();
 		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
-		this.pendingCCPermissionRequests = new HashMap<String, Integer>();
+		this.pendingReadPermissionRequests = new HashMap<String, Integer>();
+		this.pendingWritePermissionRequests = new HashMap<String, Integer>();
 		this.pendingRPCDeleteRequests = new HashMap<String, Integer>();
 		this.pendingRPCCreateRequests = new HashMap<String, Integer>();
 		this.transactionsInProgress = new HashSet<Integer>();
@@ -146,7 +152,7 @@ public class ManagerNode {
 	/**
 	 * NOTE for why this returns false if the file is locked by the client: If
 	 * the client is the one locking the file, then it's fine to give them
-	 * permission and not queue the request, because this patient probably has
+	 * permission and not queue the request, because this client probably has
 	 * an exclusive lock on the file. This also means that even if someone else
 	 * has RO on the file, then it's a good idea to just return and allow them
 	 * to proceed as normal (since they'll revoke someone else's access if
@@ -264,13 +270,22 @@ public class ManagerNode {
 			return;
 		}
 
-		requester = pendingCCPermissionRequests.remove(filename);
+		// look for read/rw requests
+		requester = pendingReadPermissionRequests.remove(filename);
 		if (requester != null) {
 			// file was deleted by owner
 			sendError(requester, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
 			return;
 		}
+		requester = pendingWritePermissionRequests.remove(filename);
+		if (requester != null) {
+			// file was deleted by owner
+			sendError(requester, Protocol.DELETE, filename,
+					ErrorCode.FileDoesNotExist);
+			return;
+		}
+
 
 	}
 
@@ -288,7 +303,7 @@ public class ManagerNode {
 		 * shouldn't be a create or delete (which require RW, so send W{F,D}
 		 * messages instead)
 		 */
-		Integer destAddr = pendingCCPermissionRequests.remove(filename);
+		Integer destAddr = pendingReadPermissionRequests.remove(filename);
 		if (destAddr != null) {
 			try {
 				sendFile(destAddr, filename, Protocol.RD);
@@ -342,7 +357,7 @@ public class ManagerNode {
 		}
 
 		// check CC
-		destAddr = pendingCCPermissionRequests.remove(filename);
+		destAddr = pendingWritePermissionRequests.remove(filename);
 		if (destAddr != null) {
 			if (foundPendingRequest) {
 				sendError(from, filename, "IllegalConcurrentRequestException!");
@@ -444,26 +459,6 @@ public class ManagerNode {
 
 	}
 
-	/**
-	 * Queues the given request if the file is locked and returns true. Returns
-	 * false if the file isn't locked.
-	 */
-	public boolean managerQueueRequestIfLocked(int client, int protocol,
-			String filename) {
-		if (lockedFiles.containsKey(filename)) {
-			Queue<QueuedFileRequest> requests = queuedFileRequests
-					.get(filename);
-			if (requests == null) {
-				requests = new LinkedList<QueuedFileRequest>();
-				queuedFileRequests.put(filename, requests);
-			}
-			requests.add(new QueuedFileRequest(client, protocol, Utility
-					.stringToByteArray(filename)));
-			return true;
-		} else {
-			return false;
-		}
-	}
 
 	/**
 	 * Create RPC
@@ -601,7 +596,7 @@ public class ManagerNode {
 			 * If the person who locked the file was the requester, then give
 			 * them automatic RW anyway.
 			 */
-
+			
 			return;
 		}
 
@@ -625,14 +620,20 @@ public class ManagerNode {
 		if (rw != null) { // someone has RW
 			// Get updates
 			sendRequest(rw, filename, forwardingProtocol);
-			pendingCCPermissionRequests.put(filename, from);
+			if (receivedProtocol == Protocol.RQ)
+				pendingReadPermissionRequests.put(filename, from);
+			else
+				pendingWritePermissionRequests.put(filename, from);
 		} else if (!preserveROs && ro.size() > 0) { // someone(s) have RO
 			pendingICs.put(filename, ro);
 			for (int i : ro) {
 				// Invalidate all ROs
 				sendRequest(i, filename, Protocol.IV);
 			}
-			pendingCCPermissionRequests.put(filename, from);
+			if (receivedProtocol == Protocol.RQ)
+				pendingReadPermissionRequests.put(filename, from);
+			else
+				pendingWritePermissionRequests.put(filename, from);
 		} else { // no one has RW or RO
 			/*
 			 * TODO: Should this be an error - I think it currently sends
@@ -696,8 +697,8 @@ public class ManagerNode {
 				 */
 				pendingICs.remove(filename);
 
-				if (pendingCCPermissionRequests.containsKey(filename)) {
-					destAddr = pendingCCPermissionRequests.remove(filename);
+				if (pendingWritePermissionRequests.containsKey(filename)) {
+					destAddr = pendingWritePermissionRequests.remove(filename);
 					try {
 						sendFile(destAddr, filename, Protocol.WD);
 					} catch (IOException e) {
@@ -913,11 +914,19 @@ public class ManagerNode {
 		for (Entry<String, Integer> entry : cacheRW.entrySet()) {
 			Integer newOwner;
 			if (entry.getValue().equals(destAddr)) {
+				String filename = entry.getKey();
 				newOwner = this.replicaNode.get(destAddr);
 				this.node.printVerbose("Node: " + destAddr
 						+ " failed. Transferring ownership" + " of file: "
-						+ entry.getKey() + " to replica node: " + newOwner);
-				cacheRW.put(entry.getKey(), newOwner);
+						+ filename + " to replica node: " + newOwner);
+				cacheRW.put(filename, newOwner);
+				// if someone was waiting for this file, send a WF/RF to the replica
+				if (pendingWritePermissionRequests.remove(filename) != null){
+					this.node.RIOSend(newOwner, Protocol.WF, Utility.stringToByteArray(filename));
+				}
+				else if (pendingReadPermissionRequests.remove(filename) != null) {
+					this.node.RIOSend(newOwner, Protocol.RF, Utility.stringToByteArray(filename));
+				}
 			}
 		}
 
