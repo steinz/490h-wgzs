@@ -483,7 +483,7 @@ public class ManagerNode {
 			sendRequest(rw, filename, Protocol.WF);
 			pendingRPCCreateRequests.put(filename, client);
 			lockFile(filename, client);
-		} else if (!checkCacheExistence(filename)) {
+		} else if (checkCacheExistence(filename)) {
 			// Someone has RO, so throw an error that the file exists already
 			sendError(client, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
