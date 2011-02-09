@@ -358,6 +358,11 @@ public class ClientNode {
 			node.printInfo("promoted to manager");
 			node.isManager = true;
 			node.managerFunctions = new ManagerNode(node);
+
+			/*
+			 * TODO: This should probably restart the node as a manager (call a
+			 * different start method in Client)
+			 */
 		} else {
 			node.printInfo("already manager");
 		}

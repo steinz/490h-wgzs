@@ -159,8 +159,7 @@ public class Client extends RIONode {
 	 * client doesn't hear a response back from the server after sending a
 	 * commit request
 	 * 
-	 * TODO: HIGH: think about restart TODO: HIGH: This try/catch pair results
-	 * in the tfs never being declared if the TFS aborts
+	 * TODO: HIGH: think about restart
 	 */
 	public void restart() {
 		printInfo("CLIENT (RE)STARTING");
@@ -170,10 +169,17 @@ public class Client extends RIONode {
 		this.clientFunctions = new ClientNode(this,
 				clientMaxWaitingForCommitQueueSize);
 
+		fs = null;
 		try {
 			fs = new TransactionalFileSystem(this, tempFilename, logFilename,
 					logTempFilename, fsPurgeFrequency);
 		} catch (IOException e) {
+			/*
+			 * TODO: for clients, it should be okay to try again here w/
+			 * recovery turned off since the files can be recovered from
+			 * elsewhere, but managers should stay down here since their FS is
+			 * corrupt
+			 */
 			printError(e);
 		}
 	}
