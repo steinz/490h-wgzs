@@ -346,8 +346,8 @@ public class ClientNode {
 	}
 
 	/**
-	 * TODO: HIGH: Broadcast manageris packets to all clients so they don't have
-	 * to execute manageris commands and remove the managerisHandler
+	 * TODO: Broadcast manageris packets to all clients so they don't have to
+	 * execute manageris commands, remove the managerisHandler
 	 */
 
 	/**
@@ -441,12 +441,6 @@ public class ClientNode {
 	 * the manager can still find the newest version of the file if I'm down
 	 * 
 	 * The next node address will be my replica
-	 * 
-	 * Is it safe for my transaction to just be lost? Aka, if I fail, the
-	 * manager just uses whatever it has, which will be everything before my RWs
-	 * in my latest transaction. I'm worried that someone could get ownership of
-	 * one but not all of the files I mutated, leaving the system in an
-	 * inconsistent state
 	 * 
 	 * Send changes to replica before committing anything to manager
 	 */
@@ -733,12 +727,7 @@ public class ClientNode {
 			} catch (IOException e) {
 				// FS failure - might as well be disconnected
 				return;
-				/*
-				 * TODO: HIGH: How does the manager deal w/ this? Needs to give
-				 * requester access at some point, so I guess it just uses the
-				 * most recent version of the file it has and revokes RW to the
-				 * client who failed to respond to the F request?
-				 */
+				// manager will query replica instead
 			}
 		}
 

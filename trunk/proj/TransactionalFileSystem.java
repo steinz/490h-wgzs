@@ -266,10 +266,12 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			fs.performWrite(logTempFilename, false, logContents);
 
 			/*
-			 * TODO: HIGH: This assumes the above write is atomic, which it
-			 * might not be - print some special identifier at the end so that
-			 * we can ensure the entire copy was made during recovery (this
-			 * might also be a problem w/ RFS' recovery of .temp)
+			 * TODO: This assumes the above write is atomic, which it might not
+			 * be - print some special identifier at the end so that we can
+			 * ensure the entire copy was made during recovery (this might also
+			 * be a problem w/ RFS' recovery of .temp)
+			 * 
+			 * TODO: HIGH: Document this issue
 			 */
 
 			// read through the log, building up PendingOperation lists

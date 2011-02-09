@@ -55,6 +55,9 @@ public class ManagerNode {
 	 * I like this kind of thing so here's what I think the class should be:
 	 */
 
+	/**
+	 * Encapsulates the RW and RO caches
+	 */
 	private static class Cache {
 		private Map<String, Integer> RW;
 		private Map<String, List<Integer>> RO;
@@ -66,10 +69,16 @@ public class ManagerNode {
 			this.RO = new HashMap<String, List<Integer>>();
 		}
 
+		/**
+		 * Check if filename is in either cache
+		 */
 		public boolean contains(String filename) {
 			return RW.containsKey(filename) || RO.containsKey(filename);
 		}
 
+		/**
+		 * Revoke any RO on filename and give RW to addr
+		 */
 		public void giveRW(int addr, String filename) {
 			revokeRO(filename);
 			RW.put(filename, addr);
@@ -77,6 +86,9 @@ public class ManagerNode {
 					+ filename);
 		}
 
+		/**
+		 * Revoke RW on filename and give RO to addr
+		 */
 		public void giveRO(int addr, String filename) {
 			RW.remove(filename);
 
@@ -91,20 +103,34 @@ public class ManagerNode {
 					+ filename);
 		}
 
+		/**
+		 * Return the address of the node w/ RW on filename or null
+		 */
 		public Integer hasRW(String filename) {
 			return RW.get(filename);
 		}
 
+		/**
+		 * Return the list of addresses of nodes w/ RO on filename or null
+		 */
 		public List<Integer> hasRO(String filename) {
 			return RO.get(filename);
 		}
 
+		/**
+		 * Revoke all RW and RO on filename
+		 * 
+		 * (Not sure we actually need this one)
+		 */
 		public void revoke(String filename) {
 			RW.remove(filename);
 			revokeRO(filename);
 			n.printVerbose("CacheStatus: Revoking all access to " + filename);
 		}
 
+		/**
+		 * Revoke all RO on filename
+		 */
 		private void revokeRO(String filename) {
 			List<Integer> ro = RO.get(filename);
 			if (ro != null) {
@@ -175,8 +201,6 @@ public class ManagerNode {
 
 	/**
 	 * A set of node addresses currently performing transactions
-	 * 
-	 * TODO: HIGH: Could be pushed down into the TransactionalFileSystem
 	 */
 	protected Set<Integer> transactionsInProgress;
 
@@ -495,8 +519,8 @@ public class ManagerNode {
 	 */
 	protected void lockFile(String filename, Integer from) {
 		/**
-		 * TODO: HIGH: Detect if client is performing operations out of filename
-		 * order during transaction.
+		 * TODO: Detect if client is performing operations out of filename order
+		 * during transaction.
 		 */
 
 		this.node.printVerbose("manager locking file: " + filename);
@@ -691,10 +715,8 @@ public class ManagerNode {
 	 * @return
 	 */
 	private boolean checkCacheExistence(String filename) {
-		/*
-		 * TODO: HIGH: This seems like it should actually just be called
-		 * checkExistence
-		 */
+
+		// TODO: HIGH: This seems like it should just be checkExistence
 
 		if (cachedFiles.contains(filename))
 			return true;
@@ -704,7 +726,7 @@ public class ManagerNode {
 		} else if (Utility.fileExists(this.node, filename)) {
 			/*
 			 * TODO: HIGH: This should use fs.fileExists so the log is searched
-			 * as well as persistent storage
+			 * as well as persistent storage - might be similar bugs elsewhere
 			 */
 			cachedFiles.add(filename);
 			return true;
