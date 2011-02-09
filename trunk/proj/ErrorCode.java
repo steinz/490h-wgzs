@@ -16,6 +16,7 @@ public class ErrorCode {
 	public static final int FileAlreadyExists = 11;
 	public static final int Timeout = 20;
 	public static final int FileTooLarge = 30;
+	public static final int IOEXception = 31;
 
 	// cache coherence errors
 	public static final int NotManager = 40;

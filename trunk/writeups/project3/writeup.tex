@@ -18,14 +18,50 @@ January 27, 2011
 
 \textbf{Notes:} \\
 
+ 
+\textbf{Transaction Scheme:} \\
+
+For our transactions, we decided to use two-phase locking as opposed to optimistic concurrency. We chose 2PL for a variety of reasons, namely:
+
+\begin{enumerate}
+\item[Framework setup] Our framework is already suited towards two-phase locking. We already have a locking scheme in-place for cache coherency (project 2), and so the process of locking files was 
+simply expanded to lock files for the duration of a transaction, instead of for the duration of a request.
+\item[Difficulties with optimistic concurrency] We thought about using optimistic concurrency, however this requires the server to validate all requests at the end of a transaction. This would require
+a log on the server recording transactions. Further, this log would have to timestamp all transactions in order to decide whether two transactions conflicted or not. Lastly, this would also required the
+server to be sent a copy of the client's transaction log with every commit, which we thought was unnecessary.
+\end{enumerate}
+
+\textbf{Dealing with deadlock:} \\
+
+One potential problem with 2PL is the possibility of deadlock.
+
 We require clients to operate on files within a transaction in filename order to avoid deadlock.
-So, if a client wants to do: 
+So, if a client wants to perform the following operations: 
 	Get g => x
 	Put x => f
-They have to actually do:
-	Append "" => f
+They have to actually perform these operations:
+	Append "" f
 	Get g => x
 	Put x => f
+
+The server currently makes no guarantees to clients if they do not perform requests in filename order. Clients can always abort themselves, which results in all locks freeing eventually.
+
+\textbf{Replication:} \\
+
+In the middle of transactions, in order to avoid potential situations where the most current copy of the file is lost, we decided to implement replication. Whenever a client changes a file locally,
+it will also replicate this action via RPC on another client (we chose a simple replication scheme, where client 1 replicates on client 2, ... client k replicates on client k+1, ... client N replicates on client 1).
+This ensures that the latest copy of a file will never be lost, even if a client fails (see below for further discussion on that topic).
+
+\textbf{Failure Handling:} \\
+
+\begin{description}
+\item[Server Failures] Currently clients block on server failures. This is within the specification of the assignment, and so we did not implement any handling of this scenario.
+\item[Client Failures] While a client is in the middle of a transaction, they are periodically sent pings by the server (heartbeat pings). If the client ceases responding to this heartbeat, then
+after a set number of rounds the server will assume the client went down (this functionality was largely borrowed from project 1). If the server detects that a client went down, it will immediately
+release all locks this client had on any files.
+
+The server will then immediately change ownership of any files that client had ownership of to its replica. If there were pending permission requests for this file, then the server will immediately forward that
+request to the appropriate replica. 
 
 \textbf{TFS Log Entry Format:} \\
 
