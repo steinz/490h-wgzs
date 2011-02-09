@@ -186,8 +186,6 @@ public class ManagerNode {
 	 * @return The client who owns this file, -1 if no one currently owns this
 	 *         file.
 	 * 
-	 *         TODO: HIGH: I'd suggest returning null instead of -1 if nobody
-	 *         has RW, some of the other code assumes it.
 	 */
 	public Integer checkRWClients(String filename) {
 
@@ -196,9 +194,10 @@ public class ManagerNode {
 
 		if (cacheRW.containsKey(filename)) {
 			clientNumber = cacheRW.get(filename);
+			return clientNumber;
 		}
-
-		return clientNumber;
+		else
+			return null;
 	}
 
 	/**
@@ -469,10 +468,11 @@ public class ManagerNode {
 	/**
 	 * Create RPC
 	 * 
+	 * TODO: HIGH: Is the client assuming they have RW now?
 	 */
-	public void receiveCreate(int client, String filename) {
+	public void receiveCreate(int from, String filename) {
 
-		if (queueRequestIfLocked(client, Protocol.CREATE, filename)) {
+		if (queueRequestIfLocked(from, Protocol.CREATE, filename)) {
 			return;
 		}
 
@@ -481,28 +481,30 @@ public class ManagerNode {
 
 		if (rw != null) {
 			sendRequest(rw, filename, Protocol.WF);
-			pendingRPCCreateRequests.put(filename, client);
-			lockFile(filename, client);
+			pendingRPCCreateRequests.put(filename, from);
+			lockFile(filename, from);
 		} else if (checkCacheExistence(filename)) {
 			// Someone has RO, so throw an error that the file exists already
-			sendError(client, Protocol.ERROR, filename,
+			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
 		} else { // File not in system
 			// decide what to do based on transaction status
-			if (transactionsInProgress.contains(client)) {
+			if (transactionsInProgress.contains(from)) {
 				try {
-					this.node.fs.createFileTX(client, filename);
-					this.sendSuccess(client, Protocol.CREATE, filename);
+					this.node.fs.createFileTX(from, filename);
+					this.sendSuccess(from, Protocol.CREATE, filename);
+					cacheRW.put(filename, from);
+					this.node.printVerbose("Giving client: " + from + " RW on file: " + filename);
 				} catch (TransactionException e) {
 					this.node.printError(e);
-					this.sendError(client, filename, e.getMessage());
+					this.sendError(from, filename, e.getMessage());
 				} catch (IOException e) {
 					this.node.printError(e);
-					this.sendError(client, filename, e.getMessage());
+					this.sendError(from, filename, e.getMessage());
 				}
 			} else {
-				createNewFile(filename, client);
-				this.sendSuccess(client, Protocol.CREATE, filename);
+				createNewFile(filename, from);
+				this.sendSuccess(from, Protocol.CREATE, filename);
 			}
 		}
 
@@ -552,6 +554,9 @@ public class ManagerNode {
 			if (transactionsInProgress.contains(from))
 				try {
 					this.node.fs.deleteFileTX(from, filename);
+					this.node.send(from, Protocol.SUCCESS, Client.emptyPayload);
+					this.node.printVerbose("Giving client: " + from + " RW on file: " + filename);
+					cacheRW.put(filename, from);
 				} catch (TransactionException e) {
 					this.node
 							.printVerbose("TransactionException on manager for file: "
