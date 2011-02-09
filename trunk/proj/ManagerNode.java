@@ -528,12 +528,27 @@ public class ManagerNode {
 			sendError(from, "", "tx not in progress on client");
 		}
 
+		/*
+		 * TODO: HIGH: I might not be done servicing all the requests I received
+		 * before this (could be waiting for RD for example), I need to queue
+		 * everything received after this, complete everything received before,
+		 * and then service this operation (and then anything queued) - our
+		 * current queueing mechanism can't handle this because it is keyed one
+		 * filenames... Maybe we can lock a transaction in progress whenever we
+		 * have to stall and do a F/D chain?
+		 */
+
 		try {
 			this.node.fs.commitTransaction(from);
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
 		}
 		transactionsInProgress.remove(from); // remove from tx
+
+		/*
+		 * TODO: Keep the list of files locked by this client so we don't have
+		 * to go through everything that's locked
+		 */
 
 		// unlock files
 		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
@@ -588,8 +603,8 @@ public class ManagerNode {
 					this.node.fs.createFileTX(from, filename);
 					this.sendSuccess(from, Protocol.CREATE, filename);
 					cacheRW.put(filename, from);
-					this.node.printVerbose("Giving client: " + from
-							+ " RW on file: " + filename);
+					this.node.printVerbose("Giving " + from + " RW on file: "
+							+ filename);
 				} catch (TransactionException e) {
 					this.node.printError(e);
 					this.sendError(from, filename, e.getMessage());
