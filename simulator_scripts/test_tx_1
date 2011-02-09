@@ -1,0 +1,37 @@
+start 0
+start 1
+start 2
+time
+0 manager
+1 manageris 0
+2 manageris 0
+time
+1 noop 0
+2 noop 0
+time
+time
+time
+time
+1 txstart
+time
+1 create test
+time
+1 put test hello
+time
+1 txcommit
+time
+2 txstart
+time
+2 get test
+time
+2 put test world
+time
+2 txcommit
+time
+1 get test
+time
+time
+time
+time
+time
+end
