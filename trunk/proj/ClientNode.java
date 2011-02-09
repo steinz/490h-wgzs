@@ -109,6 +109,11 @@ public class ClientNode {
 	protected Map<String, Queue<String>> queuedCommands;
 
 	/**
+	 * Queue of tx{abort,commit}s waiting for all files to be unlocked
+	 */
+	protected Queue<String> queuedTxs;
+
+	/**
 	 * Whether or not the client is currently performing a transaction
 	 */
 	protected boolean transacting;
@@ -137,6 +142,7 @@ public class ClientNode {
 		this.pendingOperations = new HashMap<String, PendingClientOperation>();
 		this.lockedFiles = new HashSet<String>();
 		this.queuedCommands = new HashMap<String, Queue<String>>();
+		this.queuedTxs = new LinkedList<String>();
 		this.transacting = false;
 		this.waitingForCommitSuccess = false;
 		this.waitingForCommitQueue = new LinkedList<String>();
@@ -341,8 +347,8 @@ public class ClientNode {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = node.getID().toString();
 		node.printInfo("sending handshake to " + server);
-		node.RIOSend(server, Protocol.HANDSHAKE, Utility
-				.stringToByteArray(payload));
+		node.RIOSend(server, Protocol.HANDSHAKE,
+				Utility.stringToByteArray(payload));
 	}
 
 	/**
@@ -427,6 +433,8 @@ public class ClientNode {
 		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
+		} else if (lockedFiles.size() > 0) {
+			queuedTxs.add(line);
 		} else {
 			abortCurrentTransaction();
 			sendToManager(Protocol.TX_ABORT);
@@ -457,6 +465,8 @@ public class ClientNode {
 		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
+		} else if (lockedFiles.size() > 0) {
+			queuedTxs.add(line);
 		} else {
 			// transacting is updated when a response is received
 			waitingForCommitSuccess = true;
@@ -466,6 +476,12 @@ public class ClientNode {
 
 	/**
 	 * Sends a TX_START if not already performing a transaction
+	 * 
+	 * TODO: HIGH: Might have to queue things here... I think if
+	 * queuedTxs.size() > 0 or waitingForCommitQueue.size > 0? I'm not sure if
+	 * commands following the commit/abort will be queued correctly either - we
+	 * could just tell users to wait for response before starting another tx
+	 * maybe
 	 * 
 	 * @throws TransactionException
 	 * @throws UnknownManagerException
@@ -548,16 +564,16 @@ public class ClientNode {
 	 * Perform a create RPC to the given address
 	 */
 	public void createRPC(int address, String filename) {
-		node.RIOSend(address, Protocol.CREATE, Utility
-				.stringToByteArray(filename));
+		node.RIOSend(address, Protocol.CREATE,
+				Utility.stringToByteArray(filename));
 	}
 
 	/**
 	 * Perform a delete RPC to the given address
 	 */
 	public void deleteRPC(int address, String filename) {
-		node.RIOSend(address, Protocol.DELETE, Utility
-				.stringToByteArray(filename));
+		node.RIOSend(address, Protocol.DELETE,
+				Utility.stringToByteArray(filename));
 	}
 
 	/**
@@ -660,10 +676,15 @@ public class ClientNode {
 	}
 
 	/**
-	 * Unlocks all files locally
+	 * Unlocks all files locally and clears queued txs
+	 * 
+	 * TODO: HIGH: should maybe be clearing other queues here too - see comments
+	 * in Client in onReceive; or maybe this object should just be reset when a
+	 * HANDSHAKE is received
 	 */
 	public void unlockAll() {
 		lockedFiles.clear();
+		queuedTxs.clear();
 	}
 
 	/**
@@ -676,12 +697,19 @@ public class ClientNode {
 		node.logSynopticEvent("CLIENT-UNLOCK");
 		lockedFiles.remove(filename);
 
+		// process queued commands on this file
 		Queue<String> queuedRequests = queuedCommands.get(filename);
 		if (queuedRequests != null) {
 			while (queuedRequests.size() > 0) {
 				String request = queuedRequests.poll();
 				onCommand(request);
 			}
+		}
+
+		// process a queued tx command
+		if (queuedTxs.size() > 0) {
+			String request = queuedTxs.poll();
+			onCommand(request);
 		}
 	}
 
@@ -875,6 +903,8 @@ public class ClientNode {
 	protected void receiveTX_FAILURE() {
 		abortCurrentTransaction();
 		processWaitingForCommitQueue();
+
+		// TODO: HIGH: process more queued tx commands?
 	}
 
 	/**
@@ -883,6 +913,8 @@ public class ClientNode {
 	protected void receiveTX_SUCCESS() {
 		commitCurrentTransaction();
 		processWaitingForCommitQueue();
+
+		// TODO: HIGH: process more queued tx commands?
 	}
 
 	/**

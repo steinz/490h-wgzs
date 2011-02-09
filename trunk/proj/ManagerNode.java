@@ -504,7 +504,8 @@ public class ManagerNode {
 		Integer rw = cacheRW.get(filename);
 		if (rw == null || rw != from) {
 			node.printError("WD received from client w/o RW"); // for now
-			sendError(from, Protocol.DELETE, filename, ErrorCode.PrivilegeDisagreement);
+			sendError(from, Protocol.DELETE, filename,
+					ErrorCode.PrivilegeDisagreement);
 		} else {
 			this.node.printVerbose("Blanking ownership permissions for file: "
 					+ filename);
@@ -560,6 +561,9 @@ public class ManagerNode {
 		 * current queueing mechanism can't handle this because it is keyed one
 		 * filenames... Maybe we can lock a transaction in progress whenever we
 		 * have to stall and do a F/D chain?
+		 * 
+		 * UPDATE: This might actually be fixed by the client queuing
+		 * commits/aborts until they have unlocked all of their files locally
 		 */
 
 		try {
@@ -856,8 +860,7 @@ public class ManagerNode {
 				// still waiting for more ICs
 				List<Integer> waitingFor = pendingICs.get(filename);
 				StringBuilder waiting = new StringBuilder();
-				waiting
-						.append("Received IC but waiting for IC from clients : ");
+				waiting.append("Received IC but waiting for IC from clients : ");
 				for (int i : waitingFor) {
 					waiting.append(i + " ");
 				}
@@ -887,8 +890,9 @@ public class ManagerNode {
 
 	public void receiveWC(int from, String filename) {
 
-		if (cacheRW.get(filename) == from){
-			sendError(from, Protocol.WC, filename, ErrorCode.PrivilegeDisagreement);
+		if (cacheRW.get(filename) == from) {
+			sendError(from, Protocol.WC, filename,
+					ErrorCode.PrivilegeDisagreement);
 		}
 		this.node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
@@ -966,7 +970,8 @@ public class ManagerNode {
 	 */
 
 	/**
-	 * Sends a successful message for the given protocol from the manager to the client
+	 * Sends a successful message for the given protocol from the manager to the
+	 * client
 	 */
 	protected void sendSuccess(int destAddr, int protocol, String message) {
 		String msg = Protocol.protocolToString(protocol) + Client.delimiter
@@ -994,16 +999,16 @@ public class ManagerNode {
 				+ ErrorCode.lookup(errorcode);
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(destAddr, Protocol.ERROR, payload);
-		this.node.RIOSend(destAddr, Protocol.TX_FAILURE, Utility
-				.stringToByteArray(""));
+		this.node.RIOSend(destAddr, Protocol.TX_FAILURE,
+				Utility.stringToByteArray(""));
 	}
 
 	public void sendError(int from, String filename, String message) {
 		String msg = filename + Client.delimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(from, Protocol.ERROR, payload);
-		this.node.RIOSend(from, Protocol.TX_FAILURE, Utility
-				.stringToByteArray(""));
+		this.node.RIOSend(from, Protocol.TX_FAILURE,
+				Utility.stringToByteArray(""));
 	}
 
 	/**
@@ -1052,8 +1057,8 @@ public class ManagerNode {
 	 */
 	public void killNode(int destAddr) {
 		// might as well send a txabort just in case this node is alive
-		this.node.RIOSend(destAddr, Protocol.TX_FAILURE, Utility
-				.stringToByteArray(""));
+		this.node.RIOSend(destAddr, Protocol.TX_FAILURE,
+				Utility.stringToByteArray(""));
 		transactionsInProgress.remove(destAddr);
 
 		// transfer ownership of files
@@ -1069,11 +1074,11 @@ public class ManagerNode {
 				// if someone was waiting for this file, send a WF/RF to the
 				// replica
 				if (pendingWritePermissionRequests.remove(filename) != null) {
-					this.node.RIOSend(newOwner, Protocol.WF, Utility
-							.stringToByteArray(filename));
+					this.node.RIOSend(newOwner, Protocol.WF,
+							Utility.stringToByteArray(filename));
 				} else if (pendingReadPermissionRequests.remove(filename) != null) {
-					this.node.RIOSend(newOwner, Protocol.RF, Utility
-							.stringToByteArray(filename));
+					this.node.RIOSend(newOwner, Protocol.RF,
+							Utility.stringToByteArray(filename));
 				}
 			}
 		}
