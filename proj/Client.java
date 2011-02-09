@@ -159,8 +159,8 @@ public class Client extends RIONode {
 	 * client doesn't hear a response back from the server after sending a
 	 * commit request
 	 * 
-	 * TODO: HIGH: think about restart
-	 * TODO: HIGH: This try/catch pair results in the tfs never being declared if the TFS aborts
+	 * TODO: HIGH: think about restart TODO: HIGH: This try/catch pair results
+	 * in the tfs never being declared if the TFS aborts
 	 */
 	public void restart() {
 		printInfo("CLIENT (RE)STARTING");
@@ -202,11 +202,16 @@ public class Client extends RIONode {
 	public void onReceive(Integer from, int protocol, byte[] msg) {
 		printVerbose("received " + Protocol.protocolToString(protocol)
 				+ " from Universe, giving to RIOLayer");
-		
-		if (protocol == Protocol.HANDSHAKE) {
+
+		/*
+		 * Manager restarted or is talking to you for the first time - whatever
+		 * a client was doing has been abandoned by the manager, so unlock
+		 * everything locally
+		 */
+		if (!isManager && protocol == Protocol.HANDSHAKE) {
 			clientFunctions.unlockAll();
 		}
-		
+
 		super.onReceive(from, protocol, msg);
 	}
 
@@ -608,7 +613,6 @@ public class Client extends RIONode {
 	/*************************************************
 	 * end client and manager cache coherency functions
 	 ************************************************/
-
 
 	public void killNode(int destAddr) {
 		if (isManager) {
