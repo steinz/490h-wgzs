@@ -871,10 +871,9 @@ public class ManagerNode {
 	public void heartbeatTimeout(Integer destAddr) {
 
 		if (transactionsInProgress.contains(destAddr)) {
-			this.node
-					.RIOSend(destAddr, Protocol.HEARTBEAT, Client.emptyPayload);
+			this.node.RIOSend(destAddr, Protocol.HEARTBEAT, Client.emptyPayload);
+			addHeartbeatTimeout(destAddr);
 		}
-		addHeartbeatTimeout(destAddr);
 
 	}
 
