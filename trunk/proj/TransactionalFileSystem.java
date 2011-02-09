@@ -571,10 +571,9 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		PendingOperation op;
 		if (append) {
 			op = new PendingOperation(client, Operation.APPEND, filename,
-					contents + lineSeparator);
+					contents);
 		} else {
-			op = new PendingOperation(client, Operation.PUT, filename, contents
-					+ lineSeparator);
+			op = new PendingOperation(client, Operation.PUT, filename, contents);
 		}
 		performWrite(logFilename, true, op.toLogString());
 		txCache.enque(client, op);
