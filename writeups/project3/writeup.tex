@@ -71,9 +71,9 @@ Since the client gains RW access on test.txt after the first command, there is n
 We decided to use two-phase locking manager-side to ensure serializable transactions for the following reasons:
 
 \begin{enumerate}
-\item[Framework setup] Our framework is already suited towards two-phase locking. We already have a locking scheme in-place for cache coherency (project 2), and so the process of locking files was 
+	\item[Framework setup] Our framework is already suited towards two-phase locking. We already have a locking scheme in-place for cache coherency (project 2), and so the process of locking files was 
 simply expanded to lock files for the duration of a transaction, instead of for the duration of a request.
-\item[Difficulties with optimistic concurrency] We thought about using optimistic concurrency, however this requires the server to validate all requests at the end of a transaction. This would require
+	\item[Difficulties with optimistic concurrency] We thought about using optimistic concurrency, however this requires the server to validate all requests at the end of a transaction. This would require
 a log on the server recording transactions. Further, this log would have to timestamp all transactions in order to decide whether two transactions conflicted or not. Lastly, this would also required the
 server to be sent a copy of the client's transaction log with every commit, which we thought was unnecessary.
 \end{enumerate}
