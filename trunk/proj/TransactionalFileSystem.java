@@ -263,6 +263,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 * 
 		 * Writes the full log to logTempFile first in case of failure
 		 * 
+		 * TODO: HIGH: Test purgeLog
+		 * 
 		 * @throws IOException
 		 */
 		public void purgeLog() throws IOException {

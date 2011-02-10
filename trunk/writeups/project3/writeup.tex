@@ -54,8 +54,6 @@ If the client fails to respond to the manager's request, the manager asks one of
 If no client has ReadWrite access to a file, any number of clients can have ReadOnly access to that file.
 The manager explicitly invalidates these permissions before granting anyone else ReadWrite access to that file.
 
-If a client is slow or network failure occurs, the manager might be forced to give someone ReadWrite access to a file before receiving all invalidation confirmations from the clients who previously had ReadOnly access to that file. This means that after reconnection, two clients might think they have ReadWrite, so the manager always verifies that clients trying to perform mutations on files have RW access to those files. \\
-
 \textbf{Serialization:}
 
 We employ client-side file-level locking to prevent a client from requesting permission to the same file twice in a row.
