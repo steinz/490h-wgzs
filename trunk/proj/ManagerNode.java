@@ -682,7 +682,7 @@ public class ManagerNode {
 					ErrorCode.FileDoesNotExist);
 		}
 
-		if (rw != null && ro != null || ro.size() == 0) {
+		if (rw != null && (ro != null || ro.size() == 0)) {
 			String problem = "simultaneous RW (" + rw + ") and ROs ("
 					+ ro.toString() + ") detected on file: " + filename;
 			node.printError(problem);
@@ -690,14 +690,22 @@ public class ManagerNode {
 			sendError(from, filename, problem);
 		}
 
+		// Check RW status
 		if (rw != null) { // someone has RW
 			// Get updates
 			sendRequest(rw, filename, forwardingProtocol);
-			if (receivedProtocol == Protocol.RQ)
+			if (receivedProtocol == Protocol.RQ){
 				pendingReadPermissionRequests.put(filename, from);
-			else
+				return;
+			}
+			else{
 				pendingWritePermissionRequests.put(filename, from);
-		} else if (!preserveROs && ro.size() > 0) { // someone(s) have RO
+				return;
+			}
+		} 
+		
+		// Check RO status
+		if (!preserveROs && ro.size() > 0) { // someone(s) have RO
 			pendingICs.put(filename, ro);
 			for (int i : ro) {
 				// Invalidate all ROs
@@ -706,16 +714,23 @@ public class ManagerNode {
 				else {
 					try {
 						sendFile(from, filename, responseProtocol);
+						return;
 					} catch (IOException e) {
 						sendError(from, filename, e.getMessage());
 					}
 				}
 			}
-			if (receivedProtocol == Protocol.RQ)
+			if (receivedProtocol == Protocol.RQ){
 				pendingReadPermissionRequests.put(filename, from);
-			else
+				return;
+			else{
 				pendingWritePermissionRequests.put(filename, from);
-		} else { // no one has RW or RO
+				return;
+			}
+		} 
+		
+		// no one has RW or RO
+		else { 
 			// send file to requester
 			try {
 				sendFile(from, filename, responseProtocol);
