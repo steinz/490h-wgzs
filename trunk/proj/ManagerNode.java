@@ -182,7 +182,7 @@ public class ManagerNode {
 	 */
 	protected Set<Integer> transactionsInProgress;
 	
-	protected Cache RWcache;
+	protected Cache filePermissionCache;
 
 	public ManagerNode(Client n) {
 		node = n;
@@ -196,7 +196,7 @@ public class ManagerNode {
 		this.pendingCommitRequests = new HashMap<Integer, QueuedFileRequest>();
 		this.transactionsInProgress = new HashSet<Integer>();
 		this.replicaNode = new HashMap<Integer, Integer>();
-		this.RWcache = new Cache(this.node);
+		this.filePermissionCache = new Cache(this.node);
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -213,7 +213,7 @@ public class ManagerNode {
 		// give RW to the requester for filename
 		this.node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
-		this.RWcache.giveRW(from, filename);
+		this.filePermissionCache.giveRW(from, filename);
 
 		// send success to requester
 		this.node.printVerbose("sending "
@@ -233,7 +233,7 @@ public class ManagerNode {
 
 		this.node
 				.printVerbose("Blanking all permissions for file: " + filename);
-		this.RWcache.revoke(filename);
+		this.filePermissionCache.revoke(filename);
 
 		// no one had permissions, so send success
 		sendSuccess(from, Protocol.DELETE, filename);
@@ -310,7 +310,7 @@ public class ManagerNode {
 		// remove permissions
 
 		this.node.printVerbose("Blanking permissions for file: " + filename);
-		this.RWcache.revoke(filename);
+		this.filePermissionCache.revoke(filename);
 
 		// look for pending requests
 
@@ -363,7 +363,7 @@ public class ManagerNode {
 		 * shouldn't be a create or delete (which require RW, so send W{F,D}
 		 * messages instead)
 		 */
-		this.RWcache.revoke(filename);
+		this.filePermissionCache.revoke(filename);
 		this.node.printVerbose("Revoking permission on file: " + filename + " for client: " + from);
 		
 		Integer destAddr = pendingReadPermissionRequests.remove(filename);
@@ -375,7 +375,7 @@ public class ManagerNode {
 			}
 
 			// Add to RO list
-			this.RWcache.giveRO(destAddr, filename);
+			this.filePermissionCache.giveRO(destAddr, filename);
 		}
 
 	}
@@ -396,7 +396,7 @@ public class ManagerNode {
 		// look for pending request
 		boolean foundPendingRequest = false;
 		this.node.printVerbose("Revoking permission on file: " + filename + " for client: " + from);
-		this.RWcache.revoke(filename);
+		this.filePermissionCache.revoke(filename);
 		
 		// check creates
 		Integer destAddr = pendingRPCCreateRequests.remove(filename);
@@ -437,7 +437,7 @@ public class ManagerNode {
 		}
 
 		// update the status of the client who sent the WD
-		Integer rw = this.RWcache.hasRW(filename);
+		Integer rw = this.filePermissionCache.hasRW(filename);
 		if (rw == null || rw != from) {
 			node.printError("WD received from client w/o RW"); // for now
 			sendError(from, Protocol.DELETE, filename,
@@ -445,7 +445,7 @@ public class ManagerNode {
 		} else {
 			this.node.printVerbose("Blanking ownership permissions for file: "
 					+ filename);
-			this.RWcache.revoke(filename);
+			this.filePermissionCache.revoke(filename);
 		}
 	}
 
@@ -541,13 +541,13 @@ public class ManagerNode {
 		}
 
 		// Find out if anyone has RW
-		Integer rw = RWcache.hasRW(filename);
+		Integer rw = filePermissionCache.hasRW(filename);
 
 		if (rw != null) {
 			sendRequest(rw, filename, Protocol.WF);
 			pendingRPCCreateRequests.put(filename, from);
 			lockFile(filename, from);
-		} else if (checkCacheExistence(filename)) {
+		} else if (checkExistence(filename)) {
 			// Someone has RO, so throw an error that the file exists already
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
@@ -557,7 +557,7 @@ public class ManagerNode {
 				try {
 					this.node.fs.createFileTX(from, filename);
 					this.sendSuccess(from, Protocol.CREATE, filename);
-					this.RWcache.giveRW(from, filename);
+					this.filePermissionCache.giveRW(from, filename);
 					this.node.printVerbose("Giving " + from + " RW on file: "
 							+ filename);
 				} catch (TransactionException e) {
@@ -580,10 +580,10 @@ public class ManagerNode {
 			return;
 		}
 
-		Integer rw = this.RWcache.hasRW(filename);
-		List<Integer> ro = this.RWcache.hasRO(filename);
+		Integer rw = this.filePermissionCache.hasRW(filename);
+		List<Integer> ro = this.filePermissionCache.hasRO(filename);
 
-		if (!checkCacheExistence(filename)) {
+		if (!checkExistence(filename)) {
 			// File doesn't exist, send an error to the requester
 			sendError(from, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
@@ -622,7 +622,7 @@ public class ManagerNode {
 					this.node.send(from, Protocol.SUCCESS, Client.emptyPayload);
 					this.node.printVerbose("Giving client: " + from
 							+ " RW on file: " + filename);
-					this.RWcache.giveRW(from, filename);
+					this.filePermissionCache.giveRW(from, filename);
 				} catch (TransactionException e) {
 					this.node
 							.printVerbose("TransactionException on manager for file: "
@@ -645,12 +645,11 @@ public class ManagerNode {
 	 *            The filename
 	 * @return
 	 */
-	private boolean checkCacheExistence(String filename) {
+	private boolean checkExistence(String filename) {
 
-		// TODO: HIGH: This seems like it should just be checkExistence
-		if (this.RWcache.hasRO(filename) != null)
+		if (this.filePermissionCache.hasRO(filename) != null)
 			return true;
-		else if (this.RWcache.hasRW(filename) != null)
+		else if (this.filePermissionCache.hasRW(filename) != null)
 			return true;
 		else if (this.node.fs.fileExistsTX(this.node.addr, filename)) 
 			return true;
@@ -675,15 +674,15 @@ public class ManagerNode {
 		lockFile(filename, from);
 
 		// address of node w/ rw or null
-		Integer rw = RWcache.hasRW(filename);
-		List<Integer> ro = RWcache.hasRO(filename);
+		Integer rw = filePermissionCache.hasRW(filename);
+		List<Integer> ro = filePermissionCache.hasRO(filename);
 
-		if (!checkCacheExistence(filename)) {
+		if (!checkExistence(filename)) {
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileDoesNotExist);
 		}
 
-		if (rw != null && ro != null) {
+		if (rw != null && ro != null || ro.size() == 0) {
 			String problem = "simultaneous RW (" + rw + ") and ROs ("
 					+ ro.toString() + ") detected on file: " + filename;
 			node.printError(problem);
@@ -702,18 +701,21 @@ public class ManagerNode {
 			pendingICs.put(filename, ro);
 			for (int i : ro) {
 				// Invalidate all ROs
-				sendRequest(i, filename, Protocol.IV);
+				if (i != from && ro.size() > 1)
+					sendRequest(i, filename, Protocol.IV);
+				else {
+					try {
+						sendFile(from, filename, responseProtocol);
+					} catch (IOException e) {
+						sendError(from, filename, e.getMessage());
+					}
+				}
 			}
 			if (receivedProtocol == Protocol.RQ)
 				pendingReadPermissionRequests.put(filename, from);
 			else
 				pendingWritePermissionRequests.put(filename, from);
 		} else { // no one has RW or RO
-			/*
-			 * TODO: Should this be an error - I think it currently sends
-			 * whatever is on disk?
-			 */
-
 			// send file to requester
 			try {
 				sendFile(from, filename, responseProtocol);
@@ -741,11 +743,10 @@ public class ManagerNode {
 		} else {
 
 			// update the status of the client who sent the IC
-			List<Integer> ro = RWcache.hasRO(filename);
+			List<Integer> ro = filePermissionCache.hasRO(filename);
 			ro.remove(from);
 			this.node.printVerbose("Changing status of client: " + from
 					+ " to RO for file: " + filename);
-			this.RWcache.RO.put(filename, ro);
 
 			this.node.printVerbose("Changing client: " + from + " to IV");
 
@@ -792,7 +793,7 @@ public class ManagerNode {
 	public void receiveRC(int from, String filename) {
 		this.node.printVerbose("Changing client: " + from + " to RO");
 
-		this.RWcache.giveRO(from, filename);
+		this.filePermissionCache.giveRO(from, filename);
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -806,7 +807,7 @@ public class ManagerNode {
 
 		this.node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
-		this.RWcache.giveRW(from, filename);
+		this.filePermissionCache.giveRW(from, filename);
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -825,7 +826,7 @@ public class ManagerNode {
 			throws IOException {
 		StringBuilder sendMsg = new StringBuilder();
 
-		if (!checkCacheExistence(filename)) {
+		if (!checkExistence(filename)) {
 			// Manager doesn't have the file
 			sendError(to, Protocol.ERROR, filename, ErrorCode.FileDoesNotExist);
 		} else {
@@ -1006,7 +1007,7 @@ public class ManagerNode {
 		transactionsInProgress.remove(destAddr);
 
 		// transfer ownership of files
-		for (Entry<String, Integer> entry : this.RWcache.RW.entrySet()) {
+		for (Entry<String, Integer> entry : this.filePermissionCache.RW.entrySet()) {
 			Integer newOwner;
 			if (entry.getValue().equals(destAddr)) {
 				String filename = entry.getKey();
@@ -1014,7 +1015,7 @@ public class ManagerNode {
 				this.node.printVerbose("Node: " + destAddr
 						+ " failed. Transferring ownership" + " of file: "
 						+ filename + " to replica node: " + newOwner);
-				this.RWcache.giveRW(newOwner, filename);
+				this.filePermissionCache.giveRW(newOwner, filename);
 				// if someone was waiting for this file, send a WF/RF to the
 				// replica
 				if (pendingWritePermissionRequests.remove(filename) != null) {
