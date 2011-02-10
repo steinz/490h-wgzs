@@ -682,7 +682,7 @@ public class ManagerNode {
 					ErrorCode.FileDoesNotExist);
 		}
 
-		if (rw != null && (ro != null || ro.size() == 0)) {
+		if (rw != null && ro != null && ro.size() > 0) {
 			String problem = "simultaneous RW (" + rw + ") and ROs ("
 					+ ro.toString() + ") detected on file: " + filename;
 			node.printError(problem);
