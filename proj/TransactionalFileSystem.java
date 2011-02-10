@@ -146,8 +146,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 						contents.append(reader.readLine());
 						contents.append(lineSeparator);
 					}
-					return new PendingOperation(client, op, filename, contents
-							.toString());
+					return new PendingOperation(client, op, filename,
+							contents.toString());
 				} else {
 					return new PendingOperation(client, op, filename);
 				}
@@ -198,15 +198,20 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		protected void apply(PendingOperation op) throws IOException {
 			switch (op.op) {
 			case CREATE:
-				fs.createFile(op.filename);
+				if (!Utility.fileExists(fs.n, op.filename)) {
+					fs.createFile(op.filename);
+				}
 				break;
 			case DELETE:
-				fs.deleteFile(op.filename);
+				if (Utility.fileExists(fs.n, op.filename)) {
+					fs.deleteFile(op.filename);
+				}
 				break;
 			case PUT:
 				fs.writeFile(op.filename, op.contents, false);
 				break;
 			case APPEND:
+				//TODO: HIGH: This can double append if a failure occurs during redo
 				fs.writeFile(op.filename, op.contents, true);
 				break;
 			default:

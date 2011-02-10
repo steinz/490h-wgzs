@@ -115,6 +115,11 @@ public class ClientNode {
 	 * Whether or not the client is waiting for a response to it's txcommit
 	 */
 	protected boolean waitingForCommitSuccess;
+	
+	/**
+	 * True iff the client is waiting to satisfy all PendingOperations to commit
+	 */
+	protected boolean waitingToCommit;
 
 	/**
 	 * Commands queued because the client is waiting for a commit result
@@ -138,6 +143,7 @@ public class ClientNode {
 		this.transacting = false;
 		this.waitingForCommitSuccess = false;
 		this.waitingForCommitQueue = new LinkedList<String>();
+		this.waitingToCommit = false;
 		this.managerAddr = -1;
 	}
 
@@ -455,7 +461,9 @@ public class ClientNode {
 		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
-		} else {
+		} else if (pendingOperations.size() > 0) {
+			waitingToCommit = true;
+		}else {
 			// transacting is updated when a response is received
 			waitingForCommitSuccess = true;
 			sendToManager(Protocol.TX_COMMIT);
@@ -682,6 +690,12 @@ public class ClientNode {
 				String request = queuedRequests.poll();
 				onCommand(request);
 			}
+		}
+		
+		// send a commit if one is waiting
+		if (pendingOperations.isEmpty() && waitingToCommit) {
+			waitingToCommit = false;
+			onCommand("txcommit");
 		}
 	}
 
