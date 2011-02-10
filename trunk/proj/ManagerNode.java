@@ -193,6 +193,11 @@ public class ManagerNode {
 	private Map<String, Integer> pendingRPCCreateRequests;
 
 	/**
+	 * A set of pending commit requests, used to make sure that commits don't occur before requests are handled
+	 */
+	private Map<Integer, QueuedFileRequest> pendingCommitRequests;
+	
+	/**
 	 * A map detailing who replicates who, for example, replicaNode.get(1) = 2
 	 */
 	private Map<Integer, Integer> replicaNode;
@@ -215,6 +220,7 @@ public class ManagerNode {
 		this.pendingWritePermissionRequests = new HashMap<String, Integer>();
 		this.pendingRPCDeleteRequests = new HashMap<String, Integer>();
 		this.pendingRPCCreateRequests = new HashMap<String, Integer>();
+		this.pendingCommitRequests = new HashMap<Integer, QueuedFileRequest>();
 		this.transactionsInProgress = new HashSet<Integer>();
 		this.replicaNode = new HashMap<Integer, Integer>();
 		this.cachedFiles = new HashSet<String>();
@@ -427,6 +433,9 @@ public class ManagerNode {
 		 * shouldn't be a create or delete (which require RW, so send W{F,D}
 		 * messages instead)
 		 */
+		cacheRW.remove(filename);
+		this.node.printVerbose("Revoking permission on file: " + filename + " for client: " + from);
+		
 		Integer destAddr = pendingReadPermissionRequests.remove(filename);
 		if (destAddr != null) {
 			try {
@@ -461,7 +470,9 @@ public class ManagerNode {
 
 		// look for pending request
 		boolean foundPendingRequest = false;
-
+		this.node.printVerbose("Revoking permission on file: " + filename + " for client: " + from);
+		cacheRW.remove(filename);
+		
 		// check creates
 		Integer destAddr = pendingRPCCreateRequests.remove(filename);
 		if (destAddr != null) {
@@ -553,19 +564,9 @@ public class ManagerNode {
 			sendError(from, "", "tx not in progress on client");
 		}
 
-		/*
-		 * TODO: HIGH: I might not be done servicing all the requests I received
-		 * before this (could be waiting for RD for example), I need to queue
-		 * everything received after this, complete everything received before,
-		 * and then service this operation (and then anything queued) - our
-		 * current queueing mechanism can't handle this because it is keyed one
-		 * filenames... Maybe we can lock a transaction in progress whenever we
-		 * have to stall and do a F/D chain?
-		 * 
-		 * UPDATE: This might actually be fixed by the client queuing
-		 * commits/aborts until they have unlocked all of their files locally
-		 */
-
+		if (checkPermissionsForClient(from))
+			pendingCommitRequests.put(from, new QueuedFileRequest(from, Protocol.TX_COMMIT, Client.emptyPayload));
+		
 		try {
 			this.node.fs.commitTransaction(from);
 		} catch (IOException e) {
@@ -878,7 +879,6 @@ public class ManagerNode {
 			cacheRO.put(filename, ro);
 		}
 		ro.add(from);
-		Integer rw = cacheRW.get(filename);
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -890,10 +890,6 @@ public class ManagerNode {
 
 	public void receiveWC(int from, String filename) {
 
-		if (cacheRW.get(filename) == from) {
-			sendError(from, Protocol.WC, filename,
-					ErrorCode.PrivilegeDisagreement);
-		}
 		this.node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
 		cacheRW.put(filename, from);
@@ -938,16 +934,48 @@ public class ManagerNode {
 		this.node.printVerbose("manager unlocking file: " + filename);
 		this.node.logSynopticEvent("MANAGER-UNLOCK");
 		lockedFiles.remove(filename);
+		int queuedRequester = -1;
 
 		Queue<QueuedFileRequest> outstandingRequests = queuedFileRequests
 				.get(filename);
 		while (outstandingRequests != null) { // TODO: size > 0 check?
 			QueuedFileRequest nextRequest = outstandingRequests.poll();
 			if (nextRequest != null) {
+				queuedRequester = nextRequest.from;
 				this.node.onRIOReceive(nextRequest.from, nextRequest.protocol,
 						nextRequest.msg);
 			}
 		}
+		
+		// Was a node waiting for this file request to process?
+		if (queuedRequester != -1 && pendingCommitRequests.containsKey(queuedRequester)){
+			if (checkPermissionsForClient(queuedRequester))
+			{
+				QueuedFileRequest commitRequest = pendingCommitRequests.remove(queuedRequester);
+				this.node.onRIOReceive(commitRequest.from, commitRequest.protocol,
+						commitRequest.msg);
+			}
+		}
+		
+	}
+	
+	/**
+	 * Checks the pending permission request caches for a client
+	 * @param from
+	 * @return
+	 */
+	protected boolean checkPermissionsForClient(int from){
+		return (checkPermissionsHelper(from, pendingWritePermissionRequests) && 
+				checkPermissionsHelper(from, pendingReadPermissionRequests));
+	
+	}
+	
+	protected boolean checkPermissionsHelper(int from, Map<String, Integer> struct) {
+		for (Entry<String, Integer> entry : struct.entrySet()) {
+			if (entry.getValue() == from)
+				return false;
+		}
+		return true;
 	}
 
 	/**
