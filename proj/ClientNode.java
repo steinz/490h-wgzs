@@ -463,6 +463,7 @@ public class ClientNode {
 					"client not performing a transaction");
 		} else if (pendingOperations.size() > 0) {
 			waitingToCommit = true;
+			node.printVerbose("queueing commit");
 		} else {
 			// transacting is updated when a response is received
 			waitingForCommitSuccess = true;
