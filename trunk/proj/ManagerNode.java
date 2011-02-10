@@ -509,7 +509,8 @@ public class ManagerNode {
 		 */
 
 		// unlock files
-		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
+		Set<Entry<String, Integer>> keys = lockedFiles.entrySet();
+		for (Entry<String, Integer> entry : keys) {
 			if (entry.getValue() == from) {
 				unlockFile(entry.getKey());
 			}
