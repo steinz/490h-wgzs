@@ -490,7 +490,7 @@ public class ManagerNode {
 			return;
 		}
 
-		if (checkPermissionsForClient(from))
+		if (clientHasPendingPermissions(from))
 			pendingCommitRequests.put(from, new QueuedFileRequest(from, Protocol.TX_COMMIT, Client.emptyPayload));
 		
 		try {
@@ -723,6 +723,7 @@ public class ManagerNode {
 			if (receivedProtocol == Protocol.RQ){
 				pendingReadPermissionRequests.put(filename, from);
 				return;
+			}
 			else{
 				pendingWritePermissionRequests.put(filename, from);
 				return;
@@ -879,7 +880,7 @@ public class ManagerNode {
 		
 		// Was a node waiting for this file request to process?
 		if (queuedRequester != -1 && pendingCommitRequests.containsKey(queuedRequester)){
-			if (checkPermissionsForClient(queuedRequester))
+			if (clientHasPendingPermissions(queuedRequester))
 			{
 				QueuedFileRequest commitRequest = pendingCommitRequests.remove(queuedRequester);
 				this.node.onRIOReceive(commitRequest.from, commitRequest.protocol,
@@ -891,10 +892,10 @@ public class ManagerNode {
 	
 	/**
 	 * Checks the pending permission request caches for a client
-	 * @param from
-	 * @return
+	 * @param from The client to check
+	 * @return False if this client has no pending permission requests, but True if the client has no pending permission requests
 	 */
-	protected boolean checkPermissionsForClient(int from){
+	protected boolean clientHasPendingPermissions(int from){
 		return (checkPermissionsHelper(from, pendingWritePermissionRequests) && 
 				checkPermissionsHelper(from, pendingReadPermissionRequests));
 	
