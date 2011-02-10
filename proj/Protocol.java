@@ -52,10 +52,13 @@ public class Protocol {
 	public static final int TX_FAILURE = 24;
 	public static final int HEARTBEAT = 25;
 
+	public static final int MANAGERIS = 26;
+	
 	// Command Status Result Types
 	public static final int SUCCESS = 125;
 	public static final int ERROR = 126;
 
+	
 	/*
 	 * END MESSAGE TYPES
 	 */

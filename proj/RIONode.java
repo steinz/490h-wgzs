@@ -19,6 +19,11 @@ import java.util.UUID;
  * overriding the onReceive() method to include a call to super.onReceive()
  */
 public abstract class RIONode extends Node {
+	/**
+	 * Static empty payload for use by messages that don't have payloads
+	 */
+	protected static final byte[] emptyPayload = new byte[0];
+
 	protected ReliableInOrderMsgLayer RIOLayer;
 
 	/**
@@ -63,8 +68,7 @@ public abstract class RIONode extends Node {
 	@Override
 	public void send(int destAddr, int protocol, byte[] payload) {
 		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
-				+ destAddr + " with payload: "
-				+ packetBytesToString(payload));
+				+ destAddr + " with payload: " + packetBytesToString(payload));
 		super.send(destAddr, protocol, payload);
 	}
 
@@ -76,6 +80,30 @@ public abstract class RIONode extends Node {
 				+ " to " + destAddr + " with payload: "
 				+ packetBytesToString(payload));
 		RIOLayer.RIOSend(destAddr, protocol, payload);
+	}
+
+	/**
+	 * Send a message using the reliable, in-order delivery layer with no
+	 * payload
+	 */
+	public void RIOSend(int destAddr, int protocol) {
+		RIOSend(destAddr, protocol, emptyPayload);
+	}
+
+	/**
+	 * Broadcast a message
+	 */
+	public void broadcast(int protocol, byte[] payload) {
+		printVerbose("broadcasting " + Protocol.protocolToString(protocol)
+				+ " with payload: " + packetBytesToString(payload));
+		super.broadcast(protocol, payload);
+	}
+	
+	/**
+	 * Broadcast a message with no payload
+	 */
+	public void broadcast(int protocol) {
+		broadcast(protocol, emptyPayload);
 	}
 
 	/**
@@ -152,6 +180,6 @@ public abstract class RIONode extends Node {
 	public String toString() {
 		return "RIONode|SessionID:" + ID + "|RIOLayer:" + RIOLayer.toString();
 	}
-	
+
 	public abstract void killNode(int destAddr);
 }
