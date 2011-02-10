@@ -178,7 +178,7 @@ public class ManagerNode {
 	 */
 	private Map<Integer, Integer> replicaNode;
 
-	private static final Integer TIMEOUT = 5;
+	private static final Integer TIMEOUT = 10;
 
 	/**
 	 * A set of node addresses currently performing transactions

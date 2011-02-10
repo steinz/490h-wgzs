@@ -358,18 +358,18 @@ public class ClientNode {
 	 * Used for project2 to tell a node it is the manager.
 	 */
 	public void managerHandler(StringTokenizer tokens, String line) {
-		if (!node.isManager) {
-			node.printInfo("promoted to manager");
-			node.isManager = true;
-			node.managerFunctions = new ManagerNode(node);
+		node.printInfo("promoted to manager");
+		node.isManager = true;
+		node.managerFunctions = new ManagerNode(node);
 
-			/*
-			 * TODO: This should probably restart the node as a manager (call a
-			 * different start method in Client)
-			 */
-		} else {
-			node.printInfo("already manager");
-		}
+		/*
+		 * TODO: This should probably restart the node as a manager (call a
+		 * different start method in Client) that sets up state
+		 */
+
+		node.broadcast(Protocol.MANAGERIS,
+				Utility.stringToByteArray(node.addr + ""));
+
 	}
 
 	/**

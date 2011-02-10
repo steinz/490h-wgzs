@@ -114,11 +114,6 @@ public class Client extends RIONode {
 	protected static int clientMaxWaitingForCommitQueueSize = 10;
 
 	/**
-	 * Static empty payload for use by messages that don't have payloads
-	 */
-	protected static final byte[] emptyPayload = new byte[0];
-
-	/**
 	 * Whether or not this node is the manager for project 2.
 	 */
 	protected boolean isManager;
@@ -210,16 +205,29 @@ public class Client extends RIONode {
 		printVerbose("received " + Protocol.protocolToString(protocol)
 				+ " from Universe, giving to RIOLayer");
 
+		if (protocol == Protocol.MANAGERIS) {
+			receiveMANAGERIS(from, msg);
+			return;
+		}
+
 		/*
 		 * Manager restarted or is talking to you for the first time - whatever
 		 * a client was doing has been abandoned by the manager, so unlock
 		 * everything locally
+		 * 
+		 * TODO: Pull some of the RIO HANDSHAKE handling up here?
 		 */
 		if (!isManager && protocol == Protocol.HANDSHAKE) {
 			clientFunctions.unlockAll();
 		}
 
 		super.onReceive(from, protocol, msg);
+	}
+
+	protected void receiveMANAGERIS(Integer from, byte[] msg) {
+		String msgStr = Utility.byteArrayToString(msg);
+		this.clientFunctions.managerAddr = Integer.parseInt(msgStr);
+		printInfo("setting manager address to " + from);
 	}
 
 	/**
@@ -238,53 +246,36 @@ public class Client extends RIONode {
 
 		String msgString = Utility.byteArrayToString(msg);
 
+		// TODO: If manager but not managing, send MANAGERIS to client
+
 		/*
-
-		// TODO: Replace massive switch w/ dynamic dispatch - started below
-		
-		// Turn the protocol into a message type
-		MessageType mt = MessageType.ordinalToMessageType(protocol);
-
-		// Verify we have a correct message type
-		if (mt == null) {
-			printError("invalid message ordinal " + protocol + " received");
-			return;
-		}
-
-		// Find the instance to handle this message type
-		Object instance = null;
-		switch (mt.handlingClass) {
-		case Client:
-			instance = this;
-			break;
-		case ClientNode:
-			instance = clientFunctions;
-			break;
-		case ManagerNode:
-			instance = managerFunctions;
-			break;
-		case ClientAndManagerNode:
-			instance = isManager ? managerFunctions : clientFunctions;
-			break;
-		}
-
-		// Invalid message type for my node type (manager got client-only, etc)
-		if (instance == null) {
-			printError("unhandled message type " + mt + " received");
-			return;
-		}
-
-		// route message
-		try {
-			Class<?> handlingClass = instance.getClass();
-			Class<?>[] paramTypes = { int.class, String.class };
-			Method handler = handlingClass.getMethod("receive" + mt.name(),
-					paramTypes);
-			handler.invoke(from, msgString);
-		} catch (Exception e) {
-			printError(e);
-		}
-        */
+		 * 
+		 * // TODO: Replace massive switch w/ dynamic dispatch - started below
+		 * 
+		 * // Turn the protocol into a message type MessageType mt =
+		 * MessageType.ordinalToMessageType(protocol);
+		 * 
+		 * // Verify we have a correct message type if (mt == null) {
+		 * printError("invalid message ordinal " + protocol + " received");
+		 * return; }
+		 * 
+		 * // Find the instance to handle this message type Object instance =
+		 * null; switch (mt.handlingClass) { case Client: instance = this;
+		 * break; case ClientNode: instance = clientFunctions; break; case
+		 * ManagerNode: instance = managerFunctions; break; case
+		 * ClientAndManagerNode: instance = isManager ? managerFunctions :
+		 * clientFunctions; break; }
+		 * 
+		 * // Invalid message type for my node type (manager got client-only,
+		 * etc) if (instance == null) { printError("unhandled message type " +
+		 * mt + " received"); return; }
+		 * 
+		 * // route message try { Class<?> handlingClass = instance.getClass();
+		 * Class<?>[] paramTypes = { int.class, String.class }; Method handler =
+		 * handlingClass.getMethod("receive" + mt.name(), paramTypes);
+		 * handler.invoke(from, msgString); } catch (Exception e) {
+		 * printError(e); }
+		 */
 
 		try {
 			switch (protocol) {

@@ -1,5 +1,3 @@
-import javax.net.ssl.HandshakeCompletedEvent;
-
 /**
  * CSE 490h
  * 
@@ -14,7 +12,8 @@ public enum MessageType {
 
 	ACK(HandlingClass.RIOLayer), HandshakeCompletedEvent(HandlingClass.RIOLayer),
 
-	NOOP(HandlingClass.Client), HEARTBEAT(HandlingClass.Client),
+	NOOP(HandlingClass.Client), HEARTBEAT(HandlingClass.Client), MANAGERIS(
+			HandlingClass.Client),
 
 	CREATE(HandlingClass.ManagerNode), DELETE(HandlingClass.ManagerNode), WQ(
 			HandlingClass.ManagerNode), RQ(HandlingClass.ManagerNode), WC(
