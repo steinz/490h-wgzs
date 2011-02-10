@@ -487,6 +487,7 @@ public class ManagerNode {
 	public void receiveTX_COMMIT(int from) {
 		if (!transactionsInProgress.contains(from)) {
 			sendError(from, "", "tx not in progress on client");
+			return;
 		}
 
 		if (checkPermissionsForClient(from))

@@ -115,7 +115,7 @@ public class ClientNode {
 	 * Whether or not the client is waiting for a response to it's txcommit
 	 */
 	protected boolean waitingForCommitSuccess;
-	
+
 	/**
 	 * True iff the client is waiting to satisfy all PendingOperations to commit
 	 */
@@ -463,7 +463,7 @@ public class ClientNode {
 					"client not performing a transaction");
 		} else if (pendingOperations.size() > 0) {
 			waitingToCommit = true;
-		}else {
+		} else {
 			// transacting is updated when a response is received
 			waitingForCommitSuccess = true;
 			sendToManager(Protocol.TX_COMMIT);
@@ -660,10 +660,7 @@ public class ClientNode {
 	protected void receiveError(Integer from, String msgString) {
 		node.printError(msgString);
 
-		abortCurrentTransaction();
-
-		String filename = msgString.split("")[0];
-		unlockFile(filename);
+		// tx failure cleans up data structures
 	}
 
 	/**
@@ -691,7 +688,7 @@ public class ClientNode {
 				onCommand(request);
 			}
 		}
-		
+
 		// send a commit if one is waiting
 		if (pendingOperations.isEmpty() && waitingToCommit) {
 			waitingToCommit = false;
@@ -891,6 +888,7 @@ public class ClientNode {
 		// drop everything we're waiting for
 		unlockAll();
 		pendingOperations.clear();
+		queuedCommands.clear();
 		processWaitingForCommitQueue();
 	}
 
@@ -917,7 +915,8 @@ public class ClientNode {
 		cacheStatus.put(filename, CacheStatuses.ReadWrite);
 
 		PendingClientOperation intent = pendingOperations.get(filename);
-
+		pendingOperations.remove(filename);
+		
 		if (intent == null) {
 			node.printError(new MissingPendingRequestException(
 					"missing intent on file: " + filename));
