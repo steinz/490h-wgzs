@@ -111,7 +111,7 @@ public class ManagerNode {
 		}
 
 		/**
-		 * Return the list of addresses of nodes w/ RO on filename or null
+		 * Return the list of addresses of nodes w/ RO on filename or a new empty list
 		 */
 		public List<Integer> hasRO(String filename) {
 			if (RO.get(filename) == null)
@@ -601,7 +601,7 @@ public class ManagerNode {
 			// Someone other than the requester has RW status, get updates
 			sendRequest(rw, filename, Protocol.WF);
 			waitingForResponses = true;
-		} else if (ro != null && ro.size() != 0) {
+		} else if (ro.size() != 0) {
 			pendingICs.put(filename, ro);
 			for (Integer i : ro) {
 				/*
@@ -649,7 +649,7 @@ public class ManagerNode {
 	 */
 	private boolean checkExistence(String filename) {
 
-		if (this.filePermissionCache.hasRO(filename) != null)
+		if (this.filePermissionCache.hasRO(filename).size() > 0)
 			return true;
 		else if (this.filePermissionCache.hasRW(filename) != null)
 			return true;
@@ -684,7 +684,7 @@ public class ManagerNode {
 					ErrorCode.FileDoesNotExist);
 		}
 
-		if (rw != null && ro != null && ro.size() > 0) {
+		if (rw != null && ro.size() > 0) {
 			String problem = "simultaneous RW (" + rw + ") and ROs ("
 					+ ro.toString() + ") detected on file: " + filename;
 			node.printError(problem);
@@ -706,7 +706,7 @@ public class ManagerNode {
 		} 
 		
 		// Check RO status
-		if (!preserveROs && ro != null && ro.size() > 0) { // someone(s) have RO
+		if (!preserveROs && ro.size() > 0) { // someone(s) have RO
 			pendingICs.put(filename, ro);
 			for (int i : ro) {
 				// Invalidate all ROs
