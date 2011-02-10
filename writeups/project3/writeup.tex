@@ -38,7 +38,7 @@ Configuration Commands: manager, manageris <addr>, handshake <addr>
 All operations performed outside of transactions are semantically implicity wrapped inside of a txstart and txcommit by the manager.
 However, in our actual implementaion, different code runs if the client is or isn't currently performing a tx for performance reasons. \\
 
-\textbf{File System Semantics:}
+\textbf{File System Semantics:} \\
 
 A file exists and will be accessible to any node in the system iff it has been created by some node in the system outside of a tx or during a committed tx 
 and it hasn't been deleted outside of a tx or during a committed tx since it was created.
@@ -52,9 +52,9 @@ When this happens, the manager tells the client to report its changes and lose R
 If the client fails to respond to the manager's request, the manager asks one of the client's replicas for the file instead.
 
 If no client has ReadWrite access to a file, any number of clients can have ReadOnly access to that file.
-The manager explicitly invalidates these permissions before granting anyone else ReadWrite access to that file.
+The manager explicitly invalidates these permissions before granting anyone else ReadWrite access to that file. \\
 
-\textbf{Serialization:}
+\textbf{Serialization:} \\
 
 We employ client-side file-level locking to prevent a client from requesting permission to the same file twice in a row.
 For example, say a client doesn't have ReadWrite access to the file test.txt and the client receives the commands:
@@ -93,7 +93,7 @@ It would not be difficult for the manager to ensure clients lock files in order,
 
 \textbf{Transaction Semantics:} \\
 
-A client is considered to be transacting until it receives a TX_SUCCESS or TX_FAILURE from the manager.
+A client is considered to be transacting until it receives a TX\_SUCCESS or TX\_FAILURE from the manager.
 The client will queue all commands it is given until it receives a tx response from the manager for its outstanding transaction. \\
 
 \textbf{Replication:} \\
@@ -114,14 +114,16 @@ The server will then immediately change ownership of any files that client had o
 
 \textbf{TFS Log Entry Format:} \\
 
+\begin{verbatim}
 <client_address>
 <Operation type>
 <filename>
 <contents_line_count>
 <contents>
+\end{verbatim}
 
-contents_line_count is -1 for operations that don't have contents
-there is a line separator after each <entry> including the contents
+contents\_line\_count is -1 for operations that don't have contents
+there is a line separator after each $<entry>$ including the contents
 tx ops don't have a filename or anything after
 
 \end{document}
