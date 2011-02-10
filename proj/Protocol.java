@@ -8,6 +8,8 @@ import java.lang.reflect.Field;
 
 /**
  * Contains details about the recognized protocols
+ * 
+ * TODO: HIGH: I hate this class - switch everything to use MessageType instead
  */
 public class Protocol {
 
@@ -57,7 +59,7 @@ public class Protocol {
 	/*
 	 * END MESSAGE TYPES
 	 */
-	
+
 	/**
 	 * Exclusive max valid message type
 	 */

@@ -170,7 +170,7 @@ public class Client extends RIONode {
 		this.clientFunctions = new ClientNode(this,
 				clientMaxWaitingForCommitQueueSize);
 
-		fs = null;
+		fs = null; // clear old tfs if restarting
 		try {
 			fs = new TransactionalFileSystem(this, tempFilename, logFilename,
 					logTempFilename, fsPurgeFrequency);
@@ -238,7 +238,53 @@ public class Client extends RIONode {
 
 		String msgString = Utility.byteArrayToString(msg);
 
-		// TODO: Replace massive switch w/ dynamic dispatch.
+		/*
+
+		// TODO: Replace massive switch w/ dynamic dispatch - started below
+		
+		// Turn the protocol into a message type
+		MessageType mt = MessageType.ordinalToMessageType(protocol);
+
+		// Verify we have a correct message type
+		if (mt == null) {
+			printError("invalid message ordinal " + protocol + " received");
+			return;
+		}
+
+		// Find the instance to handle this message type
+		Object instance = null;
+		switch (mt.handlingClass) {
+		case Client:
+			instance = this;
+			break;
+		case ClientNode:
+			instance = clientFunctions;
+			break;
+		case ManagerNode:
+			instance = managerFunctions;
+			break;
+		case ClientAndManagerNode:
+			instance = isManager ? managerFunctions : clientFunctions;
+			break;
+		}
+
+		// Invalid message type for my node type (manager got client-only, etc)
+		if (instance == null) {
+			printError("unhandled message type " + mt + " received");
+			return;
+		}
+
+		// route message
+		try {
+			Class<?> handlingClass = instance.getClass();
+			Class<?>[] paramTypes = { int.class, String.class };
+			Method handler = handlingClass.getMethod("receive" + mt.name(),
+					paramTypes);
+			handler.invoke(from, msgString);
+		} catch (Exception e) {
+			printError(e);
+		}
+        */
 
 		try {
 			switch (protocol) {
