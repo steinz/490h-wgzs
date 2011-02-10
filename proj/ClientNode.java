@@ -70,17 +70,15 @@ public class ClientNode {
 	protected Map<String, CacheStatuses> cacheStatus;
 
 	/*
-	 * TODO: Verify we need client side locking. I think the below case will be
-	 * handled better if we have it:
+	 * We have client side locking to handle the following type of cmd flows:
 	 * 
 	 * 1 put test hello
 	 * 
 	 * 1 delete test
 	 * 
-	 * I won't have RW yet on the delete, so I'll ask the manager for it, which
-	 * the manager will currently send an error on. Alternatively, the manager
-	 * could send me a RW, I send a RD, he sends an RD, I do the delete - but
-	 * this is a lot of messages compared to the zero sent if I just wait.
+	 * I should wait to get ReadWrite on test from the manager before executing
+	 * the second command - I don't send as many messages and the manager is
+	 * less likely to get confused
 	 */
 
 	/**
@@ -107,11 +105,6 @@ public class ClientNode {
 	 * Saves commands on client side locked files
 	 */
 	protected Map<String, Queue<String>> queuedCommands;
-
-	/**
-	 * Queue of tx{abort,commit}s waiting for all files to be unlocked
-	 */
-	protected Queue<String> queuedTxs;
 
 	/**
 	 * Whether or not the client is currently performing a transaction
@@ -142,7 +135,6 @@ public class ClientNode {
 		this.pendingOperations = new HashMap<String, PendingClientOperation>();
 		this.lockedFiles = new HashSet<String>();
 		this.queuedCommands = new HashMap<String, Queue<String>>();
-		this.queuedTxs = new LinkedList<String>();
 		this.transacting = false;
 		this.waitingForCommitSuccess = false;
 		this.waitingForCommitQueue = new LinkedList<String>();
@@ -165,7 +157,7 @@ public class ClientNode {
 			/*
 			 * TODO: figure out what we need to do to kill this object after the
 			 * node restarts, or if we should even restart the node at all - at
-			 * this point we don't know whether or not or TX succeeded
+			 * this point we don't know whether or not our TX succeeded
 			 */
 			node.restart();
 			return;
@@ -433,8 +425,6 @@ public class ClientNode {
 		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
-		} else if (lockedFiles.size() > 0) {
-			queuedTxs.add(line);
 		} else {
 			abortCurrentTransaction();
 			sendToManager(Protocol.TX_ABORT);
@@ -465,8 +455,6 @@ public class ClientNode {
 		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
-		} else if (lockedFiles.size() > 0) {
-			queuedTxs.add(line);
 		} else {
 			// transacting is updated when a response is received
 			waitingForCommitSuccess = true;
@@ -477,18 +465,13 @@ public class ClientNode {
 	/**
 	 * Sends a TX_START if not already performing a transaction
 	 * 
-	 * TODO: HIGH: Might have to queue things here... I think if
-	 * queuedTxs.size() > 0 or waitingForCommitQueue.size > 0? I'm not sure if
-	 * commands following the commit/abort will be queued correctly either - we
-	 * could just tell users to wait for response before starting another tx
-	 * maybe
-	 * 
 	 * @throws TransactionException
 	 * @throws UnknownManagerException
 	 * @throws IOException
 	 */
 	public void txstartHandler(StringTokenizer tokens, String line)
 			throws TransactionException, UnknownManagerException, IOException {
+		// this will be queued in onCommand if waitingForCommitSuccess
 		if (transacting) {
 			throw new TransactionException(
 					"client already performing a transaction");
@@ -677,14 +660,9 @@ public class ClientNode {
 
 	/**
 	 * Unlocks all files locally and clears queued txs
-	 * 
-	 * TODO: HIGH: should maybe be clearing other queues here too - see comments
-	 * in Client in onReceive; or maybe this object should just be reset when a
-	 * HANDSHAKE is received
 	 */
 	public void unlockAll() {
 		lockedFiles.clear();
-		queuedTxs.clear();
 	}
 
 	/**
@@ -704,12 +682,6 @@ public class ClientNode {
 				String request = queuedRequests.poll();
 				onCommand(request);
 			}
-		}
-
-		// process a queued tx command
-		if (queuedTxs.size() > 0) {
-			String request = queuedTxs.poll();
-			onCommand(request);
 		}
 	}
 
@@ -902,9 +874,10 @@ public class ClientNode {
 	 */
 	protected void receiveTX_FAILURE() {
 		abortCurrentTransaction();
+		// drop everything we're waiting for
+		unlockAll();
+		pendingOperations.clear();
 		processWaitingForCommitQueue();
-
-		// TODO: HIGH: process more queued tx commands?
 	}
 
 	/**
@@ -913,8 +886,6 @@ public class ClientNode {
 	protected void receiveTX_SUCCESS() {
 		commitCurrentTransaction();
 		processWaitingForCommitQueue();
-
-		// TODO: HIGH: process more queued tx commands?
 	}
 
 	/**
