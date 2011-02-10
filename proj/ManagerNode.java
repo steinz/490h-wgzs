@@ -942,6 +942,7 @@ public class ManagerNode {
 		this.node.RIOSend(destAddr, Protocol.ERROR, payload);
 		this.node.RIOSend(destAddr, Protocol.TX_FAILURE,
 				Utility.stringToByteArray(""));
+		transactionsInProgress.remove(destAddr);
 	}
 
 	public void sendError(int from, String filename, String message) {
@@ -950,6 +951,7 @@ public class ManagerNode {
 		this.node.RIOSend(from, Protocol.ERROR, payload);
 		this.node.RIOSend(from, Protocol.TX_FAILURE,
 				Utility.stringToByteArray(""));
+		transactionsInProgress.remove(from);
 	}
 
 	/**
