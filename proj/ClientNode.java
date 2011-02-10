@@ -777,7 +777,7 @@ public class ClientNode {
 		sendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
 	}
 
-	// TODO: EC: Send TFS.PendingOp objects here instead of strings
+	// TODO: Send TFS.PendingOp objects here instead of strings
 
 	/**
 	 * @param msgString
@@ -917,7 +917,7 @@ public class ClientNode {
 
 		PendingClientOperation intent = pendingOperations.get(filename);
 		pendingOperations.remove(filename);
-		
+
 		if (intent == null) {
 			node.printError(new MissingPendingRequestException(
 					"missing intent on file: " + filename));

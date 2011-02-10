@@ -15,18 +15,13 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 //NOTE: Implicit transactions are handled by cache coherency!
 
-/*
- * TODO: HIGH: If a client trys to do an operation that requires RW, make sure they have RW and abort 
- * them or send them a failure if they don't (see Writeup 3 > FS Semantics > Paragraph 4 )
- */
-
 // TODO: HIGH: I vote for sed s/from/client/g
 
 // TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
 // TODO: HIGH: TEST: Add to cache status for all files requested
 // TODO: HIGH: TEST: Deal with creates and deletes appropriately -  
 // 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
-// TODO: HIGH: Need to handle aborts, failures, and successes - every handler code path should end by sending something to the client (except {W,R,I}C) - this comment should persist
+// TODO: HIGH: TEST: Need to handle aborts, failures, and successes - every handler code path should end by sending something to the client (except {W,R,I}C) - this comment should persist
 // TODO: HIGH: TEST: Replicas - if client <x> goes down, and someone is requesting this file, we should request a copy from its replica
 /**
  * Replica scheme: 1 -> 2 2 -> 3 3 -> 4 4 -> 5 5 -> 1
@@ -43,17 +38,6 @@ public class ManagerNode {
 	 * A map of queued file requests, from filename -> Client request
 	 */
 	private Map<String, Queue<QueuedFileRequest>> queuedFileRequests;
-
-	/**
-	 * TODO: HIGH: It would be nice if our cache data structures enforced the
-	 * constraint that either: one client has RW, some number of clients have
-	 * RO, or no clients have RW or RO
-	 * 
-	 * If we put this in a class we can also log all changes in one place in
-	 * that class' wrapped giveRW, giveRO, etc methods
-	 * 
-	 * I like this kind of thing so here's what I think the class should be:
-	 */
 
 	/**
 	 * Encapsulates the RW and RO caches
@@ -257,10 +241,8 @@ public class ManagerNode {
 	 * 
 	 * 1 put test world
 	 * 
-	 * TOOD: HIGH: See Above - I think the second operation needs to be queued
-	 * until the get is resolved (test could have been deleted for example) - do
-	 * we handle this correctly
-	 * 
+	 * The second operation is queued by the client via it's locking mechanism
+	 *
 	 * Queues the given request if the file is locked and returns true. Returns
 	 * false if the file isn't locked. Also returns false if the file is locked
 	 * by the requesting client (i.e. the client is the one locking the file).
@@ -535,8 +517,6 @@ public class ManagerNode {
 
 	/**
 	 * Create RPC
-	 * 
-	 * TODO: HIGH: Is the client assuming they have RW now?
 	 */
 	public void receiveCreate(int from, String filename) {
 
