@@ -80,7 +80,11 @@ public class Logger {
 
 	public static void error(Node n, Throwable e) {
 		if (printError) {
-			errorPrintln(n, e.toString());
+			Throwable cause = e.getCause();
+			if (cause != null) {
+				error(n, cause);
+			}
+			errorPrintln(n, e.toString()); 
 			StackTraceElement[] trace = e.getStackTrace();
 			for (StackTraceElement st : trace) {
 				errorPrintln(n, st.toString());
