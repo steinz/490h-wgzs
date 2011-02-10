@@ -15,6 +15,11 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 //NOTE: Implicit transactions are handled by cache coherency!
 
+/*
+ * TODO: HIGH: If a client trys to do an operation that requires RW, make sure they have RW and abort 
+ * them or send them a failure if they don't (see Writeup 3 > FS Semantics > Paragraph 4 )
+ */
+
 // TODO: HIGH: I vote for sed s/from/client/g
 
 // TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
@@ -38,6 +43,17 @@ public class ManagerNode {
 	 * A map of queued file requests, from filename -> Client request
 	 */
 	private Map<String, Queue<QueuedFileRequest>> queuedFileRequests;
+
+	/**
+	 * TODO: HIGH: It would be nice if our cache data structures enforced the
+	 * constraint that either: one client has RW, some number of clients have
+	 * RO, or no clients have RW or RO
+	 * 
+	 * If we put this in a class we can also log all changes in one place in
+	 * that class' wrapped giveRW, giveRO, etc methods
+	 * 
+	 * I like this kind of thing so here's what I think the class should be:
+	 */
 
 	/**
 	 * Encapsulates the RW and RO caches
@@ -98,7 +114,10 @@ public class ManagerNode {
 		 * Return the list of addresses of nodes w/ RO on filename or null
 		 */
 		public List<Integer> hasRO(String filename) {
-			return RO.get(filename);
+			if (RO.get(filename) == null)
+				return new ArrayList<Integer>();
+			else
+				return RO.get(filename);
 		}
 
 		/**
@@ -150,11 +169,10 @@ public class ManagerNode {
 	private Map<String, Integer> pendingRPCCreateRequests;
 
 	/**
-	 * A set of pending commit requests, used to make sure that commits don't
-	 * occur before requests are handled
+	 * A set of pending commit requests, used to make sure that commits don't occur before requests are handled
 	 */
 	private Map<Integer, QueuedFileRequest> pendingCommitRequests;
-
+	
 	/**
 	 * A map detailing who replicates who, for example, replicaNode.get(1) = 2
 	 */
@@ -166,7 +184,7 @@ public class ManagerNode {
 	 * A set of node addresses currently performing transactions
 	 */
 	protected Set<Integer> transactionsInProgress;
-
+	
 	protected Cache filePermissionCache;
 
 	public ManagerNode(Client n) {
@@ -379,10 +397,9 @@ public class ManagerNode {
 
 		// look for pending request
 		boolean foundPendingRequest = false;
-		this.node.printVerbose("Revoking permission on file: " + filename
-				+ " for client: " + from);
+		this.node.printVerbose("Revoking permission on file: " + filename + " for client: " + from);
 		this.filePermissionCache.revoke(filename);
-
+		
 		// check creates
 		Integer destAddr = pendingRPCCreateRequests.remove(filename);
 		if (destAddr != null) {
@@ -583,7 +600,7 @@ public class ManagerNode {
 			// Someone other than the requester has RW status, get updates
 			sendRequest(rw, filename, Protocol.WF);
 			waitingForResponses = true;
-		} else if (ro.size() != 0) {
+		} else if (ro != null && ro.size() != 0) {
 			pendingICs.put(filename, ro);
 			for (Integer i : ro) {
 				/*
@@ -675,20 +692,20 @@ public class ManagerNode {
 		}
 
 		// Check RW status
-		if (rw != null) {
+		if (rw != null) { 
 			// Get updates
 			sendRequest(rw, filename, forwardingProtocol);
-			if (receivedProtocol == Protocol.RQ) {
+			if (receivedProtocol == Protocol.RQ){
 				pendingReadPermissionRequests.put(filename, from);
-				return;
-			} else {
-				pendingWritePermissionRequests.put(filename, from);
-				return;
 			}
-		}
-
+			else{
+				pendingWritePermissionRequests.put(filename, from);
+			}
+			return;
+		} 
+		
 		// Check RO status
-		if (!preserveROs && ro.size() > 0) { // someone(s) have RO
+		if (!preserveROs && ro != null && ro.size() > 0) { // someone(s) have RO
 			pendingICs.put(filename, ro);
 			for (int i : ro) {
 				// Invalidate all ROs
@@ -703,22 +720,22 @@ public class ManagerNode {
 					}
 				}
 			}
-			if (receivedProtocol == Protocol.RQ) {
+			if (receivedProtocol == Protocol.RQ){
 				pendingReadPermissionRequests.put(filename, from);
-				return;
-			} else {
-				pendingWritePermissionRequests.put(filename, from);
-				return;
 			}
-		}
-
-		// send file to requester, no one has RW or RO - or the request was a RQ
+			else{
+				pendingWritePermissionRequests.put(filename, from);
+			}
+			return;
+		} 
+		
+		// send file to requester, no one has RW or RO
 		try {
 			sendFile(from, filename, responseProtocol);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
 		}
-
+		
 		// unlock and priveleges updated by C message handlers
 	}
 
@@ -855,36 +872,31 @@ public class ManagerNode {
 						nextRequest.msg);
 			}
 		}
-
+		
 		// Was a node waiting for this file request to process?
-		if (queuedRequester != -1
-				&& pendingCommitRequests.containsKey(queuedRequester)) {
-			if (clientHasPendingPermissions(queuedRequester)) {
-				QueuedFileRequest commitRequest = pendingCommitRequests
-						.remove(queuedRequester);
-				this.node.onRIOReceive(commitRequest.from,
-						commitRequest.protocol, commitRequest.msg);
+		if (queuedRequester != -1 && pendingCommitRequests.containsKey(queuedRequester)){
+			if (clientHasPendingPermissions(queuedRequester))
+			{
+				QueuedFileRequest commitRequest = pendingCommitRequests.remove(queuedRequester);
+				this.node.onRIOReceive(commitRequest.from, commitRequest.protocol,
+						commitRequest.msg);
 			}
 		}
-
+		
 	}
-
+	
 	/**
 	 * Checks the pending permission request caches for a client
-	 * 
-	 * @param from
-	 *            The client to check
-	 * @return False if this client has no pending permission requests, but True
-	 *         if the client has no pending permission requests
+	 * @param from The client to check
+	 * @return False if this client has no pending permission requests, but True if the client has no pending permission requests
 	 */
-	protected boolean clientHasPendingPermissions(int from) {
-		return (checkPermissionsHelper(from, pendingWritePermissionRequests) && checkPermissionsHelper(
-				from, pendingReadPermissionRequests));
-
+	protected boolean clientHasPendingPermissions(int from){
+		return (checkPermissionsHelper(from, pendingWritePermissionRequests) && 
+				checkPermissionsHelper(from, pendingReadPermissionRequests));
+	
 	}
-
-	protected boolean checkPermissionsHelper(int from,
-			Map<String, Integer> struct) {
+	
+	protected boolean checkPermissionsHelper(int from, Map<String, Integer> struct) {
 		for (Entry<String, Integer> entry : struct.entrySet()) {
 			if (entry.getValue() == from)
 				return false;
@@ -1006,8 +1018,7 @@ public class ManagerNode {
 		transactionsInProgress.remove(destAddr);
 
 		// transfer ownership of files
-		for (Entry<String, Integer> entry : this.filePermissionCache.RW
-				.entrySet()) {
+		for (Entry<String, Integer> entry : this.filePermissionCache.RW.entrySet()) {
 			Integer newOwner;
 			if (entry.getValue().equals(destAddr)) {
 				String filename = entry.getKey();
