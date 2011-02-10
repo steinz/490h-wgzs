@@ -93,6 +93,11 @@ The server currently makes no guarantees to clients if they do not perform reque
 Clients can always abort themselves, which results in all locks freeing eventually.
 It would not be difficult for the manager to ensure clients lock files in order, but we haven't implemented it yet. \\
 
+\textbf{Transaction Semantics:} \\
+
+A client is considered to be transacting until it receives a TX_SUCCESS or TX_FAILURE from the manager.
+The client will queue all commands it is given until it receives a tx response from the manager for its outstanding transaction. \\
+
 \textbf{Replication:} \\
 
 In the middle of transactions, in order to avoid potential situations where the most current copy of the file is lost, we decided to implement replication. Whenever a client changes a file locally,
