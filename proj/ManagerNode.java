@@ -139,33 +139,6 @@ public class ManagerNode {
 		}
 	}
 
-	/**
-	 * A map of who has RW status on a given filename
-	 */
-	private Map<String, Integer> cacheRW;
-
-	/**
-	 * A map of who has RO status on a given filename
-	 */
-	private Map<String, List<Integer>> cacheRO;
-
-	/**
-	 * NOTE: This is why I was putting -1 in cacheRW for files.
-	 * 
-	 * RETORT: Isn't this redundant? When you want to check if something is
-	 * cached, why not just use a helper that does
-	 * 
-	 * (reduce or (map (cacheRW.containsKey, cacheRO.containsKey) filename))
-	 * 
-	 * err...
-	 * 
-	 * cacheRW.containsKey(filename) || cacheRO.containsKey(filename)
-	 * 
-	 * Even better, wrap everything inside a Cache class (see comment above
-	 * cachRW and cacheRO declarations)
-	 */
-	private Set<String> cachedFiles;
-
 	private Client node;
 	/**
 	 * List of nodes the manager is waiting for ICs from.
@@ -208,11 +181,11 @@ public class ManagerNode {
 	 * A set of node addresses currently performing transactions
 	 */
 	protected Set<Integer> transactionsInProgress;
+	
+	protected Cache RWcache;
 
 	public ManagerNode(Client n) {
 		node = n;
-		this.cacheRO = new HashMap<String, List<Integer>>();
-		this.cacheRW = new HashMap<String, Integer>();
 		this.lockedFiles = new HashMap<String, Integer>();
 		this.pendingICs = new HashMap<String, List<Integer>>();
 		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
@@ -223,7 +196,7 @@ public class ManagerNode {
 		this.pendingCommitRequests = new HashMap<Integer, QueuedFileRequest>();
 		this.transactionsInProgress = new HashSet<Integer>();
 		this.replicaNode = new HashMap<Integer, Integer>();
-		this.cachedFiles = new HashSet<String>();
+		this.RWcache = new Cache(this.node);
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -240,7 +213,7 @@ public class ManagerNode {
 		// give RW to the requester for filename
 		this.node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
-		cacheRW.put(filename, from);
+		this.RWcache.giveRW(from, filename);
 
 		// send success to requester
 		this.node.printVerbose("sending "
@@ -260,8 +233,7 @@ public class ManagerNode {
 
 		this.node
 				.printVerbose("Blanking all permissions for file: " + filename);
-		cacheRO.put(filename, new ArrayList<Integer>());
-		cacheRW.remove(filename);
+		this.RWcache.revoke(filename);
 
 		// no one had permissions, so send success
 		sendSuccess(from, Protocol.DELETE, filename);
@@ -316,47 +288,6 @@ public class ManagerNode {
 		}
 	}
 
-	/**
-	 * Returns who has current ownership of the file.
-	 * 
-	 * @param filename
-	 *            The filename
-	 * @return The client who owns this file, -1 if no one currently owns this
-	 *         file.
-	 * 
-	 */
-	public Integer checkRWClients(String filename) {
-
-		Integer clientNumber = -1; // Return -1 if no clients have ownership of
-		// this file
-
-		if (cacheRW.containsKey(filename)) {
-			clientNumber = cacheRW.get(filename);
-			return clientNumber;
-		} else
-			return null;
-	}
-
-	/**
-	 * Returns all clients that have RO status of the given file
-	 * 
-	 * @param filename
-	 *            The filename
-	 * @return The clients who have RO status on this file, may be empty if no
-	 *         one has RO status.
-	 */
-	public List<Integer> checkROClients(String filename) {
-		List<Integer> clients;
-
-		if (cacheRO.containsKey(filename)) {
-			clients = cacheRO.get(filename);
-		} else {
-			clients = new ArrayList<Integer>();
-		}
-
-		return clients;
-	}
-
 	public void receiveWD_DELETE(int from, String filename) {
 		// delete locally
 		try {
@@ -379,8 +310,7 @@ public class ManagerNode {
 		// remove permissions
 
 		this.node.printVerbose("Blanking permissions for file: " + filename);
-		cacheRW.remove(filename);
-		cacheRO.put(filename, new ArrayList<Integer>());
+		this.RWcache.revoke(filename);
 
 		// look for pending requests
 
@@ -433,7 +363,7 @@ public class ManagerNode {
 		 * shouldn't be a create or delete (which require RW, so send W{F,D}
 		 * messages instead)
 		 */
-		cacheRW.remove(filename);
+		this.RWcache.revoke(filename);
 		this.node.printVerbose("Revoking permission on file: " + filename + " for client: " + from);
 		
 		Integer destAddr = pendingReadPermissionRequests.remove(filename);
@@ -445,12 +375,7 @@ public class ManagerNode {
 			}
 
 			// Add to RO list
-			List<Integer> ro = cacheRO.get(filename);
-			if (ro == null) {
-				ro = new ArrayList<Integer>();
-				cacheRO.put(filename, ro);
-			}
-			ro.add(destAddr);
+			this.RWcache.giveRO(destAddr, filename);
 		}
 
 	}
@@ -471,7 +396,7 @@ public class ManagerNode {
 		// look for pending request
 		boolean foundPendingRequest = false;
 		this.node.printVerbose("Revoking permission on file: " + filename + " for client: " + from);
-		cacheRW.remove(filename);
+		this.RWcache.revoke(filename);
 		
 		// check creates
 		Integer destAddr = pendingRPCCreateRequests.remove(filename);
@@ -512,7 +437,7 @@ public class ManagerNode {
 		}
 
 		// update the status of the client who sent the WD
-		Integer rw = cacheRW.get(filename);
+		Integer rw = this.RWcache.hasRW(filename);
 		if (rw == null || rw != from) {
 			node.printError("WD received from client w/o RW"); // for now
 			sendError(from, Protocol.DELETE, filename,
@@ -520,7 +445,7 @@ public class ManagerNode {
 		} else {
 			this.node.printVerbose("Blanking ownership permissions for file: "
 					+ filename);
-			cacheRW.remove(filename);
+			this.RWcache.revoke(filename);
 		}
 	}
 
@@ -615,7 +540,7 @@ public class ManagerNode {
 		}
 
 		// Find out if anyone has RW
-		Integer rw = cacheRW.get(filename);
+		Integer rw = RWcache.hasRW(filename);
 
 		if (rw != null) {
 			sendRequest(rw, filename, Protocol.WF);
@@ -631,7 +556,7 @@ public class ManagerNode {
 				try {
 					this.node.fs.createFileTX(from, filename);
 					this.sendSuccess(from, Protocol.CREATE, filename);
-					cacheRW.put(filename, from);
+					this.RWcache.giveRW(from, filename);
 					this.node.printVerbose("Giving " + from + " RW on file: "
 							+ filename);
 				} catch (TransactionException e) {
@@ -654,8 +579,8 @@ public class ManagerNode {
 			return;
 		}
 
-		Integer rw = checkRWClients(filename);
-		List<Integer> ro = checkROClients(filename);
+		Integer rw = this.RWcache.hasRW(filename);
+		List<Integer> ro = this.RWcache.hasRO(filename);
 
 		if (!checkCacheExistence(filename)) {
 			// File doesn't exist, send an error to the requester
@@ -696,7 +621,7 @@ public class ManagerNode {
 					this.node.send(from, Protocol.SUCCESS, Client.emptyPayload);
 					this.node.printVerbose("Giving client: " + from
 							+ " RW on file: " + filename);
-					cacheRW.put(filename, from);
+					this.RWcache.giveRW(from, filename);
 				} catch (TransactionException e) {
 					this.node
 							.printVerbose("TransactionException on manager for file: "
@@ -722,20 +647,13 @@ public class ManagerNode {
 	private boolean checkCacheExistence(String filename) {
 
 		// TODO: HIGH: This seems like it should just be checkExistence
-
-		if (cachedFiles.contains(filename))
+		if (this.RWcache.hasRO(filename) != null)
 			return true;
-		else if (cacheRW.containsKey(filename) || cacheRO.containsKey(filename)) {
-			cachedFiles.add(filename);
+		else if (this.RWcache.hasRW(filename) != null)
 			return true;
-		} else if (Utility.fileExists(this.node, filename)) {
-			/*
-			 * TODO: HIGH: This should use fs.fileExists so the log is searched
-			 * as well as persistent storage - might be similar bugs elsewhere
-			 */
-			cachedFiles.add(filename);
+		else if (this.node.fs.fileExistsTX(this.node.addr, filename)) 
 			return true;
-		} else
+		else
 			return false;
 	}
 
@@ -756,15 +674,15 @@ public class ManagerNode {
 		lockFile(filename, from);
 
 		// address of node w/ rw or null
-		Integer rw = cacheRW.get(filename);
-		List<Integer> ro = checkROClients(filename);
+		Integer rw = RWcache.hasRW(filename);
+		List<Integer> ro = RWcache.hasRO(filename);
 
 		if (!checkCacheExistence(filename)) {
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileDoesNotExist);
 		}
 
-		if (rw != null && ro.size() > 0) {
+		if (rw != null && ro != null) {
 			String problem = "simultaneous RW (" + rw + ") and ROs ("
 					+ ro.toString() + ") detected on file: " + filename;
 			node.printError(problem);
@@ -822,11 +740,11 @@ public class ManagerNode {
 		} else {
 
 			// update the status of the client who sent the IC
-			List<Integer> ro = checkROClients(filename);
-			ro.remove(filename);
+			List<Integer> ro = RWcache.hasRO(filename);
+			ro.remove(from);
 			this.node.printVerbose("Changing status of client: " + from
 					+ " to RO for file: " + filename);
-			cacheRO.put(filename, ro);
+			this.RWcache.RO.put(filename, ro);
 
 			this.node.printVerbose("Changing client: " + from + " to IV");
 
@@ -873,12 +791,7 @@ public class ManagerNode {
 	public void receiveRC(int from, String filename) {
 		this.node.printVerbose("Changing client: " + from + " to RO");
 
-		List<Integer> ro = cacheRO.get(filename);
-		if (ro == null) {
-			ro = new ArrayList<Integer>();
-			cacheRO.put(filename, ro);
-		}
-		ro.add(from);
+		this.RWcache.giveRO(from, filename);
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -892,7 +805,7 @@ public class ManagerNode {
 
 		this.node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
-		cacheRW.put(filename, from);
+		this.RWcache.giveRW(from, filename);
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -1090,7 +1003,7 @@ public class ManagerNode {
 		transactionsInProgress.remove(destAddr);
 
 		// transfer ownership of files
-		for (Entry<String, Integer> entry : cacheRW.entrySet()) {
+		for (Entry<String, Integer> entry : this.RWcache.RW.entrySet()) {
 			Integer newOwner;
 			if (entry.getValue().equals(destAddr)) {
 				String filename = entry.getKey();
@@ -1098,7 +1011,7 @@ public class ManagerNode {
 				this.node.printVerbose("Node: " + destAddr
 						+ " failed. Transferring ownership" + " of file: "
 						+ filename + " to replica node: " + newOwner);
-				cacheRW.put(filename, newOwner);
+				this.RWcache.giveRW(newOwner, filename);
 				// if someone was waiting for this file, send a WF/RF to the
 				// replica
 				if (pendingWritePermissionRequests.remove(filename) != null) {
