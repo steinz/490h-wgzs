@@ -46,17 +46,6 @@ public class ManagerNode {
 	private Map<String, Queue<QueuedFileRequest>> queuedFileRequests;
 
 	/**
-	 * TODO: HIGH: It would be nice if our cache data structures enforced the
-	 * constraint that either: one client has RW, some number of clients have
-	 * RO, or no clients have RW or RO
-	 * 
-	 * If we put this in a class we can also log all changes in one place in
-	 * that class' wrapped giveRW, giveRO, etc methods
-	 * 
-	 * I like this kind of thing so here's what I think the class should be:
-	 */
-
-	/**
 	 * Encapsulates the RW and RO caches
 	 */
 	private static class Cache {
@@ -954,16 +943,6 @@ public class ManagerNode {
 		byte[] payload = Utility.stringToByteArray(filename);
 		node.RIOSend(client, protocol, payload);
 	}
-
-	/*
-	 * TODO: Wayne: Comment all send{Success, Error} methods and think about
-	 * wheter or not we really need all of them
-	 */
-
-	/*
-	 * TODO: send successess and errors for all ops done outside of txs, and
-	 * tx_successful tx_failure at end of all txs (w/ no op specific responses)?
-	 */
 
 	/**
 	 * Sends a successful message for the given protocol from the manager to the
