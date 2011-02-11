@@ -180,6 +180,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				String logTempFilename) {
 			this.fs = fs;
 			this.logFilename = logFilename;
+			this.logTempFilename = logTempFilename;
 			this.queuedOperations = new HashMap<Integer, Queue<PendingOperation>>();
 		}
 

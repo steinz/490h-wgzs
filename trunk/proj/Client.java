@@ -86,7 +86,7 @@ public class Client extends RIONode {
 	/**
 	 * Delimiter used in protocol payloads. Should be a single character.
 	 */
-	protected static final String delimiter = " ";
+	protected static final String packetDelimiter = " ";
 
 	/**
 	 * Name of the temp file used by write when append is false
@@ -122,7 +122,7 @@ public class Client extends RIONode {
 	/**
 	 * Encapsulates manager functionality
 	 */
-	protected ManagerNode managerFunctions;
+	private ManagerNode managerFunctions;
 
 	/**
 	 * Encapsulates client functionality
@@ -133,15 +133,16 @@ public class Client extends RIONode {
 	 * FS for this node
 	 */
 	protected TransactionalFileSystem fs;
-
+	
 	/**
 	 * Wipe the log and restart the client
 	 */
+	@Override
 	public void start() {
 		// Wipe the server log
 		// Logger.eraseLog(this);
 
-		restart();
+		restartAsClient();
 	}
 
 	/**
@@ -158,8 +159,8 @@ public class Client extends RIONode {
 	 * 
 	 * TODO: HIGH: think about restart
 	 */
-	public void restart() {
-		printInfo("CLIENT (RE)STARTING");
+	public void restartAsClient() {
+		printInfo("(re)starting as client");
 
 		this.isManager = false;
 
@@ -179,6 +180,22 @@ public class Client extends RIONode {
 			 */
 			printError(e);
 		}
+	}
+	
+	public void restartAsManager() {
+		printInfo("(re)starting as manager");
+	}
+
+	public void makeManager() {
+		this.isManager = true;
+		this.managerFunctions = new ManagerNode(this);
+
+		/*
+		 * TODO: This should probably restart the node as a manager (call a
+		 * different start method in Client) that sets up state
+		 */
+
+		broadcast(Protocol.MANAGERIS, Utility.stringToByteArray(this.addr + ""));
 	}
 
 	/**
@@ -245,48 +262,49 @@ public class Client extends RIONode {
 
 		// TODO: Replace massive switch w/ dynamic dispatch - started below
 
-//		// Turn the protocol into a message type
-//		MessageType mt = MessageType.ordinalToMessageType(protocol);
-//
-//		// Verify we have a correct message type
-//		if (mt == null) {
-//			printError("invalid message ordinal " + protocol + " received");
-//			return;
-//		}
-//
-//		// Find the instance to handle this message type
-//		Object instance = null;
-//		switch (mt.handlingClass) {
-//		case Client:
-//			instance = this;
-//			break;
-//		case ClientNode:
-//			instance = clientFunctions;
-//			break;
-//		case ManagerNode:
-//			instance = managerFunctions;
-//			break;
-//		case ClientAndManagerNode:
-//			instance = isManager ? managerFunctions : clientFunctions;
-//			break;
-//		}
-//
-//		// Invalid message type for my node type (manager got client-only, etc)
-//		if (instance == null) {
-//			printError("unhandled message type " + mt + " received");
-//			return;
-//		}
-//
-//		// route message
-//		try {
-//			Class<?> handlingClass = instance.getClass();
-//			Class<?>[] paramTypes = { int.class, String.class };
-//			Method handler = handlingClass.getMethod("receive" + mt.name(),
-//					paramTypes);
-//			handler.invoke(from, msgString);
-//		} catch (Exception e) {
-//			printError(e);
-//		}
+		// // Turn the protocol into a message type
+		// MessageType mt = MessageType.ordinalToMessageType(protocol);
+		//
+		// // Verify we have a correct message type
+		// if (mt == null) {
+		// printError("invalid message ordinal " + protocol + " received");
+		// return;
+		// }
+		//
+		// // Find the instance to handle this message type
+		// Object instance = null;
+		// switch (mt.handlingClass) {
+		// case Client:
+		// instance = this;
+		// break;
+		// case ClientNode:
+		// instance = clientFunctions;
+		// break;
+		// case ManagerNode:
+		// instance = managerFunctions;
+		// break;
+		// case ClientAndManagerNode:
+		// instance = isManager ? managerFunctions : clientFunctions;
+		// break;
+		// }
+		//
+		// // Invalid message type for my node type (manager got client-only,
+		// etc)
+		// if (instance == null) {
+		// printError("unhandled message type " + mt + " received");
+		// return;
+		// }
+		//
+		// // route message
+		// try {
+		// Class<?> handlingClass = instance.getClass();
+		// Class<?>[] paramTypes = { int.class, String.class };
+		// Method handler = handlingClass.getMethod("receive" + mt.name(),
+		// paramTypes);
+		// handler.invoke(from, msgString);
+		// } catch (Exception e) {
+		// printError(e);
+		// }
 
 		try {
 			switch (protocol) {
@@ -660,7 +678,7 @@ public class Client extends RIONode {
 		this.clientFunctions.managerAddr = Integer.parseInt(msgStr);
 		printInfo("setting manager address to " + from);
 	}
-	
+
 	public void killNode(int destAddr) {
 		if (isManager) {
 			this.managerFunctions.killNode(destAddr);

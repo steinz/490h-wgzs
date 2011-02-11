@@ -523,7 +523,7 @@ public class ManagerNode {
 		Set<Entry<String, Integer>> keys = lockedFiles.entrySet();
 		for (Entry<String, Integer> entry : keys) {
 			if (entry.getValue() == from) {
-				unlockFile(entry.getKey());
+				unlockFile(entry.getKey()); 
 			}
 		}
 
@@ -865,7 +865,7 @@ public class ManagerNode {
 			return;
 		} else {
 			sendMsg.append(filename);
-			sendMsg.append(Client.delimiter);
+			sendMsg.append(Client.packetDelimiter);
 			sendMsg.append(this.node.fs.getFile(filename));
 		}
 
@@ -949,7 +949,7 @@ public class ManagerNode {
 	 * client
 	 */
 	protected void sendSuccess(int destAddr, int protocol, String message) {
-		String msg = Protocol.protocolToString(protocol) + Client.delimiter
+		String msg = Protocol.protocolToString(protocol) + Client.packetDelimiter
 				+ message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(destAddr, Protocol.SUCCESS, payload);
@@ -969,8 +969,8 @@ public class ManagerNode {
 	 */
 	protected void sendError(int destAddr, int protocol, String filename,
 			int errorcode) {
-		String msg = filename + Client.delimiter
-				+ Protocol.protocolToString(protocol) + Client.delimiter
+		String msg = filename + Client.packetDelimiter
+				+ Protocol.protocolToString(protocol) + Client.packetDelimiter
 				+ ErrorCode.lookup(errorcode);
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(destAddr, Protocol.ERROR, payload);
@@ -980,7 +980,7 @@ public class ManagerNode {
 	}
 
 	public void sendError(int from, String filename, String message) {
-		String msg = filename + Client.delimiter + message;
+		String msg = filename + Client.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(from, Protocol.ERROR, payload);
 		this.node.RIOSend(from, Protocol.TX_FAILURE,
