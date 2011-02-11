@@ -21,7 +21,6 @@ import edu.washington.cs.cse490h.lib.Utility;
  * TODO: HIGH: If a client trys to do an operation that requires RW, make sure they have RW and abort 
  * them or send them a failure if they don't (see Writeup 3 > FS Semantics > Paragraph 4 )
  */
-
 // TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
 // TODO: HIGH: TEST: Add to cache status for all files requested
 // TODO: HIGH: TEST: Deal with creates and deletes appropriately -  

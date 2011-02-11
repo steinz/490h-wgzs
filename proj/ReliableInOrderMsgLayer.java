@@ -140,7 +140,8 @@ public class ReliableInOrderMsgLayer {
 	 */
 	public void RIOAckReceive(int from, byte[] msg) {
 		int seqNum = Integer.parseInt(Utility.byteArrayToString(msg));
-		outConnections.get(from).gotACK(seqNum);
+		if (outConnections.containsKey(from))
+			outConnections.get(from).gotACK(seqNum);
 	}
 
 	/**

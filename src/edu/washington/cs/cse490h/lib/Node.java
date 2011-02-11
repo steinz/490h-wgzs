@@ -22,7 +22,7 @@ public abstract class Node {
 	 * signature in their own node class. 0<=p<=1.
 	 */
 	public static double getFailureRate() {	return 5/100.0; }
-	public static double getRecoveryRate(){ return 10/100.0; }
+	public static double getRecoveryRate(){ return 15/100.0; }
 	public static double getDropRate(){ return 10/100.0; }
 	public static double getDelayRate(){ return 25/100.0; }
 	
