@@ -98,7 +98,8 @@ public class ManagerNode {
 				ro = new ArrayList<Integer>();
 				RO.put(filename, ro);
 			}
-			ro.add(addr);
+			if (!ro.contains(addr))
+				ro.add(addr);
 
 			n.printVerbose("CacheStatus: Giving RO to " + addr + " on "
 					+ filename);
@@ -748,11 +749,15 @@ public class ManagerNode {
 				// Invalidate all ROs
 				if (i != from){
 					sendRequest(i, filename, Protocol.IV);
-					if (!pendingICs.containsKey(filename)){
-						pendingICs.put(filename, new ArrayList<Integer>());
-					}
+					
+
 					List<Integer> list = pendingICs.get(filename);
+					if (list == null){
+						list = new ArrayList<Integer>();
+						pendingICs.put(filename, list);
+					}
 					list.add(i);
+
 				}
 			}
 			if (receivedProtocol == Protocol.RQ) {
@@ -797,13 +802,21 @@ public class ManagerNode {
 			
 		// update the status of the client who sent the IC
 		List<Integer> ro = filePermissionCache.hasRO(filename);
-		ro.remove(from);
+		for (int i = 0; i < ro.size(); i++){
+			if (ro.get(i) == from)
+				ro.remove(i);
+		}
 
 		this.node.printVerbose("Changing client: " + from + " to IV");
 
 		List<Integer> waitingForICsFrom = pendingICs.get(filename);
 
-		waitingForICsFrom.remove(from);
+		for (int i = 0; i < waitingForICsFrom.size(); i++){
+			if (waitingForICsFrom.get(i) == from){
+				waitingForICsFrom.remove(i);
+			}
+		}
+		
 		if (waitingForICsFrom.isEmpty()) {
 			/*
 			 * If the pending ICs are now empty, someone's waiting for a WD,
