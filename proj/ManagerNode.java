@@ -175,7 +175,7 @@ public class ManagerNode {
 	/**
 	 * A map from client address to a list of files this client has requested, in order
 	 */
-	private Map<Integer, List<String>> clientTransactionTouchedFiles;
+	private Map<Integer, List<String>> transactionTouchedFiles;
 	
 	private Cache filePermissionCache;
 
@@ -192,7 +192,7 @@ public class ManagerNode {
 		this.transactionsInProgress = new HashSet<Integer>();
 		this.replicaNode = new HashMap<Integer, Integer>();
 		this.filePermissionCache = new Cache(node);
-		this.clientTransactionTouchedFiles = new HashMap<Integer, List<String>>();
+		this.transactionTouchedFiles = new HashMap<Integer, List<String>>();
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -460,10 +460,10 @@ public class ManagerNode {
 		
 		// add this to the list of touched files for a transaction, abort them if it's out of filename order
 		if (transactionsInProgress.contains(client)){
-			List<String> list = clientTransactionTouchedFiles.get(client);
+			List<String> list = transactionTouchedFiles.get(client);
 			if (list == null){
 				list = new ArrayList<String>();
-				clientTransactionTouchedFiles.put(client, list);
+				transactionTouchedFiles.put(client, list);
 			}
 			if (list.contains(filename)){
 				node.printVerbose("Client: "  + client + " has touched file: " + filename + " previously, not checking for filename order");
@@ -506,11 +506,11 @@ public class ManagerNode {
 		addHeartbeatTimeout(client);
 		
 		// If this client has something in transaction touched cache, an error occurred
-		if (clientTransactionTouchedFiles.get(client) != null){
+		if (transactionTouchedFiles.get(client) != null){
 			node.printError("ERROR: Manager has cached transaction touched files for client: " + client);
 			// TODO: HIGH: Send the client an error? This isn't really a client problem...
 		}
-		clientTransactionTouchedFiles.put(client, new ArrayList<String>());
+		transactionTouchedFiles.put(client, new ArrayList<String>());
 
 	}
 
@@ -534,11 +534,8 @@ public class ManagerNode {
 			sendError(client, "", e);
 			return;
 		}
-
-		/*
-		 * TODO: Keep the list of files locked by this client so we don't have
-		 * to go through everything that's locked
-		 */
+		
+		// TODO: This is totally unnecessary now, use transactionTouchedFiles
 
 		// unlock files
 		ArrayList<String> filesToUnlock = new ArrayList<String>();
@@ -556,9 +553,8 @@ public class ManagerNode {
 		node.RIOSend(client, Protocol.TX_SUCCESS, Client.emptyPayload);
 		
 		// Clear cache
-		if (clientTransactionTouchedFiles.remove(client) == null){
-			// TODO: HIGH: Should we even bother printing this error? A client could txstart then abort, which might result in this situation
-			node.printError("ERROR: Manager thinks this client: " + client + " has touched no files!");
+		if (transactionTouchedFiles.remove(client) == null){
+			node.printError("Manager thinks this client: " + client + " has touched no files!");
 		}
 
 	}
@@ -584,9 +580,8 @@ public class ManagerNode {
 			return;
 		}
 		// Clear cache
-		if (clientTransactionTouchedFiles.remove(client) == null){
-			// TODO: HIGH: Should we even bother printing this error? A client could txstart then abort, which might result in this situation
-			node.printError("ERROR: Manager thinks this client: " + client + " has touched no files!");
+		if (transactionTouchedFiles.remove(client) == null){
+			node.printError("Manager thinks this client: " + client + " has touched no files!");
 		}
 	}
 
@@ -1056,7 +1051,7 @@ public class ManagerNode {
 		unlockFilesForClient(client);
 		pendingCommitRequests.remove(client);
 		// Clear cache
-		if (clientTransactionTouchedFiles.remove(client) == null){
+		if (transactionTouchedFiles.remove(client) == null){
 			// TODO: HIGH: Should we even bother printing this error? A client could txstart then abort, which might result in this situation
 			node.printError("ERROR: Manager thinks this client: " + client + " has touched no files!");
 		}
