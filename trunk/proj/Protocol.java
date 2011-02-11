@@ -15,48 +15,48 @@ public class Protocol {
 
 	// Base RIO Types
 	@Deprecated
-	public static final int DATA = 0;
-	public static final int ACK = 1;
+	public static final int DATA = 25;
+	public static final int ACK = 0;
 
 	// FS RPC Commands
-	public static final int CREATE = 2;
-	public static final int DELETE = 3;
+	public static final int CREATE = 7;
+	public static final int DELETE = 8;
 	@Deprecated
-	public static final int GET = 4;
+	public static final int GET = 26;
 	@Deprecated
-	public static final int PUT = 5;
+	public static final int PUT = 27;
 	@Deprecated
-	public static final int APPEND = 6;
-	public static final int HANDSHAKE = 7;
-	public static final int NOOP = 8;
+	public static final int APPEND = 28;
+	public static final int HANDSHAKE = 1;
+	public static final int NOOP = 2;
 
 	// Cache Coherence Commands
 	public static final int WQ = 9;
-	public static final int WD = 10;
-	public static final int WF = 11;
-	public static final int WC = 12;
-	public static final int RQ = 13;
-	public static final int RD = 14;
-	public static final int RF = 15;
-	public static final int RC = 16;
-	public static final int IV = 17;
-	public static final int IC = 18;
-	public static final int WD_DELETE = 19;
+	public static final int WD = 5;
+	public static final int WF = 18;
+	public static final int WC = 11;
+	public static final int RQ = 10;
+	public static final int RD = 6;
+	public static final int RF = 19;
+	public static final int RC = 12;
+	public static final int IV = 20;
+	public static final int IC = 13;
+	public static final int WD_DELETE = 14;
 
 	// Transcactions - Sent to manager
-	public static final int TX_START = 20;
-	public static final int TX_COMMIT = 21;
-	public static final int TX_ABORT = 22;
+	public static final int TX_START = 17;
+	public static final int TX_COMMIT = 16;
+	public static final int TX_ABORT = 15;
 	// Transactions - Sent to client
 	public static final int TX_SUCCESS = 23;
 	public static final int TX_FAILURE = 24;
-	public static final int HEARTBEAT = 25;
+	public static final int HEARTBEAT = 3;
 
-	public static final int MANAGERIS = 26;
+	public static final int MANAGERIS = 4;
 	
 	// Command Status Result Types
-	public static final int SUCCESS = 125;
-	public static final int ERROR = 126;
+	public static final int SUCCESS = 21;
+	public static final int ERROR = 22;
 
 	
 	/*

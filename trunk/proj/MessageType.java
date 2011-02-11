@@ -18,6 +18,8 @@ public enum MessageType {
 	Noop(HandlingClass.Client), Heartbeat(HandlingClass.Client), ManagerIs(
 			HandlingClass.Client),
 
+	WD(HandlingClass.Client), RD(HandlingClass.Client),
+
 	Create(HandlingClass.ManagerNode), Delete(HandlingClass.ManagerNode), WQ(
 			HandlingClass.ManagerNode), RQ(HandlingClass.ManagerNode), WC(
 			HandlingClass.ManagerNode), RC(HandlingClass.ManagerNode), IC(
@@ -30,9 +32,6 @@ public enum MessageType {
 			HandlingClass.ClientNode), TXSuccess(HandlingClass.ClientNode), TXFailure(
 			HandlingClass.ClientNode),
 
-	WD(HandlingClass.ClientAndManagerNode), RD(
-			HandlingClass.ClientAndManagerNode),
-
 	@Deprecated
 	Data(HandlingClass.None), @Deprecated
 	Get(HandlingClass.None), @Deprecated
@@ -40,7 +39,7 @@ public enum MessageType {
 	Append(HandlingClass.None);
 
 	public enum HandlingClass {
-		RIOLayer, Client, ManagerNode, ClientNode, ClientAndManagerNode, None
+		RIOLayer, Client, ManagerNode, ClientNode, None
 	};
 
 	/**
@@ -64,7 +63,7 @@ public enum MessageType {
 		return this.ordinal() < MAX_ORDINAL;
 	}
 
-	private static Map<Integer, MessageType> ordinalToMessageTypeCache = new HashMap<Integer, MessageType>();
+	private static Map<Integer, MessageType> ordinalToMessageTypeCache = new HashMap<Integer, MessageType>(MAX_ORDINAL);
 
 	/**
 	 * Turn an int ordinal into a MessageType

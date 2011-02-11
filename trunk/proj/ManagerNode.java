@@ -209,7 +209,7 @@ public class ManagerNode {
 		}
 	}
 
-	public void createNewFile(String filename, int from) {
+	private void createNewFile(String filename, int from) {
 		// local create
 		try {
 			this.node.fs.createFile(filename);
@@ -228,7 +228,7 @@ public class ManagerNode {
 		sendSuccess(from, Protocol.CREATE, filename);
 	}
 
-	public void deleteExistingFile(String filename, int from) {
+	private void deleteExistingFile(String filename, int from) {
 		// delete the file locally
 		try {
 			this.node.fs.deleteFile(filename);
@@ -293,7 +293,7 @@ public class ManagerNode {
 		}
 	}
 
-	public void receiveWD_DELETE(int from, String filename) {
+	public void receiveWDDelete(int from, String filename) {
 		// delete locally
 		try {
 			if (transactionsInProgress.contains(from))
@@ -481,7 +481,7 @@ public class ManagerNode {
 		lockedFiles.put(filename, from);
 	}
 
-	public void receiveTX_START(int from) {
+	public void receiveTXStart(int from, String empty) {
 
 		if (transactionsInProgress.contains(from)) {
 			sendError(from, "", "tx already in progress on client");
@@ -503,7 +503,7 @@ public class ManagerNode {
 
 	}
 
-	public void receiveTX_COMMIT(int from) {
+	public void receiveTXCommit(int from, String empty) {
 		if (!transactionsInProgress.contains(from)) {
 			sendError(from, "", "tx not in progress on client");
 			return;
@@ -546,7 +546,7 @@ public class ManagerNode {
 
 	}
 
-	public void receiveTX_ABORT(int from) {
+	public void receiveTXAbort(int from, String empty) {
 		if (!transactionsInProgress.contains(from)) {
 			sendError(from, "", "tx not in progress on client");
 			return;
@@ -555,7 +555,7 @@ public class ManagerNode {
 		transactionsInProgress.remove(from);
 		this.node.printVerbose("removed node " + from
 				+ " list of transactions in progress");
-		
+
 		try {
 			this.node.fs.abortTransaction(from);
 		} catch (IOException e) {
@@ -689,7 +689,15 @@ public class ManagerNode {
 			return false;
 	}
 
-	public void receiveQ(int from, String filename, int receivedProtocol,
+	public void receiveRQ(int client, String filename) {
+		receiveQ(client, filename, Protocol.RQ, Protocol.RD, Protocol.RF, true);
+	}
+
+	public void receiveWQ(int client, String filename) {
+		receiveQ(client, filename, Protocol.WQ, Protocol.WD, Protocol.WF, false);
+	}
+
+	private void receiveQ(int from, String filename, int receivedProtocol,
 			int responseProtocol, int forwardingProtocol, boolean preserveROs) {
 
 		// check if locked
@@ -768,7 +776,7 @@ public class ManagerNode {
 
 		// unlock and priveleges updated by C message handlers
 	}
-
+	
 	/**
 	 * 
 	 * @param from
@@ -777,7 +785,7 @@ public class ManagerNode {
 	 *            Should be the file name. Throws an error if we were not
 	 *            waiting for an IC from this node for this file
 	 */
-	public void receiveIC(Integer from, String filename) {
+	public void receiveIC(int from, String filename) {
 
 		int destAddr;
 		if (!pendingICs.containsKey(filename)
@@ -1012,7 +1020,7 @@ public class ManagerNode {
 		
 	}
 
-	public void sendError(int from, String filename, String message) {
+	private void sendError(int from, String filename, String message) {
 		String msg = filename + Client.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(from, Protocol.ERROR, payload);
@@ -1094,7 +1102,7 @@ public class ManagerNode {
 	 * 
 	 * @param destAddr
 	 */
-	public void killNode(int destAddr) {
+	protected void killNode(int destAddr) {
 		// might as well send a txabort just in case this node is alive
 		this.node.RIOSend(destAddr, Protocol.TX_FAILURE,
 				Utility.stringToByteArray(""));
