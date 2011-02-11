@@ -111,7 +111,8 @@ public class ManagerNode {
 		}
 
 		/**
-		 * Return the list of addresses of nodes w/ RO on filename or a new empty list
+		 * Return the list of addresses of nodes w/ RO on filename or a new
+		 * empty list
 		 */
 		public List<Integer> hasRO(String filename) {
 			if (RO.get(filename) == null)
@@ -169,10 +170,11 @@ public class ManagerNode {
 	private Map<String, Integer> pendingRPCCreateRequests;
 
 	/**
-	 * A set of pending commit requests, used to make sure that commits don't occur before requests are handled
+	 * A set of pending commit requests, used to make sure that commits don't
+	 * occur before requests are handled
 	 */
 	private Map<Integer, QueuedFileRequest> pendingCommitRequests;
-	
+
 	/**
 	 * A map detailing who replicates who, for example, replicaNode.get(1) = 2
 	 */
@@ -184,7 +186,7 @@ public class ManagerNode {
 	 * A set of node addresses currently performing transactions
 	 */
 	private Set<Integer> transactionsInProgress;
-	
+
 	private Cache filePermissionCache;
 
 	public ManagerNode(Client n) {
@@ -261,7 +263,7 @@ public class ManagerNode {
 	 * 1 put test world
 	 * 
 	 * The second operation is queued by the client via it's locking mechanism
-	 *
+	 * 
 	 * Queues the given request if the file is locked and returns true. Returns
 	 * false if the file isn't locked. Also returns false if the file is locked
 	 * by the requesting client (i.e. the client is the one locking the file).
@@ -400,9 +402,10 @@ public class ManagerNode {
 
 		// look for pending request
 		boolean foundPendingRequest = false;
-		this.node.printVerbose("Revoking permission on file: " + filename + " for client: " + from);
+		this.node.printVerbose("Revoking permission on file: " + filename
+				+ " for client: " + from);
 		this.filePermissionCache.revoke(filename);
-		
+
 		// check creates
 		Integer destAddr = pendingRPCCreateRequests.remove(filename);
 		if (destAddr != null) {
@@ -484,8 +487,9 @@ public class ManagerNode {
 		}
 
 		transactionsInProgress.add(from);
-		this.node.printVerbose("Added node: " + from
+		this.node.printVerbose("added node " + from
 				+ " to list of transactions in progress");
+
 		try {
 			this.node.fs.startTransaction(from);
 		} catch (IOException e1) {
@@ -507,13 +511,16 @@ public class ManagerNode {
 			pendingCommitRequests.put(from, new QueuedFileRequest(from,
 					Protocol.TX_COMMIT, Client.emptyPayload));
 
+		transactionsInProgress.remove(from); // remove from tx
+		this.node.printVerbose("removed node " + from
+				+ " list of transactions in progress");
+
 		try {
 			this.node.fs.commitTransaction(from);
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
 			return;
 		}
-		transactionsInProgress.remove(from); // remove from tx
 
 		/*
 		 * TODO: Keep the list of files locked by this client so we don't have
@@ -522,15 +529,16 @@ public class ManagerNode {
 
 		// unlock files
 		ArrayList<String> filesToUnlock = new ArrayList<String>();
-		
+
 		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
 			if (entry.getValue() == from) {
 				filesToUnlock.add(entry.getKey());
 			}
 		}
-		
-		for (int i = 0; i < filesToUnlock.size(); i++)
+
+		for (int i = 0; i < filesToUnlock.size(); i++) {
 			unlockFile(filesToUnlock.get(i));
+		}
 
 		this.node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
 
@@ -541,14 +549,17 @@ public class ManagerNode {
 			sendError(from, "", "tx not in progress on client");
 			return;
 		}
+
+		transactionsInProgress.remove(from);
+		this.node.printVerbose("removed node " + from
+				+ " list of transactions in progress");
+		
 		try {
 			this.node.fs.abortTransaction(from);
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
 			return;
 		}
-		transactionsInProgress.remove(from);
-
 	}
 
 	/**
@@ -713,18 +724,17 @@ public class ManagerNode {
 		}
 
 		// Check RW status
-		if (rw != null) { 
+		if (rw != null) {
 			// Get updates
 			sendRequest(rw, filename, forwardingProtocol);
-			if (receivedProtocol == Protocol.RQ){
+			if (receivedProtocol == Protocol.RQ) {
 				pendingReadPermissionRequests.put(filename, from);
-			}
-			else{
+			} else {
 				pendingWritePermissionRequests.put(filename, from);
 			}
 			return;
-		} 
-		
+		}
+
 		// Check RO status
 		if (!preserveROs && ro.size() > 0) { // someone(s) have RO
 			pendingICs.put(filename, ro);
@@ -742,22 +752,21 @@ public class ManagerNode {
 					}
 				}
 			}
-			if (receivedProtocol == Protocol.RQ){
+			if (receivedProtocol == Protocol.RQ) {
 				pendingReadPermissionRequests.put(filename, from);
-			}
-			else{
+			} else {
 				pendingWritePermissionRequests.put(filename, from);
 			}
 			return;
-		} 
-		
+		}
+
 		// send file to requester, no one has RW or RO
 		try {
 			sendFile(from, filename, responseProtocol);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
 		}
-		
+
 		// unlock and priveleges updated by C message handlers
 	}
 
@@ -896,30 +905,34 @@ public class ManagerNode {
 						nextRequest.msg);
 			}
 		}
-		
+
 		// Was a node waiting for this file request to process?
-		if (queuedRequester != -1 && pendingCommitRequests.containsKey(queuedRequester)){
-			if (clientHasPendingPermissions(queuedRequester))
-			{
-				QueuedFileRequest commitRequest = pendingCommitRequests.remove(queuedRequester);
-				this.node.onRIOReceive(commitRequest.from, commitRequest.protocol,
-						commitRequest.msg);
+		if (queuedRequester != -1
+				&& pendingCommitRequests.containsKey(queuedRequester)) {
+			if (clientHasPendingPermissions(queuedRequester)) {
+				QueuedFileRequest commitRequest = pendingCommitRequests
+						.remove(queuedRequester);
+				this.node.onRIOReceive(commitRequest.from,
+						commitRequest.protocol, commitRequest.msg);
 			}
 		}
-		
+
 	}
-	
+
 	/**
 	 * Checks the pending permission request caches for a client
-	 * @param from The client to check
-	 * @return False if this client has no pending permission requests, but True if the client has no pending permission requests
+	 * 
+	 * @param from
+	 *            The client to check
+	 * @return False if this client has no pending permission requests, but True
+	 *         if the client has no pending permission requests
 	 */
-	private boolean clientHasPendingPermissions(int from){
-		return (checkPermissionsHelper(from, pendingWritePermissionRequests) && 
-				checkPermissionsHelper(from, pendingReadPermissionRequests));
-	
+	private boolean clientHasPendingPermissions(int from) {
+		return (checkPermissionsHelper(from, pendingWritePermissionRequests) && checkPermissionsHelper(
+				from, pendingReadPermissionRequests));
+
 	}
-	
+
 	private boolean checkPermissionsHelper(int from, Map<String, Integer> struct) {
 		for (Entry<String, Integer> entry : struct.entrySet()) {
 			if (entry.getValue() == from)
@@ -952,8 +965,8 @@ public class ManagerNode {
 	 * client
 	 */
 	private void sendSuccess(int destAddr, int protocol, String message) {
-		String msg = Protocol.protocolToString(protocol) + Client.packetDelimiter
-				+ message;
+		String msg = Protocol.protocolToString(protocol)
+				+ Client.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(destAddr, Protocol.SUCCESS, payload);
 	}
@@ -1042,7 +1055,8 @@ public class ManagerNode {
 		transactionsInProgress.remove(destAddr);
 
 		// transfer ownership of files
-		for (Entry<String, Integer> entry : this.filePermissionCache.RW.entrySet()) {
+		for (Entry<String, Integer> entry : this.filePermissionCache.RW
+				.entrySet()) {
 			Integer newOwner;
 			if (entry.getValue().equals(destAddr)) {
 				String filename = entry.getKey();
@@ -1068,7 +1082,7 @@ public class ManagerNode {
 			if (entry.getValue().equals(destAddr))
 				unlockFile(entry.getKey());
 		}
-		
+
 		for (int i = 0; i < filesToUnlock.size(); i++)
 			unlockFile(filesToUnlock.get(i));
 	}

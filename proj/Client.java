@@ -58,7 +58,7 @@ public class Client extends RIONode {
 	 */
 
 	/*
-	 * TODO: LOW/EC: Let clients exchange files w/o sending them to the manager
+	 * TODO: EC: Let clients exchange files w/o sending them to the manager
 	 */
 
 	/*
@@ -133,7 +133,7 @@ public class Client extends RIONode {
 	 * FS for this node
 	 */
 	protected TransactionalFileSystem fs;
-	
+
 	/**
 	 * Wipe the log and restart the client
 	 */
@@ -146,10 +146,9 @@ public class Client extends RIONode {
 	}
 
 	/**
-	 * fs instantiation cleans up failed puts and redoes committed transactions
-	 * in the log
+	 * Resets everything to the initial client state
 	 * 
-	 * Called by start and when things get really messed up; currently when:
+	 * called by start and when things get really messed up; currently when:
 	 * 
 	 * client fails aborting/committing a transaction (can't write changes to
 	 * disk)
@@ -162,12 +161,40 @@ public class Client extends RIONode {
 	public void restartAsClient() {
 		printInfo("(re)starting as client");
 
+		nullify();
 		this.isManager = false;
-
 		this.clientFunctions = new ClientNode(this,
 				clientMaxWaitingForCommitQueueSize);
+		restartFS();
+	}
 
-		fs = null; // clear old tfs if restarting
+	/**
+	 * Resets everything to the initial manager state
+	 */
+	public void restartAsManager() {
+		printInfo("(re)starting as manager");
+
+		nullify();
+		this.isManager = true;
+		this.managerFunctions = new ManagerNode(this);
+		restartFS();
+		
+		broadcast(Protocol.MANAGERIS, Utility.stringToByteArray(this.addr + ""));
+	}
+
+	private void nullify() {
+		fs = null;
+		managerFunctions = null;
+		clientFunctions = null;
+	}
+	
+	/**
+	 * Nulls the old fs and tries to create a new one
+	 * 
+	 * fs instantiation cleans up failed puts and redoes committed transactions
+	 * in the log
+	 */
+	private void restartFS() {
 		try {
 			fs = new TransactionalFileSystem(this, tempFilename, logFilename,
 					logTempFilename, fsPurgeFrequency);
@@ -180,22 +207,6 @@ public class Client extends RIONode {
 			 */
 			printError(e);
 		}
-	}
-	
-	public void restartAsManager() {
-		printInfo("(re)starting as manager");
-	}
-
-	public void makeManager() {
-		this.isManager = true;
-		this.managerFunctions = new ManagerNode(this);
-
-		/*
-		 * TODO: This should probably restart the node as a manager (call a
-		 * different start method in Client) that sets up state
-		 */
-
-		broadcast(Protocol.MANAGERIS, Utility.stringToByteArray(this.addr + ""));
 	}
 
 	/**

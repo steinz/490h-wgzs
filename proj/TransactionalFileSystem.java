@@ -278,7 +278,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			 * ensure the entire copy was made during recovery (this might also
 			 * be a problem w/ RFS' recovery of .temp)
 			 * 
-			 * TODO: HIGH: Document this issue
+			 * TODO: Document this issue
 			 */
 
 			// read through the log, building up PendingOperation lists
