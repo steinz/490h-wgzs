@@ -605,7 +605,6 @@ public class ManagerNode {
 				}
 			} else {
 				createNewFile(filename, from);
-				this.sendSuccess(from, Protocol.CREATE, filename);
 			}
 		}
 
