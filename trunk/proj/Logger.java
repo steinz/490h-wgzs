@@ -61,7 +61,7 @@ public class Logger {
 			if (highlight) {
 				infoPrintln(n, "\n===VERBOSE===");
 			}
-			infoPrintln(n, str);
+			infoPrintln(n, "|VERBOSE| " + str);
 			if (highlight) {
 				infoPrintln(n, "===VERBOSE===\n");
 			}
@@ -70,12 +70,12 @@ public class Logger {
 
 	public static void info(Node n, String str) {
 		if (printInfo) {
-			infoPrintln(n, str);
+			infoPrintln(n, "|INFO| " + str);
 		}
 	}
 
 	public static void error(Node n, String str) {
-		errorPrintln(n, str);
+		errorPrintln(n, "|ERROR| " + str);
 	}
 
 	public static void error(Node n, Throwable e) {
@@ -84,10 +84,10 @@ public class Logger {
 			if (cause != null) {
 				error(n, cause);
 			}
-			errorPrintln(n, e.toString()); 
+			errorPrintln(n, "|ERROR| " + e.toString()); 
 			StackTraceElement[] trace = e.getStackTrace();
 			for (StackTraceElement st : trace) {
-				errorPrintln(n, st.toString());
+				errorPrintln(n, "|ERROR| " + st.toString());
 			}
 		}
 	}

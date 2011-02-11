@@ -13,10 +13,6 @@ import java.util.StringTokenizer;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /**
- * TODO: make sure checking transacting and using fs' -TX methods
- */
-
-/**
  * Implicit transactions do the right thing by CC
  * 
  * IMPORTANT: Methods names should not end in Handler unless they are meant to
@@ -160,11 +156,6 @@ public class ClientNode {
 
 		if (waitingForCommitSuccess
 				&& waitingForCommitQueue.size() > maxWaitingForCommitQueueSize) {
-			/*
-			 * TODO: figure out what we need to do to kill this object after the
-			 * node restarts, or if we should even restart the node at all - at
-			 * this point we don't know whether or not our TX succeeded
-			 */
 			parent.restartAsClient();
 			return;
 		} else if (waitingForCommitSuccess) {
@@ -351,16 +342,10 @@ public class ClientNode {
 	}
 
 	/**
-	 * TODO: Broadcast manageris packets to all clients so they don't have to
-	 * execute manageris commands, remove the managerisHandler
-	 */
-
-	/**
 	 * Used for project2 to tell a node it is the manager.
 	 */
 	public void managerHandler(StringTokenizer tokens, String line) {
-		parent.printInfo("promoted to manager");
-		parent.makeManager();
+		parent.restartAsManager();
 	}
 
 	/**
@@ -506,12 +491,11 @@ public class ClientNode {
 			return;
 		}
 
-		// TODO: HIGH: Unlock stuff?
-
 		try {
 			parent.printVerbose("aborting transaction");
-			parent.fs.abortTransaction(parent.addr);
 			transacting = false;
+			unlockAll(); // TODO: HIGH: make sure this make sense
+			parent.fs.abortTransaction(parent.addr);
 		} catch (IOException e) {
 			/*
 			 * Failed to write an abort to the log - if we keep going, we could
@@ -533,8 +517,8 @@ public class ClientNode {
 	private void commitCurrentTransaction() {
 		try {
 			parent.printVerbose("committing transaction");
-			parent.fs.commitTransaction(parent.addr);
 			transacting = false;
+			parent.fs.commitTransaction(parent.addr);
 		} catch (IOException e) {
 			/*
 			 * Failed to write the commit to the log or a change to disk - if we
@@ -697,7 +681,7 @@ public class ClientNode {
 	 * begin receiveHandlers
 	 ************************************************/
 
-	// TODO: HIGH: Cleanup state after {R,W}{Q,D,F} etc fails
+	// TODO: HIGH: Check cleaning up state after {R,W}{Q,D,F} etc fails
 
 	/**
 	 * Client receives {W,R}F as a request to propagate their changes
@@ -766,7 +750,7 @@ public class ClientNode {
 		sendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
 	}
 
-	// TODO: Send TFS.PendingOp objects here instead of strings
+	// TODO: Low: Send TFS.PendingOp objects here instead of strings
 
 	/**
 	 * @param msgString
@@ -792,7 +776,7 @@ public class ClientNode {
 			if (transacting) {
 				abortCurrentTransaction();
 				sendToManager(Protocol.TX_ABORT);
-				unlockFile(filename);
+				unlockFile(filename); // TODO: Remove redundant unlocks
 			}
 			return;
 		}
@@ -919,7 +903,6 @@ public class ClientNode {
 			}
 			parent.fs.writeFile(filename, contents, false);
 		} catch (IOException e) {
-			// TODO: double check doing everything needed
 			if (transacting) {
 				abortCurrentTransaction();
 				sendToManager(Protocol.TX_ABORT);
@@ -953,7 +936,6 @@ public class ClientNode {
 			}
 		} catch (Exception e) {
 			parent.printError(e);
-			// TODO: double check doing the right thing
 			if (transacting) {
 				abortCurrentTransaction();
 				sendToManager(Protocol.TX_ABORT);
