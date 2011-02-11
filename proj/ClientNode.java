@@ -182,7 +182,7 @@ public class ClientNode {
 		this.waitingForCommitSuccess = false;
 		this.waitingForCommitQueue = new LinkedList<String>();
 		this.waitingToCommit = false;
-		this.managerAddr = -1;
+		this.managerAddr = 0; // TODO: learn this somehow
 	}
 
 	public void onCommand(String line) {
