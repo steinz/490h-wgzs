@@ -181,6 +181,7 @@ public class ClientNode {
 		} catch (InvocationTargetException e) {
 			parent.printError(e);
 			if (transacting) {
+				sendToManager(Protocol.TX_ABORT);
 				abortCurrentTransaction();
 			}
 			/*

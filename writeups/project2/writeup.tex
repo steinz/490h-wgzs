@@ -35,7 +35,7 @@ permission from the manager the action is completed. If an error occurs (e.g. th
 
 \textbf{Managers:} \\ 
 
-The manager keeps track of client cache statuses using a couple data structures. We could have had the manager poll clients on every request to 
+The manager keeps track of client cache statuses using a couple data structures, specifically maps for client statuses and queues for queued file requests. We could have had the manager poll clients on every request to 
 determine their status and determine who needs what request sent out, but this method is much faster and reduces the number of packets sent. Unless some
 client has ownership of a file, it is assumed that the manager has the latest revision of any file.\\
 
@@ -43,10 +43,7 @@ client has ownership of a file, it is assumed that the manager has the latest re
 
 Our deletion and creation mechanism(s) are not as smooth as they could be.
 
-Because of problems differentiating blank files from created and deleted files, we implement create and delete using RPCs.
-However, this change was made Friday afternoon, and although it will fix the issues in the long run, it has not been fully debugged.
-The client and manager locking data and cache data structures are not yet updating correctly.
-Fortunately, we are confident that we will fix this soon using the test code built with the intention of generating Synoptic graphs. \\
+Because of problems differentiating blank files from created and deleted files, we implement create and delete using RPCs. \\
 
 \textbf{Additional steps:} \\
 
@@ -80,7 +77,6 @@ Node 0 will always be the manager in this case. Note that you still have to star
 
 See writeups/project2/490.png for a few basic diagrams of IVY CC. \\
 See output/*/myproj.dot.png for Synoptic graphs of a single client running CC. \\
-The version with multiple clients running CC is yet to be completed, due to time constraints. \\
 
 \textbf{Synoptic:} \\
 
