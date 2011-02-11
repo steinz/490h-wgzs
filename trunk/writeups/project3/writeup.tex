@@ -74,20 +74,20 @@ The manager, in turn, assumes the client will queue commands until they are read
 If a client requests access to the same file twice, the manager will grant them
 the appropriate level of access. \\
 
-\textbf{Transaction Scheme:}
+\textbf{Transaction Scheme:} \\
 
 We decided to use two-phase locking manager-side to ensure serializable transactions for the following reasons:
 
-\begin{enumerate}
-\\	\item[Framework setup] Our framework is already suited towards two-phase locking. We already have a locking scheme in-place for cache coherency (project 2), and so the process of locking files was 
+\begin{description}
+	\item[Framework setup] Our framework is already suited towards two-phase locking. We already have a locking scheme in-place for cache coherency (project 2), and so the process of locking files was 
 simply expanded to lock files for the duration of a transaction, instead of for the duration of a request.
-\\	\item[Difficulties with optimistic concurrency] We thought about using optimistic concurrency, however this requires the server to validate all requests at the end of a transaction. This would require
+	\item[Difficulties with optimistic concurrency] We thought about using optimistic concurrency, however this requires the server to validate all requests at the end of a transaction. This would require
 a log on the server recording transactions. Further, this log would have to timestamp all transactions in order to decide whether two transactions conflicted or not. Lastly, this would also required the
 server to be sent a copy of the client's transaction log with every commit, which we thought was unnecessary. 
-\\      \item[Versioning] Further, using optimistic concurrency would require some form of file versioning, in order to support rollback. We thought this approach required more space allocation than was necessary or ideal.
-\end{enumerate}
+        \item[Versioning] Further, using optimistic concurrency would require some form of file versioning, in order to support rollback. We thought this approach required more space allocation than was necessary or ideal.
+\end{description}
 
-\textbf{Deadlock:}
+\textbf{Deadlock:} \\
 
 One potential problem with 2PL is the possibility of deadlock.
 
@@ -95,13 +95,13 @@ We require clients to operate on files within a transaction in filename order to
 So, if a client wants to perform the following operations: 
 \begin{verbatim}
         Get g => x
-	Put x => f
+        Put x => f
 \end{verbatim}\\
 They have to actually perform these operations:
 \begin{verbatim}
-	Append "" f
-	Get g => x
-	Put x => f
+        Append "" f
+        Get g => x
+        Put x => f
 \end{verbatim}
 
 Following this procedure, clients are guaranteed not to dead lock while performing a transaction.
@@ -122,10 +122,27 @@ This ensures that the latest copy of a file will never be lost, even if a client
 \textbf{Failure Handling:} \\
 
 \begin{description}
-\item[Server Failures] Currently, clients block on server failures. This is within the specification of the assignment, and so we did not implement any handling of this scenario. This will be relaxed by PAXOS in assignment 4.
-\item[Client Failures] While a client is in the middle of a transaction, they are periodically sent pings by the server (heartbeat pings). If the client ceases responding to this heartbeat, then after a set number of rounds the server will assume the client went down (this functionality was largely borrowed from project 1, where servers were required to deal with client failures). If the server detects that a client went down, it will immediately release all locks this client had on any files and abort their transaction.
+\item[Server Failures] \\ Currently, clients block on server failures. This is within the specification of the assignment, and so we did not implement any handling of this scenario. This will be relaxed by PAXOS in assignment 4.
+\item[Client Failures] \\ While a client is in the middle of a transaction, they are periodically sent pings by the server (heartbeat pings). If the client ceases responding to this heartbeat, then after a set number of rounds the server will assume the client went down (this functionality was largely borrowed from project 1, where servers were required to deal with client failures). If the server detects that a client went down, it will immediately release all locks this client had on any files and abort their transaction.
 
 The server will then immediately change ownership of any files that client had ownership of to its replica. If there were pending permission requests for this file, then the server will immediately forward that request to the appropriate replica. TODO: HIGH: NOTE: I think we might want to implement this w/ RPC or a different message type for implementation simplicity.
+\item[Transaction Failures] \\ Since all transaction commands are written to a log before actually being committed, a transaction failure results in no changes to the local or remote file system occurring. Instead, the client
+may attempt to redo the transaction based on the type of failure that occurred, or it may simply decide to abort that transaction altogether, at which point the user would have to redo the transaction. 
+\item[Command Failures] \\ Command failures result in an automatic transaction failure for our framework. We chose to implement this feature as opposed to the alternative (sending errors but proceeding with the transaction) because we believe that users could end up in an undesirable state if they commit a transaction that succeeds on some commands but not others. Rather than allow the client to end up in an undesirable state, we decided to abort the transaction and force the user to recommit a new transaction without the offending command.
+
+
+\end{description}
+\textbf{Running Test Scripts:}\\
+
+Test scripts should be called as follows:
+
+\begin{verbatim}
+
+./clean.sh ; ./compile.sh ; 
+
+\end{verbatim}
+
+\\
 
 \textbf{TFS Log Entry Format:} \\
 
