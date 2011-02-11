@@ -60,11 +60,11 @@ public class ClientNode {
 		public boolean hasRW(String filename) {
 			return cache.get(filename) == CacheStatuses.ReadWrite;
 		}
-		
+
 		public boolean hasRO(String filename) {
 			return cache.get(filename) == CacheStatuses.ReadOnly;
 		}
-		
+
 		public boolean contains(String filename) {
 			return cache.containsKey(filename);
 		}
@@ -129,12 +129,19 @@ public class ClientNode {
 	protected int managerAddr;
 
 	/**
+	 * The maximum number of commands the client will queue before timing out
+	 * and restarting the node
+	 */
+	private int maxWaitingForCommitQueueSize;
+
+	/**
 	 * The parent node associated with this client
 	 */
 	private Client parent;
 
 	/**
-	 * Map from filenames to the operation we want to do on them later
+	 * Map from filenames to the operation we want to do on them once we receive
+	 * some response from the manager (a WD, RD, or Error)
 	 */
 	private Map<String, PendingClientOperation> pendingOperations;
 
@@ -162,12 +169,6 @@ public class ClientNode {
 	 * Commands queued because the client is waiting for a commit result
 	 */
 	private Queue<String> waitingForCommitQueue;
-
-	/**
-	 * The maximum number of commands the client will queue before timing out
-	 * and restarting the node
-	 */
-	private int maxWaitingForCommitQueueSize;
 
 	public ClientNode(Client n, int maxWaitingForCommitQueueSize) {
 		this.parent = n;
@@ -475,7 +476,7 @@ public class ClientNode {
 		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
-		} else if (pendingOperations.size() > 0) {
+		} else if (lockedFiles.size() > 0) {
 			waitingToCommit = true;
 			parent.printVerbose("queueing commit");
 		} else {
@@ -514,18 +515,17 @@ public class ClientNode {
 	 *******************************/
 
 	/**
-	 * Tells the node's fs to abort the current transaction and updates internal
-	 * transacting flag
+	 * Tells the node's fs to abort the current transaction, updates internal
+	 * transacting flag, and clears out all queued and pending commands for this
+	 * tx / releases the associated locks
 	 * 
 	 * If this fails, the Client will restart, meaning all references to this
-	 * will be lost, so this should probably be the last thing called (although
-	 * unlocks still need to be after this, in which case the node might end up
-	 * printing some garbage to its log)
+	 * will be lost, so this should be the last thing called
 	 * 
 	 * @throws TransactionException
 	 * @throws IOException
 	 */
-	private void abortCurrentTransaction() {
+	public void abortCurrentTransaction() {
 		if (!transacting) {
 			return;
 		}
@@ -533,7 +533,12 @@ public class ClientNode {
 		try {
 			parent.printVerbose("aborting transaction");
 			transacting = false;
-			unlockAll(); // TODO: HIGH: make sure this make sense
+
+			// clear out all commands
+			lockedFiles.clear();
+			queuedCommands.clear();
+			pendingOperations.clear();
+
 			parent.fs.abortTransaction(parent.addr);
 		} catch (IOException e) {
 			/*
@@ -624,8 +629,8 @@ public class ClientNode {
 	 */
 	private void processWaitingForCommitQueue() {
 		waitingForCommitSuccess = false;
-		for (String line : waitingForCommitQueue) {
-			parent.onCommand(line);
+		while (waitingForCommitQueue.size() > 0) {
+			parent.onCommand(waitingForCommitQueue.poll());
 		}
 	}
 
@@ -671,14 +676,7 @@ public class ClientNode {
 	}
 
 	/**
-	 * Unlocks all files locally and clears queued txs
-	 */
-	protected void unlockAll() {
-		lockedFiles.clear();
-	}
-
-	/**
-	 * Unlock the filename and service and queued requests on it - because this
+	 * Unlock the filename and service any queued requests on it - because this
 	 * services the next requests in the queue immediately, calling it should be
 	 * the last thing you do after mutating state for your current op
 	 */
@@ -691,13 +689,12 @@ public class ClientNode {
 		Queue<String> queuedRequests = queuedCommands.get(filename);
 		if (queuedRequests != null) {
 			while (queuedRequests.size() > 0) {
-				String request = queuedRequests.poll();
-				onCommand(request);
+				onCommand(queuedRequests.poll());
 			}
 		}
 
 		// send a commit if one is waiting
-		if (pendingOperations.isEmpty() && waitingToCommit) {
+		if (lockedFiles.isEmpty() && waitingToCommit) {
 			waitingToCommit = false;
 			onCommand("txcommit");
 		}
@@ -710,6 +707,8 @@ public class ClientNode {
 	/*************************************************
 	 * begin receiveHandlers
 	 ************************************************/
+
+	// TODO: Convince myself all the receive logic is right
 
 	/**
 	 * RPC Error
@@ -798,7 +797,7 @@ public class ClientNode {
 
 		// has RO
 		cache.put(filename, CacheStatuses.ReadOnly);
-		
+
 		try {
 			// update in cache
 			if (!Utility.fileExists(parent, filename)) {
@@ -806,11 +805,9 @@ public class ClientNode {
 			}
 			parent.fs.writeFile(filename, contents, false);
 		} catch (IOException e) {
-			// TODO: double check doing everything needed
 			if (transacting) {
 				abortCurrentTransaction();
 				sendToManager(Protocol.TX_ABORT);
-				unlockFile(filename); // TODO: Remove redundant unlocks
 			}
 			return;
 		}
@@ -869,17 +866,18 @@ public class ClientNode {
 				cache.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
 			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
-				if (Utility.fileExists(parent, filename)) {
-					// migh not exist here
-					if (transacting) {
+				// might not exist here
+				if (transacting) {
+					if (parent.fs.fileExistsTX(parent.addr, filename)) {
 						parent.fs.deleteFileTX(parent.addr, filename);
-					} else {
+					}
+				} else {
+					if (Utility.fileExists(parent, filename)) {
 						parent.fs.deleteFile(filename);
 					}
 				}
 				cache.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
-
 			} else {
 				parent.printError("received invalid cmd " + cmd + " in "
 						+ Protocol.protocolToString(Protocol.SUCCESS)
@@ -888,7 +886,6 @@ public class ClientNode {
 		} catch (Exception e) {
 			parent.printError(e);
 			abortCurrentTransaction();
-			unlockFile(filename);
 		}
 	}
 
@@ -897,10 +894,6 @@ public class ClientNode {
 	 */
 	public void receiveTXFailure(int from, String empty) {
 		abortCurrentTransaction();
-		// drop everything we're waiting for
-		unlockAll();
-		pendingOperations.clear();
-		queuedCommands.clear();
 		processWaitingForCommitQueue();
 	}
 
@@ -942,7 +935,6 @@ public class ClientNode {
 			if (transacting) {
 				abortCurrentTransaction();
 				sendToManager(Protocol.TX_ABORT);
-				unlockFile(filename);
 			}
 			return;
 		}
@@ -975,7 +967,6 @@ public class ClientNode {
 			if (transacting) {
 				abortCurrentTransaction();
 				sendToManager(Protocol.TX_ABORT);
-				unlockFile(filename);
 			}
 			return;
 		}
