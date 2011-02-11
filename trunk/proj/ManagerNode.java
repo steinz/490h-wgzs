@@ -212,6 +212,7 @@ public class ManagerNode {
 			this.node.fs.createFile(filename);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
+			return;
 		}
 		// give RW to the requester for filename
 		this.node.printVerbose("Changing status of client: " + from
@@ -305,6 +306,7 @@ public class ManagerNode {
 				this.node.fs.deleteFile(filename);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
+			return;
 		}
 		// remove permissions
 
@@ -355,6 +357,7 @@ public class ManagerNode {
 			this.node.fs.writeFile(filename, contents, false);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
+			return;
 		}
 
 		/*
@@ -372,6 +375,7 @@ public class ManagerNode {
 				sendFile(destAddr, filename, Protocol.RD);
 			} catch (IOException e) {
 				sendError(from, filename, e.getMessage());
+				return;
 			}
 
 			// Add to RO list
@@ -391,6 +395,7 @@ public class ManagerNode {
 			this.node.fs.writeFile(filename, contents, false);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
+			return;
 		}
 
 		// look for pending request
@@ -404,6 +409,7 @@ public class ManagerNode {
 			foundPendingRequest = true;
 			sendError(destAddr, Protocol.CREATE, filename,
 					ErrorCode.FileAlreadyExists);
+			return;
 		}
 
 		// check deletes
@@ -411,6 +417,7 @@ public class ManagerNode {
 		if (destAddr != null) {
 			if (foundPendingRequest) {
 				sendError(from, filename, "IllegalConcurrentRequestException!");
+				return;
 			}
 			foundPendingRequest = true;
 			deleteExistingFile(filename, destAddr);
@@ -421,12 +428,14 @@ public class ManagerNode {
 		if (destAddr != null) {
 			if (foundPendingRequest) {
 				sendError(from, filename, "IllegalConcurrentRequestException!");
+				return;
 			}
 			foundPendingRequest = true;
 			try {
 				sendFile(destAddr, filename, Protocol.WD);
 			} catch (IOException e) {
 				sendError(from, filename, e.getMessage());
+				return;
 			}
 		}
 
@@ -434,6 +443,7 @@ public class ManagerNode {
 
 			sendError(from, filename, "MissingPendingRequestException: file: "
 					+ filename);
+			return;
 		}
 
 		// update the status of the client who sent the WD
@@ -442,6 +452,7 @@ public class ManagerNode {
 			node.printError("WD received from client w/o RW"); // for now
 			sendError(from, Protocol.DELETE, filename,
 					ErrorCode.PrivilegeDisagreement);
+			return;
 		} else {
 			this.node.printVerbose("Blanking ownership permissions for file: "
 					+ filename);
@@ -469,6 +480,7 @@ public class ManagerNode {
 
 		if (transactionsInProgress.contains(from)) {
 			sendError(from, "", "tx already in progress on client");
+			return;
 		}
 
 		transactionsInProgress.add(from);
@@ -498,6 +510,7 @@ public class ManagerNode {
 			this.node.fs.commitTransaction(from);
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
+			return;
 		}
 		transactionsInProgress.remove(from); // remove from tx
 
@@ -521,11 +534,13 @@ public class ManagerNode {
 	public void receiveTX_ABORT(int from) {
 		if (!transactionsInProgress.contains(from)) {
 			sendError(from, "", "tx not in progress on client");
+			return;
 		}
 		try {
 			this.node.fs.abortTransaction(from);
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
+			return;
 		}
 		transactionsInProgress.remove(from);
 
@@ -551,6 +566,7 @@ public class ManagerNode {
 			// Someone has RO, so throw an error that the file exists already
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
+			return;
 		} else { // File not in system
 			// decide what to do based on transaction status
 			if (transactionsInProgress.contains(from)) {
@@ -563,9 +579,11 @@ public class ManagerNode {
 				} catch (TransactionException e) {
 					this.node.printError(e);
 					this.sendError(from, filename, e.getMessage());
+					return;
 				} catch (IOException e) {
 					this.node.printError(e);
 					this.sendError(from, filename, e.getMessage());
+					return;
 				}
 			} else {
 				createNewFile(filename, from);
@@ -595,6 +613,7 @@ public class ManagerNode {
 		if (rw != null && rw == from) {
 			// Requester should have RW
 			sendError(from, "", "Got delete request from client with RW");
+			return;
 		} else if (rw != null && rw != from) {
 			// Someone other than the requester has RW status, get updates
 			sendRequest(rw, filename, Protocol.WF);
@@ -678,6 +697,7 @@ public class ManagerNode {
 		if (!checkExistence(filename)) {
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileDoesNotExist);
+			return;
 		}
 
 		if (rw != null && ro.size() > 0) {
@@ -686,6 +706,7 @@ public class ManagerNode {
 			node.printError(problem);
 
 			sendError(from, filename, problem);
+			return;
 		}
 
 		// Check RW status
@@ -714,6 +735,7 @@ public class ManagerNode {
 						return;
 					} catch (IOException e) {
 						sendError(from, filename, e.getMessage());
+						return;
 					}
 				}
 			}
@@ -782,6 +804,7 @@ public class ManagerNode {
 						sendFile(destAddr, filename, Protocol.WD);
 					} catch (IOException e) {
 						sendError(from, filename, e.getMessage());
+						return;
 					}
 				} else {
 					destAddr = pendingRPCDeleteRequests.remove(filename);
@@ -839,6 +862,7 @@ public class ManagerNode {
 		if (!checkExistence(filename)) {
 			// Manager doesn't have the file
 			sendError(to, Protocol.ERROR, filename, ErrorCode.FileDoesNotExist);
+			return;
 		} else {
 			sendMsg.append(filename);
 			sendMsg.append(Client.delimiter);
