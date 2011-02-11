@@ -178,7 +178,7 @@ public class Client extends RIONode {
 		this.isManager = true;
 		this.managerFunctions = new ManagerNode(this);
 		restartFS();
-		
+
 		broadcast(Protocol.MANAGERIS, Utility.stringToByteArray(this.addr + ""));
 	}
 
@@ -187,7 +187,7 @@ public class Client extends RIONode {
 		managerFunctions = null;
 		clientFunctions = null;
 	}
-	
+
 	/**
 	 * Nulls the old fs and tries to create a new one
 	 * 
@@ -234,8 +234,10 @@ public class Client extends RIONode {
 		printVerbose("received " + Protocol.protocolToString(protocol)
 				+ " from Universe, giving to RIOLayer");
 
+		// Updates manager address as soon as possible
 		if (protocol == Protocol.MANAGERIS) {
-			receiveMANAGERIS(from, msg);
+			String msgStr = Utility.byteArrayToString(msg);
+			receiveManagerIs(from, msgStr);
 			return;
 		}
 
@@ -247,6 +249,7 @@ public class Client extends RIONode {
 		 * TODO: Pull some of the RIO HANDSHAKE handling up here?
 		 */
 		if (!isManager && protocol == Protocol.HANDSHAKE) {
+			// TODO: restart?
 			clientFunctions.unlockAll();
 		}
 
@@ -273,374 +276,81 @@ public class Client extends RIONode {
 
 		// TODO: Replace massive switch w/ dynamic dispatch - started below
 
-		// // Turn the protocol into a message type
-		// MessageType mt = MessageType.ordinalToMessageType(protocol);
-		//
-		// // Verify we have a correct message type
-		// if (mt == null) {
-		// printError("invalid message ordinal " + protocol + " received");
-		// return;
-		// }
-		//
-		// // Find the instance to handle this message type
-		// Object instance = null;
-		// switch (mt.handlingClass) {
-		// case Client:
-		// instance = this;
-		// break;
-		// case ClientNode:
-		// instance = clientFunctions;
-		// break;
-		// case ManagerNode:
-		// instance = managerFunctions;
-		// break;
-		// case ClientAndManagerNode:
-		// instance = isManager ? managerFunctions : clientFunctions;
-		// break;
-		// }
-		//
-		// // Invalid message type for my node type (manager got client-only,
-		// etc)
-		// if (instance == null) {
-		// printError("unhandled message type " + mt + " received");
-		// return;
-		// }
-		//
-		// // route message
-		// try {
-		// Class<?> handlingClass = instance.getClass();
-		// Class<?>[] paramTypes = { int.class, String.class };
-		// Method handler = handlingClass.getMethod("receive" + mt.name(),
-		// paramTypes);
-		// handler.invoke(from, msgString);
-		// } catch (Exception e) {
-		// printError(e);
-		// }
+		// Turn the protocol into a message type
+		MessageType mt = MessageType.ordinalToMessageType(protocol);
 
+		// Verify we have a correct message type
+		if (mt == null) {
+			printError("invalid message ordinal " + protocol + " received");
+			return;
+		}
+
+		// Find the instance to handle this message type
+		Object instance = null;
+		switch (mt.handlingClass) {
+		case Client:
+			instance = this;
+			break;
+		case ClientNode:
+			instance = clientFunctions;
+			break;
+		case ManagerNode:
+			instance = managerFunctions;
+			break;
+		}
+
+		// Invalid message type for my node type
+		// (manager got client-only, etc)
+		if (instance == null) {
+			printError("unhandled message type " + mt + " received");
+			return;
+		}
+
+		// route message
 		try {
-			switch (protocol) {
-			case Protocol.CREATE:
-				receiveCreate(from, msgString);
-				break;
-			case Protocol.DELETE:
-				receiveDelete(from, msgString);
-				break;
-			case Protocol.NOOP:
-				printInfo("received noop from " + from);
-				break;
-			case Protocol.HEARTBEAT:
-				printInfo("received heartbeat from " + from);
-				break;
-			case Protocol.IC:
-				receiveIC(from, msgString);
-				break;
-			case Protocol.IV:
-				receiveIV(msgString);
-				break;
-			case Protocol.WC:
-				receiveWC(from, msgString);
-				break;
-			case Protocol.RC:
-				receiveRC(from, msgString);
-				break;
-			case Protocol.WD:
-				receiveWD(from, msgString);
-				break;
-			case Protocol.RD:
-				receiveRD(from, msgString);
-				break;
-			case Protocol.RQ:
-				receiveRQ(from, msgString);
-				break;
-			case Protocol.WQ:
-				receiveWQ(from, msgString);
-				break;
-			case Protocol.WF:
-				receiveWF(msgString);
-				break;
-			case Protocol.RF:
-				receiveRF(msgString);
-				break;
-			case Protocol.WD_DELETE:
-				receiveWD_DELETE(from, msgString);
-				break;
-			case Protocol.TX_START:
-				receiveTX_START(from);
-				break;
-			case Protocol.TX_ABORT:
-				receiveTX_ABORT(from);
-				break;
-			case Protocol.TX_COMMIT:
-				receiveTX_COMMIT(from);
-				break;
-			case Protocol.TX_SUCCESS:
-				receiveTX_SUCCESS();
-				break;
-			case Protocol.TX_FAILURE:
-				receiveTX_FAILURE();
-				break;
-			case Protocol.ERROR:
-				receiveError(from, msgString);
-				break;
-			case Protocol.SUCCESS:
-				receiveSuccessful(from, msgString);
-				break;
-			default:
-				printError("received invalid/deprecated packet type");
-			}
-		} catch (NotManagerException e) {
-
-			/*
-			 * TODO: HIGH: All errors should be caught and dealt w/ by their
-			 * respective receive methods
-			 * 
-			 * Manager side: respond by sendError(from) or send TX_FAILURE
-			 * 
-			 * Client side: printError, abort tx - manager might detect failure
-			 * first, but maybe good to abort here just in case - if manager
-			 * removes the client from it's transacting set an abort shouldn't
-			 * be necessary and the manager needs to know what to do with it
-			 * (ignore it probably)
-			 * 
-			 * EXCEPT: If someone gets a message type meant only for the other
-			 * type of node, the demultiplexing methods below will throw an
-			 * exception up here - we can just print an error in this case since
-			 * something has to be pretty messed up for this to happen
-			 */
-
-			printError(e);
-		} catch (NotClientException e) {
+			Class<?> handlingClass = instance.getClass();
+			Class<?>[] paramTypes = { int.class, String.class };
+			Method handler = handlingClass.getMethod("receive" + mt.name(),
+					paramTypes);
+			Object[] args = { from, msgString };
+			handler.invoke(instance, args);
+		} catch (Exception e) {
 			printError(e);
 		}
+
+		/*
+		 * TODO: HIGH: All errors should be caught and dealt w/ by their
+		 * respective receive methods
+		 * 
+		 * (This might be out of date now)
+		 * 
+		 * Manager side: respond by sendError(from) or send TX_FAILURE
+		 * 
+		 * Client side: printError, abort tx - manager might detect failure
+		 * first, but maybe good to abort here just in case - if manager removes
+		 * the client from it's transacting set an abort shouldn't be necessary
+		 * and the manager needs to know what to do with it (ignore it probably)
+		 */
 	}
 
-	/*************************************************
-	 * begin manager-only cache coherency functions
-	 ************************************************/
-
-	/**
-	 * Create RPC
-	 * 
-	 * @throws NotManagerException
-	 * @throws IOException
-	 */
-	protected void receiveCreate(int client, String filename)
-			throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveCreate(client, filename);
+	public void receiveNoop(int from, String msg) {
+		printInfo("received noop from " + from);
 	}
 
-	/**
-	 * Delete RPC
-	 * 
-	 * @throws NotManagerException
-	 * @throws IOException
-	 * @throws InconsistentPrivelageLevelsDetectedException
-	 */
-	protected void receiveDelete(int from, String filename)
-			throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveDelete(from, filename);
+	public void receiveHeartbeat(int from, String msg) {
+		printVerbose("received heartbeat from " + from);
 	}
 
-	protected void receiveIC(int client, String filename)
-			throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveIC(client, filename);
+	public void receiveManagerIs(int from, String msg) {
+		this.clientFunctions.managerAddr = Integer.parseInt(msg);
+		printInfo("setting manager address to " + from);
 	}
-
-	/**
-	 * Receives an RC and changes this client's status from IV or RW to RO.
-	 * 
-	 * @throws NotManagerException
-	 */
-	protected void receiveRC(int client, String filename)
-			throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveRC(client, filename);
-
-	}
-
-	protected void receiveRQ(int client, String filename)
-			throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-
-		this.managerFunctions.receiveQ(client, filename, Protocol.RQ,
-				Protocol.RD, Protocol.RF, true);
-	}
-
-	protected void receiveTX_ABORT(int from) throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveTX_ABORT(from);
-	}
-
-	protected void receiveTX_COMMIT(int from) throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveTX_COMMIT(from);
-	}
-
-	protected void receiveTX_START(int from) throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveTX_START(from);
-	}
-
-	/**
-	 * Changes the status of this client from IV or RW
-	 * 
-	 * @throws NotManagerException
-	 */
-	protected void receiveWC(int client, String filename)
-			throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-		this.managerFunctions.receiveWC(client, filename);
-	}
-
-	protected void receiveWD_DELETE(int from, String filename)
-			throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException(
-					"WD_DELETE should only be received by the manager");
-		}
-		this.managerFunctions.receiveWD_DELETE(from, filename);
-	}
-
-	protected void receiveWQ(int client, String filename)
-			throws NotManagerException {
-		if (!isManager) {
-			throw new NotManagerException();
-		}
-
-		this.managerFunctions.receiveQ(client, filename, Protocol.WQ,
-				Protocol.WD, Protocol.WF, false);
-	}
-
-	/*************************************************
-	 * end manager-only cache coherency functions
-	 ************************************************/
-
-	/*************************************************
-	 * begin client-only cache coherency functions
-	 ************************************************/
-
-	/**
-	 * Client receives IV as a notification to mark a cached file invalid
-	 * 
-	 * @throws NotClientException
-	 */
-	protected void receiveIV(String msgString) throws NotClientException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveIV(msgString);
-	}
-
-	/**
-	 * Client receives RF as a request from the server to propagate their
-	 * changes.
-	 * 
-	 * @throws NotClientException
-	 */
-	protected void receiveRF(String msgString) throws NotClientException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveF(msgString, "RF", Protocol.RD, true);
-	}
-
-	/**
-	 * Client receives WF as a request from the server to propagate their
-	 * changes.
-	 * 
-	 * @throws NotClientException
-	 */
-	protected void receiveWF(String msgString) throws NotClientException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveF(msgString, "WF", Protocol.WD, false);
-	}
-
-	/**
-	 * RPC Error
-	 * 
-	 * @throws NotClientException
-	 */
-	protected void receiveError(Integer from, String msgString)
-			throws NotClientException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveError(from, msgString);
-	}
-
-	/**
-	 * RPC Successful (only received after successful Create or Delete)
-	 * 
-	 * @throws Exception
-	 */
-	protected void receiveSuccessful(int from, String msgString)
-			throws NotClientException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveSuccessful(from, msgString);
-	}
-
-	/**
-	 * Transaction succeeded
-	 * 
-	 * @throws NotClientException
-	 */
-	protected void receiveTX_SUCCESS() throws NotClientException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveTX_SUCCESS();
-	}
-
-	/**
-	 * Transaction failed
-	 * 
-	 * @throws NotClientException
-	 */
-	protected void receiveTX_FAILURE() throws NotClientException {
-		if (isManager) {
-			throw new NotClientException();
-		}
-		clientFunctions.receiveTX_FAILURE();
-	}
-
-	/*************************************************
-	 * end client-only cache coherency functions
-	 ************************************************/
-
-	/*************************************************
-	 * begin client and manager cache coherency functions
-	 ************************************************/
 
 	/**
 	 * @param msgString
 	 *            <filename> <contents> for ex) test hello world
 	 */
-	protected void receiveWD(int from, String msgString) {
+	public void receiveWD(int from, String msgString) {
 
 		// parse packet
 		StringTokenizer tokens = new StringTokenizer(msgString);
@@ -659,9 +369,9 @@ public class Client extends RIONode {
 
 	/**
 	 * @param msgString
-	 * @throws IOException
+	 *            <filename> <contents> for ex) test hello world
 	 */
-	protected void receiveRD(int from, String msgString) {
+	public void receiveRD(int from, String msgString) {
 		// parse packet
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
@@ -675,19 +385,6 @@ public class Client extends RIONode {
 		} else {
 			this.managerFunctions.receiveRD(from, filename, contents);
 		}
-	}
-
-	/*************************************************
-	 * end client and manager cache coherency functions
-	 ************************************************/
-
-	/**
-	 * 
-	 */
-	protected void receiveMANAGERIS(Integer from, byte[] msg) {
-		String msgStr = Utility.byteArrayToString(msg);
-		this.clientFunctions.managerAddr = Integer.parseInt(msgStr);
-		printInfo("setting manager address to " + from);
 	}
 
 	public void killNode(int destAddr) {

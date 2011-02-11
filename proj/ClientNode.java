@@ -156,6 +156,7 @@ public class ClientNode {
 
 		if (waitingForCommitSuccess
 				&& waitingForCommitQueue.size() > maxWaitingForCommitQueueSize) {
+			// TODO: just invoke receivedTxFailure here?
 			parent.restartAsClient();
 			return;
 		} else if (waitingForCommitSuccess) {
@@ -531,7 +532,7 @@ public class ClientNode {
 	/**
 	 * Perform a create RPC to the given address
 	 */
-	protected void createRPC(int address, String filename) {
+	private void createRPC(int address, String filename) {
 		parent.RIOSend(address, Protocol.CREATE,
 				Utility.stringToByteArray(filename));
 	}
@@ -539,7 +540,7 @@ public class ClientNode {
 	/**
 	 * Perform a delete RPC to the given address
 	 */
-	protected void deleteRPC(int address, String filename) {
+	private void deleteRPC(int address, String filename) {
 		parent.RIOSend(address, Protocol.DELETE,
 				Utility.stringToByteArray(filename));
 	}
@@ -632,15 +633,6 @@ public class ClientNode {
 	}
 
 	/**
-	 * RPC Error
-	 */
-	protected void receiveError(Integer from, String msgString) {
-		parent.printError(msgString);
-
-		// tx failure cleans up data structures
-	}
-
-	/**
 	 * Unlocks all files locally and clears queued txs
 	 */
 	protected void unlockAll() {
@@ -681,12 +673,20 @@ public class ClientNode {
 	 * begin receiveHandlers
 	 ************************************************/
 
+	/**
+	 * RPC Error
+	 */
+	public void receiveError(int from, String msgString) {
+		parent.printError(msgString);
+		// tx failure cleans up data structures
+	}
+
 	// TODO: HIGH: Check cleaning up state after {R,W}{Q,D,F} etc fails
 
 	/**
 	 * Client receives {W,R}F as a request to propagate their changes
 	 */
-	protected void receiveF(String msgString, String RForWF,
+	private void receiveF(String msgString, String RForWF,
 			int responseProtocol, boolean keepRO) {
 		if (managerUnknown()) {
 			return;
@@ -739,7 +739,7 @@ public class ClientNode {
 	/**
 	 * Client receives IV as a notification to mark a cached file invalid
 	 */
-	protected void receiveIV(String msgString) {
+	public void receiveIV(int from, String msgString) {
 		if (managerUnknown()) {
 			return;
 		}
@@ -756,7 +756,7 @@ public class ClientNode {
 	 * @param msgString
 	 *            <filename> <contents> ex) test hello world
 	 */
-	protected void receiveRD(int from, String filename, String contents) {
+	public void receiveRD(int from, String filename, String contents) {
 		if (managerUnknown()) {
 			return;
 		}
@@ -793,10 +793,14 @@ public class ClientNode {
 		unlockFile(filename);
 	}
 
+	public void receiveRF(int from, String filename) {
+		receiveF(filename, "RF", Protocol.RD, true);
+	}
+
 	/**
 	 * RPC Successful (only received after successful Create or Delete)
 	 */
-	protected void receiveSuccessful(int from, String msgString) {
+	public void receiveSuccess(int from, String msgString) {
 
 		String[] split = msgString.split(Client.packetDelimiter);
 		String cmd = split[0];
@@ -857,7 +861,7 @@ public class ClientNode {
 	/**
 	 * Transaction failed
 	 */
-	protected void receiveTX_FAILURE() {
+	public void receiveTXFailure(int from, String empty) {
 		abortCurrentTransaction();
 		// drop everything we're waiting for
 		unlockAll();
@@ -869,7 +873,7 @@ public class ClientNode {
 	/**
 	 * Transaction succeeded
 	 */
-	protected void receiveTX_SUCCESS() {
+	public void receiveTXSuccess(int from, String empty) {
 		commitCurrentTransaction();
 		processWaitingForCommitQueue();
 	}
@@ -878,7 +882,7 @@ public class ClientNode {
 	 * @param msgString
 	 *            <filename> <contents> ex) test hello world
 	 */
-	protected void receiveWD(int from, String filename, String contents) {
+	public void receiveWD(int from, String filename, String contents) {
 		if (managerUnknown()) {
 			return;
 		}
@@ -948,6 +952,11 @@ public class ClientNode {
 		sendToManager(Protocol.WC, Utility.stringToByteArray(filename));
 		unlockFile(filename);
 	}
+
+	public void receiveWF(int from, String filename) {
+		receiveF(filename, "WF", Protocol.WD, false);
+	}
+
 	/*************************************************
 	 * end receiveHandlers
 	 ************************************************/

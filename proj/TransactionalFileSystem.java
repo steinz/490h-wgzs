@@ -498,9 +498,10 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		Queue<PendingOperation> ops = txCache.queuedOperations.get(client);
 		if (ops != null) {
 			for (PendingOperation op : ops) {
-				if (op.op == Operation.DELETE) {
+				if (op.op == Operation.DELETE && op.filename.equals(filename)) {
 					exists = false;
-				} else if (op.op == Operation.CREATE) {
+				} else if (op.op == Operation.CREATE
+						&& op.filename.equals(filename)) {
 					exists = true;
 				}
 			}
