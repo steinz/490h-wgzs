@@ -108,7 +108,7 @@ public class ClientNode {
 
 	@Deprecated
 	private Queue<String> getQueue = new LinkedList<String>();
-	
+
 	/*
 	 * We have client side locking to handle the following type of cmd flows:
 	 * 
@@ -543,12 +543,15 @@ public class ClientNode {
 			pendingOperations.clear();
 
 			parent.fs.abortTransaction(parent.addr);
-		} catch (IOException e) {
+		} catch (IOException e) {			
 			/*
 			 * Failed to write an abort to the log - if we keep going, we could
 			 * corrupt the log (since txs don't have ids)
 			 */
 			parent.restartAsClient();
+		} catch (NullPointerException e) {
+			// NPE in abortTransaction on: start - crash - abort
+			parent.printError(e);
 		}
 	}
 
