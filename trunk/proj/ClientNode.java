@@ -176,7 +176,7 @@ public class ClientNode {
 	public ClientNode(Client n, int maxWaitingForCommitQueueSize) {
 		this.parent = n;
 		this.maxWaitingForCommitQueueSize = maxWaitingForCommitQueueSize;
-
+		
 		this.cache = new Cache(parent);
 		this.pendingOperations = new HashMap<String, PendingClientOperation>();
 		this.lockedFiles = new HashSet<String>();
@@ -366,6 +366,9 @@ public class ClientNode {
 			}
 			parent.printInfo("Got file, contents below:");
 			parent.printInfo(content);
+			
+			getQueue.add("got " + filename + ":");
+			getQueue.add(content);
 		} else {
 			// lock and get permissions
 			parent.printVerbose("requesting read access for " + filename);
@@ -821,6 +824,9 @@ public class ClientNode {
 		// print GET result
 		parent.printInfo("Got file, contents below:");
 		parent.printInfo(contents);
+		
+		getQueue.add("got " + filename + ":");
+		getQueue.add(contents);
 
 		// send rc
 		parent.printVerbose("sending rc to manager for " + filename);
@@ -908,6 +914,11 @@ public class ClientNode {
 	 */
 	public void receiveTXSuccess(int from, String empty) {
 		commitCurrentTransaction();
+		
+		while (getQueue.size() > 0) {
+			parent.printInfo(getQueue.poll());
+		}
+		
 		processWaitingForCommitQueue();
 	}
 
