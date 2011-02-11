@@ -209,7 +209,7 @@ public class ClientNode {
 	 * 
 	 * @throws TransactionException
 	 */
-	protected void appendHandler(StringTokenizer tokens, String line)
+	public void appendHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException {
 		// TODO: I think I found a framework bug - "append 1 test  world" is
 		// losing the extra space
@@ -244,7 +244,7 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * @throws UnknownManagerException
 	 */
-	protected void createHandler(StringTokenizer tokens, String line)
+	public void createHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException, UnknownManagerException {
 		String filename = tokens.nextToken();
 
@@ -273,7 +273,7 @@ public class ClientNode {
 	 * For debugging purposes only. Prints expected numbers for in and out
 	 * channels. Likely to change as new problems arise.
 	 */
-	protected void debugHandler(StringTokenizer tokens, String line) {
+	public void debugHandler(StringTokenizer tokens, String line) {
 		parent.RIOLayer.printSeqStateDebug();
 	}
 
@@ -285,7 +285,7 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * @throws UnknownManagerException
 	 */
-	protected void deleteHandler(StringTokenizer tokens, String line)
+	public void deleteHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException, UnknownManagerException {
 		String filename = tokens.nextToken();
 
@@ -315,7 +315,7 @@ public class ClientNode {
 	 * 
 	 * @throws IOException
 	 */
-	protected void getHandler(StringTokenizer tokens, String line)
+	public void getHandler(StringTokenizer tokens, String line)
 			throws IOException {
 		String filename = tokens.nextToken();
 
@@ -342,7 +342,7 @@ public class ClientNode {
 	/**
 	 * Initiates a remote handshake
 	 */
-	protected void handshakeHandler(StringTokenizer tokens, String line) {
+	public void handshakeHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = parent.getID().toString();
 		parent.printInfo("sending handshake to " + server);
@@ -358,7 +358,7 @@ public class ClientNode {
 	/**
 	 * Used for project2 to tell a node it is the manager.
 	 */
-	protected void managerHandler(StringTokenizer tokens, String line) {
+	public void managerHandler(StringTokenizer tokens, String line) {
 		parent.printInfo("promoted to manager");
 		parent.makeManager();
 	}
@@ -366,7 +366,7 @@ public class ClientNode {
 	/**
 	 * Used for project2 to tell a node the address of the manager.
 	 */
-	protected void managerisHandler(StringTokenizer tokens, String line) {
+	public void managerisHandler(StringTokenizer tokens, String line) {
 		managerAddr = Integer.parseInt(tokens.nextToken());
 		parent.printInfo("setting manager address to " + managerAddr);
 	}
@@ -374,7 +374,7 @@ public class ClientNode {
 	/**
 	 * Sends a noop
 	 */
-	protected void noopHandler(StringTokenizer tokens, String line) {
+	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
 		parent.RIOSend(server, Protocol.NOOP, Client.emptyPayload);
 	}
@@ -386,7 +386,7 @@ public class ClientNode {
 	 * 
 	 * @throws TransactionException
 	 */
-	protected void putHandler(StringTokenizer tokens, String line)
+	public void putHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException {
 		String filename = tokens.nextToken();
 		String content = parseAddContent(line, "put", filename);
@@ -416,7 +416,7 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * @throws IOException
 	 */
-	protected void txabortHandler(StringTokenizer tokens, String line)
+	public void txabortHandler(StringTokenizer tokens, String line)
 			throws TransactionException, IOException {
 		if (!transacting) {
 			throw new TransactionException(
@@ -446,7 +446,7 @@ public class ClientNode {
 	 * 
 	 * @throws IOException
 	 */
-	protected void txcommitHandler(StringTokenizer tokens, String line)
+	public void txcommitHandler(StringTokenizer tokens, String line)
 			throws TransactionException, IOException {
 		if (!transacting) {
 			throw new TransactionException(
@@ -468,7 +468,7 @@ public class ClientNode {
 	 * 
 	 * @throws IOException
 	 */
-	protected void txstartHandler(StringTokenizer tokens, String line)
+	public void txstartHandler(StringTokenizer tokens, String line)
 			throws TransactionException, IOException {
 		// this will be queued in onCommand if waitingForCommitSuccess
 		if (transacting) {
