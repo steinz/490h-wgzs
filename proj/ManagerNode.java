@@ -146,7 +146,7 @@ public class ManagerNode {
 	/**
 	 * List of nodes the manager is waiting for ICs from.
 	 */
-	protected Map<String, List<Integer>> pendingICs;
+	private Map<String, List<Integer>> pendingICs;
 
 	/**
 	 * Status of who is waiting for read permission for this file
@@ -183,9 +183,9 @@ public class ManagerNode {
 	/**
 	 * A set of node addresses currently performing transactions
 	 */
-	protected Set<Integer> transactionsInProgress;
+	private Set<Integer> transactionsInProgress;
 	
-	protected Cache filePermissionCache;
+	private Cache filePermissionCache;
 
 	public ManagerNode(Client n) {
 		node = n;
@@ -266,7 +266,7 @@ public class ManagerNode {
 	 * false if the file isn't locked. Also returns false if the file is locked
 	 * by the requesting client (i.e. the client is the one locking the file).
 	 */
-	public boolean queueRequestIfLocked(int client, int protocol,
+	private boolean queueRequestIfLocked(int client, int protocol,
 			String filename) {
 		if (lockedFiles.containsKey(filename)) {
 
@@ -465,7 +465,7 @@ public class ManagerNode {
 	 * 
 	 * @param filename
 	 */
-	protected void lockFile(String filename, Integer from) {
+	private void lockFile(String filename, Integer from) {
 		/**
 		 * TODO: Detect if client is performing operations out of filename order
 		 * during transaction.
@@ -520,12 +520,16 @@ public class ManagerNode {
 		 */
 
 		// unlock files
-		Set<Entry<String, Integer>> keys = lockedFiles.entrySet();
-		for (Entry<String, Integer> entry : keys) {
+		ArrayList<String> filesToUnlock = new ArrayList<String>();
+		
+		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
 			if (entry.getValue() == from) {
-				unlockFile(entry.getKey()); 
+				filesToUnlock.add(entry.getKey());
 			}
 		}
+		
+		for (int i = 0; i < filesToUnlock.size(); i++)
+			unlockFile(filesToUnlock.get(i));
 
 		this.node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
 
@@ -664,9 +668,7 @@ public class ManagerNode {
 	 */
 	private boolean checkExistence(String filename) {
 
-		if (this.filePermissionCache.hasRO(filename).size() > 0)
-			return true;
-		else if (this.filePermissionCache.hasRW(filename) != null)
+		if (this.filePermissionCache.contains(filename))
 			return true;
 		else if (this.node.fs.fileExistsTX(this.node.addr, filename))
 			return true;
@@ -855,7 +857,7 @@ public class ManagerNode {
 	 * 
 	 * @throws IOException
 	 */
-	protected void sendFile(int to, String filename, int protocol)
+	private void sendFile(int to, String filename, int protocol)
 			throws IOException {
 		StringBuilder sendMsg = new StringBuilder();
 
@@ -876,7 +878,7 @@ public class ManagerNode {
 	/**
 	 * Unlocks filename and checks if there is another request to service
 	 */
-	protected void unlockFile(String filename) {
+	private void unlockFile(String filename) {
 
 		this.node.printVerbose("manager unlocking file: " + filename);
 		this.node.logSynopticEvent("MANAGER-UNLOCK");
@@ -911,13 +913,13 @@ public class ManagerNode {
 	 * @param from The client to check
 	 * @return False if this client has no pending permission requests, but True if the client has no pending permission requests
 	 */
-	protected boolean clientHasPendingPermissions(int from){
+	private boolean clientHasPendingPermissions(int from){
 		return (checkPermissionsHelper(from, pendingWritePermissionRequests) && 
 				checkPermissionsHelper(from, pendingReadPermissionRequests));
 	
 	}
 	
-	protected boolean checkPermissionsHelper(int from, Map<String, Integer> struct) {
+	private boolean checkPermissionsHelper(int from, Map<String, Integer> struct) {
 		for (Entry<String, Integer> entry : struct.entrySet()) {
 			if (entry.getValue() == from)
 				return false;
@@ -929,7 +931,7 @@ public class ManagerNode {
 	 * Helper that sends a request for the provided filename to the provided
 	 * client using the provided protocol
 	 */
-	protected void sendRequest(int client, String filename, int protocol) {
+	private void sendRequest(int client, String filename, int protocol) {
 		byte[] payload = Utility.stringToByteArray(filename);
 		node.RIOSend(client, protocol, payload);
 	}
@@ -948,7 +950,7 @@ public class ManagerNode {
 	 * Sends a successful message for the given protocol from the manager to the
 	 * client
 	 */
-	protected void sendSuccess(int destAddr, int protocol, String message) {
+	private void sendSuccess(int destAddr, int protocol, String message) {
 		String msg = Protocol.protocolToString(protocol) + Client.packetDelimiter
 				+ message;
 		byte[] payload = Utility.stringToByteArray(msg);
@@ -967,7 +969,7 @@ public class ManagerNode {
 	 * @param errorcode
 	 *            The error code
 	 */
-	protected void sendError(int destAddr, int protocol, String filename,
+	private void sendError(int destAddr, int protocol, String filename,
 			int errorcode) {
 		String msg = filename + Client.packetDelimiter
 				+ Protocol.protocolToString(protocol) + Client.packetDelimiter
@@ -1006,7 +1008,7 @@ public class ManagerNode {
 
 	}
 
-	public void addHeartbeatTimeout(Integer destAddr) {
+	private void addHeartbeatTimeout(Integer destAddr) {
 
 		Method cbMethod = null;
 		try {
@@ -1059,11 +1061,15 @@ public class ManagerNode {
 				}
 			}
 		}
+		ArrayList<String> filesToUnlock = new ArrayList<String>();
 
 		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
 			if (entry.getValue().equals(destAddr))
 				unlockFile(entry.getKey());
 		}
+		
+		for (int i = 0; i < filesToUnlock.size(); i++)
+			unlockFile(filesToUnlock.get(i));
 	}
 
 }
