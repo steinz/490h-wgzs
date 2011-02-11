@@ -397,7 +397,6 @@ public class Client extends RIONode {
 	 * 
 	 * @throws NotManagerException
 	 * @throws IOException
-	 * @throws PrivilegeLevelDisagreementException
 	 * @throws InconsistentPrivelageLevelsDetectedException
 	 */
 	protected void receiveDelete(int from, String filename)
@@ -505,7 +504,6 @@ public class Client extends RIONode {
 	 * Client receives IV as a notification to mark a cached file invalid
 	 * 
 	 * @throws NotClientException
-	 * @throws UnknownManagerException
 	 */
 	protected void receiveIV(String msgString) throws NotClientException {
 		if (isManager) {
@@ -519,9 +517,6 @@ public class Client extends RIONode {
 	 * changes.
 	 * 
 	 * @throws NotClientException
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 * @throws PrivilegeLevelDisagreementException
 	 */
 	protected void receiveRF(String msgString) throws NotClientException {
 		if (isManager) {
@@ -535,9 +530,6 @@ public class Client extends RIONode {
 	 * changes.
 	 * 
 	 * @throws NotClientException
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 * @throws PrivilegeLevelDisagreementException
 	 */
 	protected void receiveWF(String msgString) throws NotClientException {
 		if (isManager) {
@@ -576,8 +568,6 @@ public class Client extends RIONode {
 	 * Transaction succeeded
 	 * 
 	 * @throws NotClientException
-	 * @throws TransactionException
-	 * @throws IOException
 	 */
 	protected void receiveTX_SUCCESS() throws NotClientException {
 		if (isManager) {
@@ -590,8 +580,6 @@ public class Client extends RIONode {
 	 * Transaction failed
 	 * 
 	 * @throws NotClientException
-	 * @throws TransactionException
-	 * @throws IOException
 	 */
 	protected void receiveTX_FAILURE() throws NotClientException {
 		if (isManager) {
@@ -611,10 +599,6 @@ public class Client extends RIONode {
 	/**
 	 * @param msgString
 	 *            <filename> <contents> for ex) test hello world
-	 * @throws IOException
-	 * @throws UnknownManagerException
-	 * @throws IllegalConcurrentRequestException
-	 * @throws MissingPendingRequestException
 	 */
 	protected void receiveWD(int from, String msgString) {
 
@@ -636,7 +620,6 @@ public class Client extends RIONode {
 	/**
 	 * @param msgString
 	 * @throws IOException
-	 * @throws UnknownManagerException
 	 */
 	protected void receiveRD(int from, String msgString) {
 		// parse packet

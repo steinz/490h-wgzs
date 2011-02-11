@@ -225,7 +225,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 * 
 		 * @param client
 		 * @throws IOException
-		 * @throws TransactionException
 		 */
 		public void commitQueue(int client) throws IOException {
 			Queue<PendingOperation> clientQueue = queuedOperations.get(client);
@@ -263,7 +262,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 * 
 		 * Writes the full log to logTempFile first in case of failure
 		 * 
-		 * TODO: HIGH: Test purgeLog
+		 * TODO: HIGH: TEST
 		 * 
 		 * @throws IOException
 		 */
@@ -319,6 +318,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 		/**
 		 * Parse the log file on disk
+		 * 
+		 * TODO: HIGH: TEST
 		 * 
 		 * @throws FileNotFoundException
 		 */
@@ -393,7 +394,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 						seenStart = false;
 					} else if (seenStart && nextOp.op == Operation.TXSTART) {
 						throw new TransactionLogException(
-								"multiple TXSTART without separating TXCOMMIT");
+								"multiple txstarts without txcommit or txabort");
 					} else if (!seenStart && nextOp.op == Operation.TXSTART) {
 						seenStart = true;
 					} else if (seenStart) {
