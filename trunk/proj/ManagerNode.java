@@ -4,7 +4,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -21,13 +20,9 @@ import edu.washington.cs.cse490h.lib.Utility;
  * TODO: HIGH: If a client trys to do an operation that requires RW, make sure they have RW and abort 
  * them or send them a failure if they don't (see Writeup 3 > FS Semantics > Paragraph 4 )
  */
-// TODO: HIGH: TEST: If a client tries to write to a file that you locked previously, you should be granted automatic RW. This should work now, but testing...
-// TODO: HIGH: TEST: Add to cache status for all files requested
-// TODO: HIGH: TEST: Deal with creates and deletes appropriately -  
-// 		for create, need to change W_DEL and createReceive to use createfiletx and deletefiletx.
 // TODO: HIGH: TEST: Need to handle aborts, failures, and successes - every handler code path should end by sending something to the client (except {W,R,I}C) - this comment should persist
-// TODO: HIGH: TEST: Replicas - if client <x> goes down, and someone is requesting this file, we should request a copy from its replica
-// TODO: HIGH: Change senderror from error codes to exceptions
+// TODO: Replicas - if client <x> goes down, and someone is requesting this file, we should request a copy from its replica
+// TODO: I would like to push the manager to a separate subpackage entirely and have separate classes for the node, permission queues, etc.
 /**
  * Replica scheme: 1 -> 2 2 -> 3 3 -> 4 4 -> 5 5 -> 1
  */
@@ -177,6 +172,11 @@ public class ManagerNode {
 	 */
 	private Set<Integer> transactionsInProgress;
 
+	/**
+	 * A map from client address to a list of files this client has requested, in order
+	 */
+	private Map<Integer, List<String>> clientTransactionTouchedFiles;
+	
 	private Cache filePermissionCache;
 
 	public ManagerNode(Client n) {
@@ -192,6 +192,7 @@ public class ManagerNode {
 		this.transactionsInProgress = new HashSet<Integer>();
 		this.replicaNode = new HashMap<Integer, Integer>();
 		this.filePermissionCache = new Cache(node);
+		this.clientTransactionTouchedFiles = new HashMap<Integer, List<String>>();
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -261,6 +262,13 @@ public class ManagerNode {
 	}
 
 	public void receiveWDDelete(int client, String filename) {
+		
+		// make sure this client actually had RW to begin with
+		if (filePermissionCache.hasRW(filename) != client){
+			sendError(client, filename, new TransactionException("Error: client " + client + " does not have RW on file: " + filename));
+			return;
+		}
+		
 		// delete locally
 		try {
 			if (transactionsInProgress.contains(client))
@@ -313,6 +321,11 @@ public class ManagerNode {
 
 	public void receiveRD(int client, String filename, String contents) {
 
+		// make sure this client actually had RW to begin with
+		if (filePermissionCache.hasRW(filename) != client){
+			sendError(client, filename, new TransactionException("Error: client " + client + " does not have RW on file: " + filename));
+			return;
+		}
 		// first write the file to save a local copy
 		try {
 			node.fs.writeFile(filename, contents, false);
@@ -352,6 +365,12 @@ public class ManagerNode {
 		 * creates it might give us a newer file version, which might be nice)
 		 */
 		// first write the file to save a local copy
+		
+		// make sure this client actually had RW to begin with
+		if (filePermissionCache.hasRW(filename) != client){
+			sendError(client, filename, new TransactionException("Error: client " + client + " does not have RW on file: " + filename));
+			return;
+		}
 		
 		// check for blank contents
 		if (contents.equals(null))
@@ -438,6 +457,32 @@ public class ManagerNode {
 		node.printVerbose("manager locking file: " + filename);
 		node.logSynopticEvent("MANAGER-LOCK");
 		lockedFiles.put(filename, client);
+		
+		// add this to the list of touched files for a transaction, abort them if it's out of filename order
+		if (transactionsInProgress.contains(client)){
+			List<String> list = clientTransactionTouchedFiles.get(client);
+			if (list == null){
+				list = new ArrayList<String>();
+				clientTransactionTouchedFiles.put(client, list);
+			}
+			if (list.contains(filename)){
+				node.printVerbose("Client: "  + client + " has touched file: " + filename + " previously, not checking for filename order");
+				return;
+			}
+			if (list.size() == 0){
+				node.printVerbose("Client: "  + client + " has now touched file: " + filename);
+				list.add(filename);
+				return;
+			}
+			String lastFile = list.get(list.size() - 1);
+			if (filename.compareTo(lastFile) < 0){
+				sendError(client, filename, new TransactionException("Error: client: " + client + " requested file out of filename order: " + filename));
+			}
+			else{
+				node.printVerbose("Client: "  + client + " has now touched file: " + filename);
+				list.add(filename);
+			}
+		}
 	}
 
 	public void receiveTXStart(int client, String empty) {
@@ -459,6 +504,13 @@ public class ManagerNode {
 		}
 		// callback setup
 		addHeartbeatTimeout(client);
+		
+		// If this client has something in transaction touched cache, an error occurred
+		if (clientTransactionTouchedFiles.get(client) != null){
+			node.printError("ERROR: Manager has cached transaction touched files for client: " + client);
+			// TODO: HIGH: Send the client an error? This isn't really a client problem...
+		}
+		clientTransactionTouchedFiles.put(client, new ArrayList<String>());
 
 	}
 
@@ -502,6 +554,12 @@ public class ManagerNode {
 		}
 
 		node.RIOSend(client, Protocol.TX_SUCCESS, Client.emptyPayload);
+		
+		// Clear cache
+		if (clientTransactionTouchedFiles.remove(client) == null){
+			// TODO: HIGH: Should we even bother printing this error? A client could txstart then abort, which might result in this situation
+			node.printError("ERROR: Manager thinks this client: " + client + " has touched no files!");
+		}
 
 	}
 
@@ -524,6 +582,11 @@ public class ManagerNode {
 		} catch (IOException e) {
 			sendError(client, "", e);
 			return;
+		}
+		// Clear cache
+		if (clientTransactionTouchedFiles.remove(client) == null){
+			// TODO: HIGH: Should we even bother printing this error? A client could txstart then abort, which might result in this situation
+			node.printError("ERROR: Manager thinks this client: " + client + " has touched no files!");
 		}
 	}
 
@@ -671,6 +734,7 @@ public class ManagerNode {
 		// lock
 		lockFile(filename, client);
 
+		
 		// address of node w/ rw or null
 		Integer rw = filePermissionCache.hasRW(filename);
 		List<Integer> ro = filePermissionCache.hasRO(filename);
@@ -991,6 +1055,11 @@ public class ManagerNode {
 		transactionsInProgress.remove(client);
 		unlockFilesForClient(client);
 		pendingCommitRequests.remove(client);
+		// Clear cache
+		if (clientTransactionTouchedFiles.remove(client) == null){
+			// TODO: HIGH: Should we even bother printing this error? A client could txstart then abort, which might result in this situation
+			node.printError("ERROR: Manager thinks this client: " + client + " has touched no files!");
+		}
 	}
 
 	/**
