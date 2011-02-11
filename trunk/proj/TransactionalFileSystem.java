@@ -18,18 +18,16 @@ import java.util.Queue;
 import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.Utility;
 
-/*
- * TODO: EC: In memory file content caching
- */
+// TODO: EC: In memory file content caching
 
 /*
  * TODO: EC: Implement some kind of snapshotting that could be used by long 
  * running, non-mutating transactions without locking files (for analytics, etc)
  */
 
-/*
- * TODO: Keep the log open between writes
- */
+// TODO: More unit tests
+
+// TODO: Keep the log open between writes
 
 /**
  * Extension of the ReliableFileSystem that adds support for transactions via
@@ -201,6 +199,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			case CREATE:
 				if (!Utility.fileExists(fs.n, op.filename)) {
 					fs.createFile(op.filename);
+				} else {
+					fs.performWrite(op.filename, false, "");
 				}
 				break;
 			case DELETE:
@@ -212,7 +212,10 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 				fs.writeFile(op.filename, op.contents, false);
 				break;
 			case APPEND:
-				//TODO: HIGH: This can double append if a failure occurs during redo
+				/*
+				 * This can't double append if a failure occurs during redo
+				 * because a temp copy of the log is made before redoing
+				 */
 				fs.writeFile(op.filename, op.contents, true);
 				break;
 			default:
@@ -223,6 +226,9 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		/**
 		 * Commits each operation in the queue for client and then clears the
 		 * queue
+		 * 
+		 * TODO: HIGH: Can this result in double appends if the client fails
+		 * after appending? Maybe this should write a temp log first...
 		 * 
 		 * @param client
 		 * @throws IOException
@@ -262,8 +268,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 * the latest commit or abort
 		 * 
 		 * Writes the full log to logTempFile first in case of failure
-		 * 
-		 * TODO: HIGH: TEST
 		 * 
 		 * @throws IOException
 		 */
@@ -320,8 +324,6 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		/**
 		 * Parse the log file on disk
 		 * 
-		 * TODO: HIGH: TEST
-		 * 
 		 * @throws FileNotFoundException
 		 */
 		protected Map<Integer, List<PendingOperation>> queueFromLog()
@@ -370,8 +372,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			}
 
 			/*
-			 * TODO: Not sure if we are handling any failures reading the log
-			 * file correctly, although I don't think we need to
+			 * TODO: HIGH: Not sure if we are handling any failures reading the
+			 * log file correctly, although I don't think we need to
 			 */
 
 			Map<Integer, List<PendingOperation>> oldTxs = queueFromLog();

@@ -105,6 +105,8 @@ public class Client extends RIONode {
 
 	/**
 	 * Purge the log every fsPurgeFrequency commits/aborts
+	 * 
+	 * TODO: raise for prod
 	 */
 	protected static final int fsPurgeFrequency = 5;
 
