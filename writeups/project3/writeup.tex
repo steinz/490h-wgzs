@@ -40,10 +40,12 @@ However, in our actual implementaion, different code runs if the client is or is
 
 \textbf{File System Semantics:} \\
 
-A file exists and will be accessible to any node in the system iff it has been created by some node in the system outside of a tx or during a committed tx 
-and it hasn't been deleted outside of a tx or during a committed tx since it was created.
+A file is defined to exist and is accessible iff some node in the system created the file outside of a tx, or inside of a tx that has been committed. This file will cease to be available if it is deleted outside of a tx or deleted by a committed tx.
 
-Any file existing in the system is guaranteed to have some version in the manager's persistent storage (although this might not be the newest version).
+If a file exists, then it is guaranteed that the manager has some version of the file in its persistent storage (although, it is not guaranteed to be the newest version).
+
+
+
 For a given file, at any point in time at most one client can have ReadWrite access to that file.
 If some client has RW access to a file, it is that client's responsibility to make sure that its replicas log all changes the owning client
 makes to that file before the client reports changes completed either to the manager or to the command-issuer.

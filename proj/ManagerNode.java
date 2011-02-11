@@ -3,6 +3,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -297,9 +298,10 @@ public class ManagerNode {
 		try {
 			if (transactionsInProgress.contains(from))
 				try {
-					this.node.fs.createFileTX(from, filename);
+					this.node.fs.deleteFileTX(from, filename);
 				} catch (TransactionException e) {
 					this.node.printError(e);
+					return;
 				} catch (IOException e) {
 					this.node.printVerbose("IOException on manager for file: "
 							+ filename);
@@ -307,7 +309,7 @@ public class ManagerNode {
 			else
 				this.node.fs.deleteFile(filename);
 		} catch (IOException e) {
-			sendError(from, filename, e.getMessage());
+			sendError(from, filename, "IOException on manager for file: " + filename);
 			return;
 		}
 		// remove permissions
@@ -323,7 +325,6 @@ public class ManagerNode {
 			// create the file which was deleted by the owner
 			createNewFile(filename, requester);
 			unlockFile(filename);
-			return;
 		}
 
 		requester = pendingRPCDeleteRequests.remove(filename);
@@ -331,7 +332,6 @@ public class ManagerNode {
 			// file was previously deleted by owner
 			sendError(requester, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
-			return;
 		}
 
 		// look for read/rw requests
@@ -340,14 +340,12 @@ public class ManagerNode {
 			// file was deleted by owner
 			sendError(requester, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
-			return;
 		}
 		requester = pendingWritePermissionRequests.remove(filename);
 		if (requester != null) {
 			// file was deleted by owner
 			sendError(requester, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
-			return;
 		}
 
 	}
@@ -393,10 +391,14 @@ public class ManagerNode {
 		 * creates it might give us a newer file version, which might be nice)
 		 */
 		// first write the file to save a local copy
+		
+		// check for blank contents
+		if (contents.equals(null))
+			contents = "";
 		try {
 			this.node.fs.writeFile(filename, contents, false);
 		} catch (IOException e) {
-			sendError(from, filename, e.getMessage());
+			sendError(from, filename, "IOException in receiveWD");
 			return;
 		}
 
@@ -582,7 +584,6 @@ public class ManagerNode {
 			// Someone has RO, so throw an error that the file exists already
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileAlreadyExists);
-			return;
 		} else { // File not in system
 			// decide what to do based on transaction status
 			if (transactionsInProgress.contains(from)) {
@@ -693,11 +694,6 @@ public class ManagerNode {
 
 		// check if locked
 		if (queueRequestIfLocked(from, receivedProtocol, filename)) {
-			/**
-			 * If the person who locked the file was the requester, then give
-			 * them automatic RW anyway.
-			 */
-
 			return;
 		}
 
@@ -711,6 +707,7 @@ public class ManagerNode {
 		if (!checkExistence(filename)) {
 			sendError(from, Protocol.ERROR, filename,
 					ErrorCode.FileDoesNotExist);
+			unlockFile(filename);
 			return;
 		}
 
@@ -720,6 +717,8 @@ public class ManagerNode {
 			node.printError(problem);
 
 			sendError(from, filename, problem);
+
+			unlockFile(filename);
 			return;
 		}
 
@@ -842,8 +841,8 @@ public class ManagerNode {
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
-		if (!lockedFiles.containsKey(filename)
-				|| !transactionsInProgress.contains(lockedFiles.get(filename)))
+		if (lockedFiles.containsKey(filename)
+				&& !transactionsInProgress.contains(lockedFiles.get(filename)))
 			unlockFile(filename);
 
 	}
@@ -856,8 +855,8 @@ public class ManagerNode {
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
-		if (!lockedFiles.containsKey(filename)
-				|| !transactionsInProgress.contains(lockedFiles.get(filename)))
+		if (lockedFiles.containsKey(filename)
+				&& !transactionsInProgress.contains(lockedFiles.get(filename)))
 			unlockFile(filename);
 	}
 
@@ -919,6 +918,23 @@ public class ManagerNode {
 
 	}
 
+	/**
+	 * Unlocks all files this client has locks on currently.
+	 * Meant mostly for the case of tx failures
+	 * @param client the client to unlock all files from
+	 */
+	private void unlockFilesForClient(int client){
+		ArrayList<String> filesToUnlock = new ArrayList<String>();
+
+		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
+			if (entry.getValue().equals(client))
+				filesToUnlock.add(entry.getKey());
+		}
+		
+		for (int i = 0; i < filesToUnlock.size(); i++)
+			unlockFile(filesToUnlock.get(i));
+	}
+	
 	/**
 	 * Checks the pending permission request caches for a client
 	 * 
@@ -990,18 +1006,27 @@ public class ManagerNode {
 				+ ErrorCode.lookup(errorcode);
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(destAddr, Protocol.ERROR, payload);
-		this.node.RIOSend(destAddr, Protocol.TX_FAILURE,
-				Utility.stringToByteArray(""));
-		transactionsInProgress.remove(destAddr);
+		
+		// tx cleanup
+		txFailureCleanup(destAddr);
+		
 	}
 
 	public void sendError(int from, String filename, String message) {
 		String msg = filename + Client.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		this.node.RIOSend(from, Protocol.ERROR, payload);
+		
+		// tx cleanup
+		txFailureCleanup(from);
+	}
+	
+	private void txFailureCleanup(int from){
+
 		this.node.RIOSend(from, Protocol.TX_FAILURE,
 				Utility.stringToByteArray(""));
 		transactionsInProgress.remove(from);
+		unlockFilesForClient(from);
 	}
 
 	/**
@@ -1019,7 +1044,7 @@ public class ManagerNode {
 					.RIOSend(destAddr, Protocol.HEARTBEAT, Client.emptyPayload);
 			addHeartbeatTimeout(destAddr);
 		}
-
+		//printDebug();
 	}
 
 	private void addHeartbeatTimeout(Integer destAddr) {
@@ -1039,6 +1064,27 @@ public class ManagerNode {
 		Integer[] args = { destAddr };
 		Callback cb = new Callback(cbMethod, this, args);
 		this.node.addTimeout(cb, TIMEOUT);
+	}
+	
+	/**
+	 * Print debug method that prints the current state of data structures for the manager
+	 */
+	private void printDebug(){
+
+		node.printVerbose(pendingWritePermissionRequests.containsValue(1) + "", true);
+		node.printVerbose(pendingWritePermissionRequests.containsValue(2) + "", true);
+		Set<String> filenames = pendingWritePermissionRequests.keySet();
+		Iterator<String> i = filenames.iterator();
+		while (i.hasNext()){
+			node.printVerbose(i.next() + "", true);
+			
+		}
+		
+		Set<String> lockedfiles = lockedFiles.keySet();
+		Iterator<String> j = lockedfiles.iterator();
+		while (j.hasNext()){
+			node.printVerbose(j.next(), true);
+		}
 	}
 
 	/**
@@ -1080,7 +1126,7 @@ public class ManagerNode {
 
 		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
 			if (entry.getValue().equals(destAddr))
-				unlockFile(entry.getKey());
+				filesToUnlock.add(entry.getKey());
 		}
 
 		for (int i = 0; i < filesToUnlock.size(); i++)
