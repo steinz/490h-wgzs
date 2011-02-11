@@ -129,14 +129,14 @@ public class Logger {
 	// TODO: LOW: keep the writer open between entries
 
 	private static void writeToLog(Node n, String message) {
-		try {
-			PersistentStorageWriter writer = n.getWriter(LOG_FILE, true);
-			writer.write(message);
-			writer.newLine();
-			writer.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+//		try {
+//			PersistentStorageWriter writer = n.getWriter(LOG_FILE, true);
+//			writer.write(message);
+//			writer.newLine();
+//			writer.close();
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}
 
 		try {
 			BufferedWriter r = null;
