@@ -64,8 +64,8 @@ public class ManagerNode {
 		private Map<String, List<Integer>> RO;
 		private RIONode n;
 
-		public Cache(RIONode n) {
-			this.n = n;
+		public Cache(RIONode node) {
+			this.n = node;
 			this.RW = new HashMap<String, Integer>();
 			this.RO = new HashMap<String, List<Integer>>();
 		}
@@ -192,7 +192,7 @@ public class ManagerNode {
 	private Cache filePermissionCache;
 
 	public ManagerNode(Client n) {
-		node = n;
+		this.node = n;
 		this.lockedFiles = new HashMap<String, Integer>();
 		this.pendingICs = new HashMap<String, List<Integer>>();
 		this.queuedFileRequests = new HashMap<String, Queue<QueuedFileRequest>>();
@@ -203,7 +203,7 @@ public class ManagerNode {
 		this.pendingCommitRequests = new HashMap<Integer, QueuedFileRequest>();
 		this.transactionsInProgress = new HashSet<Integer>();
 		this.replicaNode = new HashMap<Integer, Integer>();
-		this.filePermissionCache = new Cache(this.node);
+		this.filePermissionCache = new Cache(node);
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -213,18 +213,18 @@ public class ManagerNode {
 	private void createNewFile(String filename, int from) {
 		// local create
 		try {
-			this.node.fs.createFile(filename);
+			node.fs.createFile(filename);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
 			return;
 		}
 		// give RW to the requester for filename
-		this.node.printVerbose("Changing status of client: " + from
+		node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
-		this.filePermissionCache.giveRW(from, filename);
+		filePermissionCache.giveRW(from, filename);
 
 		// send success to requester
-		this.node.printVerbose("sending "
+		node.printVerbose("sending "
 				+ Protocol.protocolToString(Protocol.SUCCESS) + " to " + from);
 		sendSuccess(from, Protocol.CREATE, filename);
 	}
@@ -232,48 +232,26 @@ public class ManagerNode {
 	private void deleteExistingFile(String filename, int from) {
 		// delete the file locally
 		try {
-			this.node.fs.deleteFile(filename);
+			node.fs.deleteFile(filename);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
 		}
 		// update permissions
-		this.node.printVerbose("marking file " + filename + " as unowned");
+		node.printVerbose("marking file " + filename + " as unowned");
 
-		this.node
+		node
 				.printVerbose("Blanking all permissions for file: " + filename);
-		this.filePermissionCache.revoke(filename);
+		filePermissionCache.revoke(filename);
 
 		// no one had permissions, so send success
 		sendSuccess(from, Protocol.DELETE, filename);
 	}
 
-	/**
-	 * NOTE for why this returns false if the file is locked by the client: If
-	 * the client is the one locking the file, then it's fine to give them
-	 * permission and not queue the request, because this client probably has an
-	 * exclusive lock on the file. This also means that even if someone else has
-	 * RO on the file, then it's a good idea to just return and allow them to
-	 * proceed as normal (since they'll revoke someone else's access if they're
-	 * requesting ownership).
-	 * 
-	 * TODO: HIGH: Super glad this exaplanation contains the word "probably"
-	 * 
-	 * Example:
-	 * 
-	 * 1 get test hello
-	 * 
-	 * 1 put test world
-	 * 
-	 * The second operation is queued by the client via it's locking mechanism
-	 * 
-	 * Queues the given request if the file is locked and returns true. Returns
-	 * false if the file isn't locked. Also returns false if the file is locked
-	 * by the requesting client (i.e. the client is the one locking the file).
-	 */
 	private boolean queueRequestIfLocked(int client, int protocol,
 			String filename) {
 		if (lockedFiles.containsKey(filename)) {
 
+			// Don't care if the file is locked by the requesting client
 			if (lockedFiles.get(filename).equals(client)) {
 				return false;
 			}
@@ -294,29 +272,29 @@ public class ManagerNode {
 		}
 	}
 
-	public void receiveWDDelete(int from, String filename) {
+	public void receiveWDDelete(int client, String filename) {
 		// delete locally
 		try {
-			if (transactionsInProgress.contains(from))
+			if (transactionsInProgress.contains(client))
 				try {
-					this.node.fs.deleteFileTX(from, filename);
+					node.fs.deleteFileTX(client, filename);
 				} catch (TransactionException e) {
-					this.node.printError(e);
+					sendError(client, Protocol.DELETE, filename, ErrorCode.UnknownError);
 					return;
 				} catch (IOException e) {
-					this.node.printVerbose("IOException on manager for file: "
-							+ filename);
+					sendError(client, Protocol.DELETE, filename, ErrorCode.UnknownError);
+					return;
 				}
 			else
-				this.node.fs.deleteFile(filename);
+				node.fs.deleteFile(filename);
 		} catch (IOException e) {
-			sendError(from, filename, "IOException on manager for file: " + filename);
+			sendError(client, filename, "IOException on manager for file: " + filename);
 			return;
 		}
 		// remove permissions
 
-		this.node.printVerbose("Blanking permissions for file: " + filename);
-		this.filePermissionCache.revoke(filename);
+		node.printVerbose("Blanking permissions for file: " + filename);
+		filePermissionCache.revoke(filename);
 
 		// look for pending requests
 
@@ -330,21 +308,18 @@ public class ManagerNode {
 
 		requester = pendingRPCDeleteRequests.remove(filename);
 		if (requester != null) {
-			// file was previously deleted by owner
 			sendError(requester, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
 		}
 
-		// look for read/rw requests
 		requester = pendingReadPermissionRequests.remove(filename);
 		if (requester != null) {
-			// file was deleted by owner
 			sendError(requester, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
 		}
+		
 		requester = pendingWritePermissionRequests.remove(filename);
 		if (requester != null) {
-			// file was deleted by owner
 			sendError(requester, Protocol.DELETE, filename,
 					ErrorCode.FileDoesNotExist);
 		}
@@ -355,7 +330,7 @@ public class ManagerNode {
 
 		// first write the file to save a local copy
 		try {
-			this.node.fs.writeFile(filename, contents, false);
+			node.fs.writeFile(filename, contents, false);
 		} catch (IOException e) {
 			sendError(from, filename, e.getMessage());
 			return;
@@ -366,8 +341,8 @@ public class ManagerNode {
 		 * shouldn't be a create or delete (which require RW, so send W{F,D}
 		 * messages instead)
 		 */
-		this.filePermissionCache.giveRO(from, filename);
-		this.node.printVerbose("Revoking permission on file: " + filename
+		filePermissionCache.giveRO(from, filename);
+		node.printVerbose("Revoking permission on file: " + filename
 				+ " for client: " + from);
 
 		Integer destAddr = pendingReadPermissionRequests.remove(filename);
@@ -380,7 +355,7 @@ public class ManagerNode {
 			}
 
 			// Add to RO list
-			this.filePermissionCache.giveRO(destAddr, filename);
+			filePermissionCache.giveRO(destAddr, filename);
 		}
 
 	}
@@ -397,7 +372,7 @@ public class ManagerNode {
 		if (contents.equals(null))
 			contents = "";
 		try {
-			this.node.fs.writeFile(filename, contents, false);
+			node.fs.writeFile(filename, contents, false);
 		} catch (IOException e) {
 			sendError(from, filename, "IOException in receiveWD");
 			return;
@@ -405,9 +380,9 @@ public class ManagerNode {
 
 		// look for pending request
 		boolean foundPendingRequest = false;
-		this.node.printVerbose("Revoking permission on file: " + filename
+		node.printVerbose("Revoking permission on file: " + filename
 				+ " for client: " + from);
-		this.filePermissionCache.revoke(filename);
+		filePermissionCache.revoke(filename);
 
 		// check creates
 		Integer destAddr = pendingRPCCreateRequests.remove(filename);
@@ -453,16 +428,16 @@ public class ManagerNode {
 		}
 
 		// update the status of the client who sent the WD
-		Integer rw = this.filePermissionCache.hasRW(filename);
+		Integer rw = filePermissionCache.hasRW(filename);
 		if (rw == null || rw != from) {
 			node.printError("WD received from client w/o RW"); // for now
 			sendError(from, Protocol.DELETE, filename,
 					ErrorCode.PrivilegeDisagreement);
 			return;
 		} else {
-			this.node.printVerbose("Blanking ownership permissions for file: "
+			node.printVerbose("Blanking ownership permissions for file: "
 					+ filename);
-			this.filePermissionCache.revoke(filename);
+			filePermissionCache.revoke(filename);
 		}
 	}
 
@@ -477,8 +452,8 @@ public class ManagerNode {
 		 * during transaction.
 		 */
 
-		this.node.printVerbose("manager locking file: " + filename);
-		this.node.logSynopticEvent("MANAGER-LOCK");
+		node.printVerbose("manager locking file: " + filename);
+		node.logSynopticEvent("MANAGER-LOCK");
 		lockedFiles.put(filename, from);
 	}
 
@@ -490,13 +465,13 @@ public class ManagerNode {
 		}
 
 		transactionsInProgress.add(from);
-		this.node.printVerbose("added node " + from
+		node.printVerbose("added node " + from
 				+ " to list of transactions in progress");
 
 		try {
-			this.node.fs.startTransaction(from);
+			node.fs.startTransaction(from);
 		} catch (IOException e1) {
-			this.node.printError(e1);
+			node.printError(e1);
 			return;
 		}
 		// callback setup
@@ -515,11 +490,11 @@ public class ManagerNode {
 					Protocol.TX_COMMIT, Client.emptyPayload));
 
 		transactionsInProgress.remove(from); // remove from tx
-		this.node.printVerbose("removed node " + from
+		node.printVerbose("removed node " + from
 				+ " list of transactions in progress");
 
 		try {
-			this.node.fs.commitTransaction(from);
+			node.fs.commitTransaction(from);
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
 			return;
@@ -543,7 +518,7 @@ public class ManagerNode {
 			unlockFile(filesToUnlock.get(i));
 		}
 
-		this.node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
+		node.RIOSend(from, Protocol.TX_SUCCESS, Client.emptyPayload);
 
 	}
 
@@ -553,12 +528,16 @@ public class ManagerNode {
 			return;
 		}
 
+
 		transactionsInProgress.remove(from);
-		this.node.printVerbose("removed node " + from
+		unlockFilesForClient(from);
+		pendingCommitRequests.remove(from);
+		
+		node.printVerbose("removed node " + from
 				+ " list of transactions in progress");
 
 		try {
-			this.node.fs.abortTransaction(from);
+			node.fs.abortTransaction(from);
 		} catch (IOException e) {
 			sendError(from, "", e.getMessage());
 			return;
@@ -589,18 +568,19 @@ public class ManagerNode {
 			// decide what to do based on transaction status
 			if (transactionsInProgress.contains(from)) {
 				try {
-					this.node.fs.createFileTX(from, filename);
-					this.sendSuccess(from, Protocol.CREATE, filename);
-					this.filePermissionCache.giveRW(from, filename);
-					this.node.printVerbose("Giving " + from + " RW on file: "
+					node.fs.createFileTX(from, filename);
+					sendSuccess(from, Protocol.CREATE, filename);
+					filePermissionCache.giveRW(from, filename);
+					node.printVerbose("Giving " + from + " RW on file: "
 							+ filename);
+					lockFile(filename, from);
 				} catch (TransactionException e) {
-					this.node.printError(e);
-					this.sendError(from, filename, e.getMessage());
+					node.printError(e);
+					sendError(from, filename, e.getMessage());
 					return;
 				} catch (IOException e) {
-					this.node.printError(e);
-					this.sendError(from, filename, e.getMessage());
+					node.printError(e);
+					sendError(from, filename, e.getMessage());
 					return;
 				}
 			} else {
@@ -615,8 +595,8 @@ public class ManagerNode {
 			return;
 		}
 
-		Integer rw = this.filePermissionCache.hasRW(filename);
-		List<Integer> ro = this.filePermissionCache.hasRO(filename);
+		Integer rw = filePermissionCache.hasRW(filename);
+		List<Integer> ro = filePermissionCache.hasRO(filename);
 
 		if (!checkExistence(filename)) {
 			// File doesn't exist, send an error to the requester
@@ -654,15 +634,15 @@ public class ManagerNode {
 		} else {
 			if (transactionsInProgress.contains(from))
 				try {
-					this.node.fs.deleteFileTX(from, filename);
-					this.node.send(from, Protocol.SUCCESS, Client.emptyPayload);
-					this.node.printVerbose("Giving client: " + from
+					node.fs.deleteFileTX(from, filename);
+					node.send(from, Protocol.SUCCESS, Client.emptyPayload);
+					node.printVerbose("Giving client: " + from
 							+ " RW on file: " + filename);
-					this.filePermissionCache.giveRW(from, filename);
+					filePermissionCache.giveRW(from, filename);
 				} catch (TransactionException e) {
-					this.node.printError(e);
+					node.printError(e);
 				} catch (IOException e) {
-					this.node.printVerbose("IOException on manager for file: "
+					node.printVerbose("IOException on manager for file: "
 							+ filename);
 				}
 			else
@@ -681,9 +661,9 @@ public class ManagerNode {
 	 */
 	private boolean checkExistence(String filename) {
 
-		if (this.filePermissionCache.contains(filename))
+		if (filePermissionCache.contains(filename))
 			return true;
-		else if (this.node.fs.fileExistsTX(this.node.addr, filename))
+		else if (node.fs.fileExistsTX(node.addr, filename))
 			return true;
 		else
 			return false;
@@ -806,7 +786,7 @@ public class ManagerNode {
 				ro.remove(i);
 		}
 
-		this.node.printVerbose("Changing client: " + from + " to IV");
+		node.printVerbose("Changing client: " + from + " to IV");
 
 		List<Integer> waitingForICsFrom = pendingICs.get(filename);
 
@@ -817,11 +797,6 @@ public class ManagerNode {
 		}
 		
 		if (waitingForICsFrom.isEmpty()) {
-			/*
-			 * If the pending ICs are now empty, someone's waiting for a WD,
-			 * so check for that and send
-			 */
-
 			/*
 			 * TODO: this should just clear to prevent reinitialization
 			 * maybe, although this way could save some memory... Anyway,
@@ -849,15 +824,15 @@ public class ManagerNode {
 			for (int i : waitingFor) {
 				waiting.append(i + " ");
 			}
-			this.node.printVerbose(waiting.toString());
+			node.printVerbose(waiting.toString());
 		}
 	}
 	
 
 	public void receiveRC(int from, String filename) {
-		this.node.printVerbose("Changing client: " + from + " to RO");
+		node.printVerbose("Changing client: " + from + " to RO");
 
-		this.filePermissionCache.giveRO(from, filename);
+		filePermissionCache.giveRO(from, filename);
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -869,9 +844,9 @@ public class ManagerNode {
 
 	public void receiveWC(int from, String filename) {
 
-		this.node.printVerbose("Changing status of client: " + from
+		node.printVerbose("Changing status of client: " + from
 				+ " to RW for file: " + filename);
-		this.filePermissionCache.giveRW(from, filename);
+		filePermissionCache.giveRW(from, filename);
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -897,11 +872,11 @@ public class ManagerNode {
 		} else {
 			sendMsg.append(filename);
 			sendMsg.append(Client.packetDelimiter);
-			sendMsg.append(this.node.fs.getFile(filename));
+			sendMsg.append(node.fs.getFile(filename));
 		}
 
 		byte[] payload = Utility.stringToByteArray(sendMsg.toString());
-		this.node.RIOSend(to, protocol, payload);
+		node.RIOSend(to, protocol, payload);
 	}
 
 	/**
@@ -909,8 +884,8 @@ public class ManagerNode {
 	 */
 	private void unlockFile(String filename) {
 
-		this.node.printVerbose("manager unlocking file: " + filename);
-		this.node.logSynopticEvent("MANAGER-UNLOCK");
+		node.printVerbose("manager unlocking file: " + filename);
+		node.logSynopticEvent("MANAGER-UNLOCK");
 		lockedFiles.remove(filename);
 		int queuedRequester = -1;
 
@@ -920,7 +895,7 @@ public class ManagerNode {
 			QueuedFileRequest nextRequest = outstandingRequests.poll();
 			if (nextRequest != null) {
 				queuedRequester = nextRequest.from;
-				this.node.onRIOReceive(nextRequest.from, nextRequest.protocol,
+				node.onRIOReceive(nextRequest.from, nextRequest.protocol,
 						nextRequest.msg);
 			}
 		}
@@ -931,7 +906,7 @@ public class ManagerNode {
 			if (clientHasPendingPermissions(queuedRequester)) {
 				QueuedFileRequest commitRequest = pendingCommitRequests
 						.remove(queuedRequester);
-				this.node.onRIOReceive(commitRequest.from,
+				node.onRIOReceive(commitRequest.from,
 						commitRequest.protocol, commitRequest.msg);
 			}
 		}
@@ -1004,7 +979,7 @@ public class ManagerNode {
 		String msg = Protocol.protocolToString(protocol)
 				+ Client.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
-		this.node.RIOSend(destAddr, Protocol.SUCCESS, payload);
+		node.RIOSend(destAddr, Protocol.SUCCESS, payload);
 	}
 
 	/**
@@ -1012,20 +987,20 @@ public class ManagerNode {
 	 * 
 	 * @param destAddr
 	 *            Who to send the error code to
-	 * @param protocol
+	 * @param cause
 	 *            The protocol that failed
 	 * @param filename
 	 *            The filename for the protocol that failed
 	 * @param errorcode
 	 *            The error code
 	 */
-	private void sendError(int destAddr, int protocol, String filename,
+	private void sendError(int destAddr, int cause, String filename,
 			int errorcode) {
 		String msg = filename + Client.packetDelimiter
-				+ Protocol.protocolToString(protocol) + Client.packetDelimiter
+				+ Protocol.protocolToString(cause) + Client.packetDelimiter
 				+ ErrorCode.lookup(errorcode);
 		byte[] payload = Utility.stringToByteArray(msg);
-		this.node.RIOSend(destAddr, Protocol.ERROR, payload);
+		node.RIOSend(destAddr, Protocol.ERROR, payload);
 		
 		// tx cleanup
 		txFailureCleanup(destAddr);
@@ -1035,7 +1010,7 @@ public class ManagerNode {
 	private void sendError(int from, String filename, String message) {
 		String msg = filename + Client.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
-		this.node.RIOSend(from, Protocol.ERROR, payload);
+		node.RIOSend(from, Protocol.ERROR, payload);
 		
 		// tx cleanup
 		txFailureCleanup(from);
@@ -1043,10 +1018,11 @@ public class ManagerNode {
 	
 	private void txFailureCleanup(int from){
 
-		this.node.RIOSend(from, Protocol.TX_FAILURE,
+		node.RIOSend(from, Protocol.TX_FAILURE,
 				Utility.stringToByteArray(""));
 		transactionsInProgress.remove(from);
 		unlockFilesForClient(from);
+		pendingCommitRequests.remove(from);
 	}
 
 	/**
@@ -1060,7 +1036,7 @@ public class ManagerNode {
 	public void heartbeatTimeout(Integer destAddr) {
 
 		if (transactionsInProgress.contains(destAddr)) {
-			this.node
+			node
 					.RIOSend(destAddr, Protocol.HEARTBEAT, Client.emptyPayload);
 			addHeartbeatTimeout(destAddr);
 		}
@@ -1074,39 +1050,18 @@ public class ManagerNode {
 			String[] params = { "java.lang.Integer" };
 			cbMethod = Callback.getMethod("heartbeatTimeout", this, params);
 		} catch (SecurityException e) {
-			this.node.printError(e);
+			node.printError(e);
 		} catch (ClassNotFoundException e) {
-			this.node.printError(e);
+			node.printError(e);
 		} catch (NoSuchMethodException e) {
-			this.node.printError(e);
+			node.printError(e);
 			e.printStackTrace();
 		}
 		Integer[] args = { destAddr };
 		Callback cb = new Callback(cbMethod, this, args);
-		this.node.addTimeout(cb, TIMEOUT);
+		node.addTimeout(cb, TIMEOUT);
 	}
 	
-	/**
-	 * Print debug method that prints the current state of data structures for the manager
-	 */
-	private void printDebug(){
-
-		node.printVerbose(pendingWritePermissionRequests.containsValue(1) + "", true);
-		node.printVerbose(pendingWritePermissionRequests.containsValue(2) + "", true);
-		Set<String> filenames = pendingWritePermissionRequests.keySet();
-		Iterator<String> i = filenames.iterator();
-		while (i.hasNext()){
-			node.printVerbose(i.next() + "", true);
-			
-		}
-		
-		Set<String> lockedfiles = lockedFiles.keySet();
-		Iterator<String> j = lockedfiles.iterator();
-		while (j.hasNext()){
-			node.printVerbose(j.next(), true);
-		}
-	}
-
 	/**
 	 * This node didn't respond to a packet even after the maximum number of
 	 * tries. If this client was in the middle of the transaction, they're now
@@ -1116,28 +1071,28 @@ public class ManagerNode {
 	 */
 	protected void killNode(int destAddr) {
 		// might as well send a txabort just in case this node is alive
-		this.node.RIOSend(destAddr, Protocol.TX_FAILURE,
+		node.RIOSend(destAddr, Protocol.TX_FAILURE,
 				Utility.stringToByteArray(""));
 		transactionsInProgress.remove(destAddr);
 
 		// transfer ownership of files
-		for (Entry<String, Integer> entry : this.filePermissionCache.RW
+		for (Entry<String, Integer> entry : filePermissionCache.RW
 				.entrySet()) {
 			Integer newOwner;
 			if (entry.getValue().equals(destAddr)) {
 				String filename = entry.getKey();
-				newOwner = this.replicaNode.get(destAddr);
-				this.node.printVerbose("Node: " + destAddr
+				newOwner = replicaNode.get(destAddr);
+				node.printVerbose("Node: " + destAddr
 						+ " failed. Transferring ownership" + " of file: "
 						+ filename + " to replica node: " + newOwner);
-				this.filePermissionCache.giveRW(newOwner, filename);
+				filePermissionCache.giveRW(newOwner, filename);
 				// if someone was waiting for this file, send a WF/RF to the
 				// replica
 				if (pendingWritePermissionRequests.remove(filename) != null) {
-					this.node.RIOSend(newOwner, Protocol.WF,
+					node.RIOSend(newOwner, Protocol.WF,
 							Utility.stringToByteArray(filename));
 				} else if (pendingReadPermissionRequests.remove(filename) != null) {
-					this.node.RIOSend(newOwner, Protocol.RF,
+					node.RIOSend(newOwner, Protocol.RF,
 							Utility.stringToByteArray(filename));
 				}
 			}

@@ -1,452 +1,170 @@
 start 0
 start 1
 start 2
+start 3
 time
-1 txstart
-1 create f5
+3 txstart
 time
+3 create f4
 time
+3 delete f4
 time
-time
-time
-1 delete f1
-time
-time
+3 txcommit
 time
 time
 time
-1 txcommit
+time
+time
+time
+time
+time
 2 txstart
-2 delete f4
 time
-time
-time
-time
-time
-2 append f3 zixa
-time
-time
-time
-time
-time
-2 txcommit
-2 txstart
-2 put f3 yrdT
-time
-time
-time
-time
-time
-2 delete f4
-time
-time
-time
-time
-time
-2 txcommit
-2 txstart
-2 create f4
-time
-time
-time
-time
-time
-2 put f2 WxmV
-time
-time
-time
-time
-time
-2 txcommit
-1 txstart
-1 create f2
-time
-time
-time
-time
-time
-1 create f1
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 create f2
-time
-time
-time
-time
-time
-1 delete f2
-time
-time
-time
-time
-time
-1 txcommit
-2 txstart
-2 get f1
-time
-time
-time
-time
-time
-2 append f5 mpPr
-time
-time
-time
-time
-time
-2 txcommit
-1 txstart
-1 delete f3
-time
-time
-time
-time
-time
-1 get f3
-time
-time
-time
-time
-time
-1 txcommit
-2 txstart
-2 create f1
-time
-time
-time
-time
-time
-2 append f3 vANa
-time
-time
-time
-time
-time
-2 txcommit
-1 txstart
-1 append f4 ykxY
-time
-time
-time
-time
-time
-1 put f4 LSrL
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 delete f4
-time
-time
-time
-time
-time
-1 get f1
-time
-time
-time
-time
-time
-1 txcommit
-2 txstart
-2 append f1 KBJR
-time
-time
-time
-time
-time
-2 create f5
-time
-time
-time
-time
-time
-2 txcommit
-1 txstart
-1 get f5
-time
-time
-time
-time
-time
-1 create f2
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 get f4
-time
-time
-time
-time
-time
-1 put f2 kcLl
-time
-time
-time
-time
-time
-1 txcommit
-2 txstart
-2 put f3 QzUa
-time
-time
-time
-time
-time
-2 append f2 qTTu
-time
-time
-time
-time
-time
-2 txcommit
-1 txstart
-1 get f5
-time
-time
-time
-time
-time
-1 append f5 jTWS
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 put f3 dohr
-time
-time
-time
-time
-time
-1 create f2
-time
-time
-time
-time
-time
-1 txcommit
-2 txstart
-2 append f4 lLTR
-time
-time
-time
-time
-time
-2 put f3 Qfep
-time
-time
-time
-time
-time
-2 txcommit
-2 txstart
-2 append f4 RPvp
-time
-time
-time
-time
-time
-2 put f2 dczg
-time
-time
-time
-time
-time
-2 txcommit
-1 txstart
-1 create f3
-time
-time
-time
-time
-time
-1 append f1 wjdn
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 put f4 MbFQ
-time
-time
-time
-time
-time
-1 put f4 LETX
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 create f1
-time
-time
-time
-time
-time
-1 create f3
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 append f4 gaXr
-time
-time
-time
-time
-time
-1 append f3 MKjq
-time
-time
-time
-time
-time
-1 txcommit
-2 txstart
 2 create f2
-time
-time
-time
-time
-time
-2 put f2 PNRA
-time
-time
-time
-time
-time
-2 txcommit
-1 txstart
-1 create f4
-time
-time
-time
-time
-time
-1 append f1 DBun
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 delete f2
-time
-time
-time
-time
-time
-1 delete f3
-time
-time
-time
-time
-time
-1 txcommit
-1 txstart
-1 get f3
-time
-time
-time
-time
-time
-1 append f1 wJEM
-time
-time
-time
-time
-time
-1 txcommit
-2 txstart
-2 delete f4
-time
-time
-time
-time
 time
 2 create f3
 time
-time
-time
-time
-time
 2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
 2 txstart
-2 get f3
 time
+2 append f2 THYX
 time
-time
-time
-time
-2 append f3 xWZw
-time
-time
-time
-time
+2 create f1
 time
 2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+1 txstart
+time
+1 get f2
+time
+1 create f4
+time
+1 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+3 txstart
+time
+3 get f4
+time
+3 get f4
+time
+3 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+1 txstart
+time
+1 get f1
+time
+1 get f3
+time
+1 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+1 txstart
+time
+1 get f3
+time
+1 get f2
+time
+1 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
 2 txstart
-2 get f5
 time
+2 delete f2
 time
-time
-time
-time
-2 put f5 kyrX
-time
-time
-time
-time
+2 put f3 pnMo
 time
 2 txcommit
-2 txstart
-2 delete f3
 time
 time
 time
 time
 time
-2 delete f3
+time
+time
+time
+3 txstart
+time
+3 create f2
+time
+3 get f3
+time
+3 txcommit
 time
 time
 time
 time
 time
-2 txcommit
-2 txstart
-2 get f5
+time
+time
+time
+1 txstart
+time
+1 get f2
+time
+1 get f3
+time
+1 txcommit
 time
 time
 time
 time
 time
-2 put f2 tBVK
+time
+time
+time
+3 txstart
+time
+3 get f3
+time
+3 get f1
+time
+3 txcommit
 time
 time
 time
 time
 time
-2 txcommit
+time
+time
+time

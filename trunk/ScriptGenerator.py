@@ -23,14 +23,14 @@ class ScriptGenerator:
         self.TxActionMax = 5
         self.TxNumMin = 10
         self.TxNumMax = 15
-        self.numNodes = 3
+        self.numNodes = 4
         self.nodeList = []
         
         
     def Generate(self):
 
         parser = optparse.OptionParser()
-        parser.add_option('--out', action = 'store', type = 'string', dest = 'outfile', help = 'Input type')
+        parser.add_option('--out', action = 'store', type = 'string', dest = 'outfile', help = 'Output file')
 	(option, args) =  parser.parse_args()
         scriptFile = open(option.outfile, "w")
         
@@ -75,16 +75,21 @@ class Node:
         self.knownFiles = []
 
     def getNextCommand(self, validOnly):
+        
+        global globalFileList
+
         nextAction = rand.choice(self.possibleActions)
         nextFile = "f" + str(rand.randrange(self.fileMin, self.fileMax))
         truth_vals = [nextFile in self.knownFiles, nextFile in globalFileList]
 
+        if (nextFile in self.knownFiles and nextFile not in globalFileList):
+            self.knownFiles.remove(nextFile)
         # I know this is shitty
         
         if ((nextAction != "get") and (nextFile not in self.knownFiles) and (nextFile in globalFileList)):
             return self.buildCommand(self.address, "get", nextFile)
 
-        if ((nextAction == "put" or nextAction == "append") and all(truth_vals)):
+        if ((nextAction == "put" or nextAction == "append") and (all(truth_vals))):
             contents = ''.join(rand.choice(string.letters) for i in xrange(4))
             return self.buildCommand(self.address, nextAction, nextFile, contents)
         if all(truth_vals):
@@ -97,6 +102,8 @@ class Node:
             
 
     def buildCommand(self, node, command, filename = "", contents = ""):
+        global globalFileList
+        
         outString = ' '.join([str(node), command, filename, contents])
         if (command == "create"):
             self.knownFiles.append(filename)
