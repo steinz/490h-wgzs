@@ -250,7 +250,7 @@ public class Client extends RIONode {
 		 */
 		if (!isManager && protocol == Protocol.HANDSHAKE) {
 			// TODO: restart?
-			clientFunctions.unlockAll();
+			clientFunctions.abortCurrentTransaction();
 		}
 
 		super.onReceive(from, protocol, msg);
