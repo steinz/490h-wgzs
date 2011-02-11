@@ -40,18 +40,20 @@ However, in our actual implementaion, different code runs if the client is or is
 
 \textbf{File System Semantics:} \\
 
-A file is defined to exist and is accessible iff some node in the system created the file outside of a tx, or inside of a tx that has been committed. This file will cease to be available if it is deleted outside of a tx or deleted by a committed tx.
+A file is defined to exist and is accessible iff some node in the system created the file outside of a tx, or inside of a tx that has been committed. 
+This file will cease to be available if it is deleted outside of a tx or deleted by a committed tx.
 
-If a file exists, then it is guaranteed that the manager has some version of the file in its persistent storage (although, it is not guaranteed to be the newest version).
+If a file exists, then it is guaranteed that the manager has some version of the file in its persistent storage (although, it is not guaranteed to be the newest version). 
+As with our previous project, we allow one client at most to have ReadWrite access to a file. 
 
+Since we are not using write-through cache coherence, we expect clients to maintain responsibility for files they have RW access on. 
+We expect that clients will use replicas to appropriately clone data so that the data can be recovered if the client goes down. This
+also means that the manager will not request the updated version of these files until another client requests them. At this point,
+the manager will ask the client to send its changed version of the files forward and to revoke its local permissions on the file(s) (and
+the manager will revoke the client's permissions on the file(s) as well).
 
-
-For a given file, at any point in time at most one client can have ReadWrite access to that file.
-If some client has RW access to a file, it is that client's responsibility to make sure that its replicas log all changes the owning client
-makes to that file before the client reports changes completed either to the manager or to the command-issuer.
-We employ write-back cache coherence, so the manager will not get the updated version of the file until someone else requests it.
-When this happens, the manager tells the client to report its changes and lose RW.
-If the client fails to respond to the manager's request, the manager asks one of the client's replicas for the file instead.
+In the event of a client failing while that client still has RW access on a file(s), the manager will transfer ownership to the client's
+replica and then request the data again.
 
 If no client has ReadWrite access to a file, any number of clients can have ReadOnly access to that file.
 The manager explicitly invalidates these permissions before granting anyone else ReadWrite access to that file. \\
@@ -68,30 +70,43 @@ delete test.txt
 
 Since the client gains RW access on test.txt after the first command, there is no need to contact the manager to perform the second command, so we queue the second operation until the fist completes.
 
+The manager, in turn, assumes the client will queue commands until they are ready for the next request to be serviced. 
+If a client requests access to the same file twice, the manager will grant them
+the appropriate level of access. \\
+
+\textbf{Transaction Scheme:}
+
 We decided to use two-phase locking manager-side to ensure serializable transactions for the following reasons:
 
 \begin{enumerate}
-	\item[Framework setup] Our framework is already suited towards two-phase locking. We already have a locking scheme in-place for cache coherency (project 2), and so the process of locking files was 
+\\	\item[Framework setup] Our framework is already suited towards two-phase locking. We already have a locking scheme in-place for cache coherency (project 2), and so the process of locking files was 
 simply expanded to lock files for the duration of a transaction, instead of for the duration of a request.
-	\item[Difficulties with optimistic concurrency] We thought about using optimistic concurrency, however this requires the server to validate all requests at the end of a transaction. This would require
+\\	\item[Difficulties with optimistic concurrency] We thought about using optimistic concurrency, however this requires the server to validate all requests at the end of a transaction. This would require
 a log on the server recording transactions. Further, this log would have to timestamp all transactions in order to decide whether two transactions conflicted or not. Lastly, this would also required the
-server to be sent a copy of the client's transaction log with every commit, which we thought was unnecessary.
+server to be sent a copy of the client's transaction log with every commit, which we thought was unnecessary. 
+\\      \item[Versioning] Further, using optimistic concurrency would require some form of file versioning, in order to support rollback. We thought this approach required more space allocation than was necessary or ideal.
 \end{enumerate}
+
+\textbf{Deadlock:}
 
 One potential problem with 2PL is the possibility of deadlock.
 
 We require clients to operate on files within a transaction in filename order to avoid deadlock.
 So, if a client wants to perform the following operations: 
-	Get g => x
+\begin{verbatim}
+        Get g => x
 	Put x => f
+\end{verbatim}\\
 They have to actually perform these operations:
+\begin{verbatim}
 	Append "" f
 	Get g => x
 	Put x => f
+\end{verbatim}
 
-The server currently makes no guarantees to clients if they do not perform requests in filename order.
-Clients can always abort themselves, which results in all locks freeing eventually.
-It would not be difficult for the manager to ensure clients lock files in order, but we haven't implemented it yet. \\
+Following this procedure, clients are guaranteed not to dead lock while performing a transaction.
+
+The server currently makes no guarantees to clients if they do not perform requests in filename order. Clients can always abort themselves, which results in all locks freeing eventually. It would not be difficult for the manager to ensure clients lock files in order, but we haven't implemented it yet. \\
 
 \textbf{Transaction Semantics:} \\
 
@@ -107,10 +122,8 @@ This ensures that the latest copy of a file will never be lost, even if a client
 \textbf{Failure Handling:} \\
 
 \begin{description}
-\item[Server Failures] Currently clients block on server failures. This is within the specification of the assignment, and so we did not implement any handling of this scenario. This will be relaxed by PAXOS in assignment 4.
-\item[Client Failures] While a client is in the middle of a transaction, they are periodically sent pings by the server (heartbeat pings). If the client ceases responding to this heartbeat, then
-after a set number of rounds the server will assume the client went down (this functionality was largely borrowed from project 1). If the server detects that a client went down, it will immediately
-release all locks this client had on any files and abort their transaction.
+\item[Server Failures] Currently, clients block on server failures. This is within the specification of the assignment, and so we did not implement any handling of this scenario. This will be relaxed by PAXOS in assignment 4.
+\item[Client Failures] While a client is in the middle of a transaction, they are periodically sent pings by the server (heartbeat pings). If the client ceases responding to this heartbeat, then after a set number of rounds the server will assume the client went down (this functionality was largely borrowed from project 1, where servers were required to deal with client failures). If the server detects that a client went down, it will immediately release all locks this client had on any files and abort their transaction.
 
 The server will then immediately change ownership of any files that client had ownership of to its replica. If there were pending permission requests for this file, then the server will immediately forward that request to the appropriate replica. TODO: HIGH: NOTE: I think we might want to implement this w/ RPC or a different message type for implementation simplicity.
 
