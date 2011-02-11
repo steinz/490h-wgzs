@@ -166,7 +166,7 @@ public class ReliableFileSystem {
 		}
 		n.printVerbose(msg.toString());
 		// TODO: HIGH: Should filename ever be null? right now sometimes it is
-		if (filename != null && filename.equals(tempFilename)) {
+		if (filename.equals(tempFilename)) {
 			n.logSynopticEvent(operation.toUpperCase() + "-TEMP-FILE");
 		} else {
 			n.logSynopticEvent(operation.toUpperCase() + "-FILE");
