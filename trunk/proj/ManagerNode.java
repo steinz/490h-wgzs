@@ -744,19 +744,15 @@ public class ManagerNode {
 
 		// Check RO status
 		if (!preserveROs && ro.size() > 0) { // someone(s) have RO
-			pendingICs.put(filename, ro);
 			for (int i : ro) {
 				// Invalidate all ROs
-				if (i != from && ro.size() > 1)
+				if (i != from){
 					sendRequest(i, filename, Protocol.IV);
-				else {
-					try {
-						sendFile(from, filename, responseProtocol);
-						return;
-					} catch (IOException e) {
-						sendError(from, filename, e.getMessage());
-						return;
+					if (!pendingICs.containsKey(filename)){
+						pendingICs.put(filename, new ArrayList<Integer>());
 					}
+					List<Integer> list = pendingICs.get(filename);
+					list.add(i);
 				}
 			}
 			if (receivedProtocol == Protocol.RQ) {
@@ -788,59 +784,63 @@ public class ManagerNode {
 	public void receiveIC(int from, String filename) {
 
 		int destAddr;
-		if (!pendingICs.containsKey(filename)
-				|| !pendingICs.get(filename).contains(from)) {
+		if (!pendingICs.containsKey(filename)) {
+			node.printError("Manager has no record of this filename in pending ICs: " + filename);
 			sendError(from, Protocol.ERROR, filename, ErrorCode.UnknownError);
-		} else {
+			return;
+		}
+		if (!pendingICs.get(filename).contains(from)){
+			node.printError("Manager was not expecting IC from this client: " + from + " for file: " + filename);
+			sendError(from, Protocol.ERROR, filename, ErrorCode.UnknownError);
+			return;
+		} 
+			
+		// update the status of the client who sent the IC
+		List<Integer> ro = filePermissionCache.hasRO(filename);
+		ro.remove(from);
 
-			// update the status of the client who sent the IC
-			List<Integer> ro = filePermissionCache.hasRO(filename);
-			ro.remove(from);
-			this.node.printVerbose("Changing status of client: " + from
-					+ " to RO for file: " + filename);
+		this.node.printVerbose("Changing client: " + from + " to IV");
 
-			this.node.printVerbose("Changing client: " + from + " to IV");
+		List<Integer> waitingForICsFrom = pendingICs.get(filename);
 
-			List<Integer> waitingForICsFrom = pendingICs.get(filename);
+		waitingForICsFrom.remove(from);
+		if (waitingForICsFrom.isEmpty()) {
+			/*
+			 * If the pending ICs are now empty, someone's waiting for a WD,
+			 * so check for that and send
+			 */
 
-			waitingForICsFrom.remove(from);
-			if (waitingForICsFrom.isEmpty()) {
-				/*
-				 * If the pending ICs are now empty, someone's waiting for a WD,
-				 * so check for that and send
-				 */
+			/*
+			 * TODO: this should just clear to prevent reinitialization
+			 * maybe, although this way could save some memory... Anyway,
+			 * check that whatever assumption is made holds
+			 */
+			pendingICs.remove(filename);
 
-				/*
-				 * TODO: this should just clear to prevent reinitialization
-				 * maybe, although this way could save some memory... Anyway,
-				 * check that whatever assumption is made holds
-				 */
-				pendingICs.remove(filename);
-
-				if (pendingWritePermissionRequests.containsKey(filename)) {
-					destAddr = pendingWritePermissionRequests.remove(filename);
-					try {
-						sendFile(destAddr, filename, Protocol.WD);
-					} catch (IOException e) {
-						sendError(from, filename, e.getMessage());
-						return;
-					}
-				} else {
-					destAddr = pendingRPCDeleteRequests.remove(filename);
-					sendSuccess(destAddr, Protocol.DELETE, filename);
+			if (pendingWritePermissionRequests.containsKey(filename)) {
+				destAddr = pendingWritePermissionRequests.remove(filename);
+				try {
+					sendFile(destAddr, filename, Protocol.WD);
+				} catch (IOException e) {
+					sendError(from, filename, e.getMessage());
+					return;
 				}
 			} else {
-				// still waiting for more ICs
-				List<Integer> waitingFor = pendingICs.get(filename);
-				StringBuilder waiting = new StringBuilder();
-				waiting.append("Received IC but waiting for IC from clients : ");
-				for (int i : waitingFor) {
-					waiting.append(i + " ");
-				}
-				this.node.printVerbose(waiting.toString());
+				destAddr = pendingRPCDeleteRequests.remove(filename);
+				sendSuccess(destAddr, Protocol.DELETE, filename);
 			}
+		} else {
+			// still waiting for more ICs
+			List<Integer> waitingFor = pendingICs.get(filename);
+			StringBuilder waiting = new StringBuilder();
+			waiting.append("Received IC but waiting for IC from clients : ");
+			for (int i : waitingFor) {
+				waiting.append(i + " ");
+			}
+			this.node.printVerbose(waiting.toString());
 		}
 	}
+	
 
 	public void receiveRC(int from, String filename) {
 		this.node.printVerbose("Changing client: " + from + " to RO");
