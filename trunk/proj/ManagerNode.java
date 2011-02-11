@@ -296,9 +296,7 @@ public class ManagerNode {
 				try {
 					this.node.fs.createFileTX(from, filename);
 				} catch (TransactionException e) {
-					this.node
-							.printVerbose("TransactionException on manager for file: "
-									+ filename);
+					this.node.printError(e);
 				} catch (IOException e) {
 					this.node.printVerbose("IOException on manager for file: "
 							+ filename);
@@ -626,9 +624,7 @@ public class ManagerNode {
 							+ " RW on file: " + filename);
 					this.filePermissionCache.giveRW(from, filename);
 				} catch (TransactionException e) {
-					this.node
-							.printVerbose("TransactionException on manager for file: "
-									+ filename);
+					this.node.printError(e);
 				} catch (IOException e) {
 					this.node.printVerbose("IOException on manager for file: "
 							+ filename);
