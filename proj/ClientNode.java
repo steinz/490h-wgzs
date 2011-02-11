@@ -28,14 +28,14 @@ public class ClientNode {
 	/**
 	 * Possible cache statuses
 	 */
-	public static enum CacheStatuses {
+	private static enum CacheStatuses {
 		ReadWrite, ReadOnly
 	};
 
 	/**
 	 * Operation types the client can remember in a PendingClientOperation
 	 */
-	protected static enum ClientOperation {
+	private static enum ClientOperation {
 		PUT, APPEND
 	};
 
@@ -43,16 +43,16 @@ public class ClientNode {
 	 * Encapsulates a client command and argument. This includes operation and
 	 * contents but not filename, which is the key used to look up this object.
 	 */
-	protected static class PendingClientOperation {
+	private static class PendingClientOperation {
 		/**
 		 * What we intend to do later
 		 */
-		protected ClientOperation operation;
+		private ClientOperation operation;
 
 		/**
 		 * The content to put or append
 		 */
-		protected String content;
+		private String content;
 
 		/**
 		 * Create an intent for an op that has content
@@ -67,7 +67,7 @@ public class ClientNode {
 	 * Status of cached files on disk. Keys are filenames. Files not in here
 	 * should be considered Invalid.
 	 */
-	protected Map<String, CacheStatuses> cacheStatus;
+	private Map<String, CacheStatuses> cacheStatus;
 
 	/*
 	 * We have client side locking to handle the following type of cmd flows:
@@ -84,7 +84,7 @@ public class ClientNode {
 	/**
 	 * List of files locked on the client's side
 	 */
-	protected Set<String> lockedFiles;
+	private Set<String> lockedFiles;
 
 	/**
 	 * The address of the manager node.
@@ -94,43 +94,43 @@ public class ClientNode {
 	/**
 	 * The parent node associated with this client
 	 */
-	protected Client parent;
+	private Client parent;
 
 	/**
 	 * Map from filenames to the operation we want to do on them later
 	 */
-	protected Map<String, PendingClientOperation> pendingOperations;
+	private Map<String, PendingClientOperation> pendingOperations;
 
 	/**
 	 * Saves commands on client side locked files
 	 */
-	protected Map<String, Queue<String>> queuedCommands;
+	private Map<String, Queue<String>> queuedCommands;
 
 	/**
 	 * Whether or not the client is currently performing a transaction
 	 */
-	protected boolean transacting;
+	private boolean transacting;
 
 	/**
 	 * Whether or not the client is waiting for a response to it's txcommit
 	 */
-	protected boolean waitingForCommitSuccess;
+	private boolean waitingForCommitSuccess;
 
 	/**
 	 * True iff the client is waiting to satisfy all PendingOperations to commit
 	 */
-	protected boolean waitingToCommit;
+	private boolean waitingToCommit;
 
 	/**
 	 * Commands queued because the client is waiting for a commit result
 	 */
-	protected Queue<String> waitingForCommitQueue;
+	private Queue<String> waitingForCommitQueue;
 
 	/**
 	 * The maximum number of commands the client will queue before timing out
 	 * and restarting the node
 	 */
-	protected int maxWaitingForCommitQueueSize;
+	private int maxWaitingForCommitQueueSize;
 
 	public ClientNode(Client n, int maxWaitingForCommitQueueSize) {
 		this.parent = n;
@@ -165,7 +165,7 @@ public class ClientNode {
 			 * node restarts, or if we should even restart the node at all - at
 			 * this point we don't know whether or not our TX succeeded
 			 */
-			parent.restart();
+			parent.restartAsClient();
 			return;
 		} else if (waitingForCommitSuccess) {
 			waitingForCommitQueue.add(line);
@@ -209,7 +209,7 @@ public class ClientNode {
 	 * 
 	 * @throws TransactionException
 	 */
-	public void appendHandler(StringTokenizer tokens, String line)
+	protected void appendHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException {
 		// TODO: I think I found a framework bug - "append 1 test  world" is
 		// losing the extra space
@@ -244,7 +244,7 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * @throws UnknownManagerException
 	 */
-	public void createHandler(StringTokenizer tokens, String line)
+	protected void createHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException, UnknownManagerException {
 		String filename = tokens.nextToken();
 
@@ -273,7 +273,7 @@ public class ClientNode {
 	 * For debugging purposes only. Prints expected numbers for in and out
 	 * channels. Likely to change as new problems arise.
 	 */
-	public void debugHandler(StringTokenizer tokens, String line) {
+	protected void debugHandler(StringTokenizer tokens, String line) {
 		parent.RIOLayer.printSeqStateDebug();
 	}
 
@@ -285,7 +285,7 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * @throws UnknownManagerException
 	 */
-	public void deleteHandler(StringTokenizer tokens, String line)
+	protected void deleteHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException, UnknownManagerException {
 		String filename = tokens.nextToken();
 
@@ -315,7 +315,7 @@ public class ClientNode {
 	 * 
 	 * @throws IOException
 	 */
-	public void getHandler(StringTokenizer tokens, String line)
+	protected void getHandler(StringTokenizer tokens, String line)
 			throws IOException {
 		String filename = tokens.nextToken();
 
@@ -342,7 +342,7 @@ public class ClientNode {
 	/**
 	 * Initiates a remote handshake
 	 */
-	public void handshakeHandler(StringTokenizer tokens, String line) {
+	protected void handshakeHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = parent.getID().toString();
 		parent.printInfo("sending handshake to " + server);
@@ -358,25 +358,15 @@ public class ClientNode {
 	/**
 	 * Used for project2 to tell a node it is the manager.
 	 */
-	public void managerHandler(StringTokenizer tokens, String line) {
+	protected void managerHandler(StringTokenizer tokens, String line) {
 		parent.printInfo("promoted to manager");
-		parent.isManager = true;
-		parent.managerFunctions = new ManagerNode(parent);
-
-		/*
-		 * TODO: This should probably restart the node as a manager (call a
-		 * different start method in Client) that sets up state
-		 */
-
-		parent.broadcast(Protocol.MANAGERIS,
-				Utility.stringToByteArray(parent.addr + ""));
-
+		parent.makeManager();
 	}
 
 	/**
 	 * Used for project2 to tell a node the address of the manager.
 	 */
-	public void managerisHandler(StringTokenizer tokens, String line) {
+	protected void managerisHandler(StringTokenizer tokens, String line) {
 		managerAddr = Integer.parseInt(tokens.nextToken());
 		parent.printInfo("setting manager address to " + managerAddr);
 	}
@@ -384,7 +374,7 @@ public class ClientNode {
 	/**
 	 * Sends a noop
 	 */
-	public void noopHandler(StringTokenizer tokens, String line) {
+	protected void noopHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
 		parent.RIOSend(server, Protocol.NOOP, Client.emptyPayload);
 	}
@@ -396,7 +386,7 @@ public class ClientNode {
 	 * 
 	 * @throws TransactionException
 	 */
-	public void putHandler(StringTokenizer tokens, String line)
+	protected void putHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException {
 		String filename = tokens.nextToken();
 		String content = parseAddContent(line, "put", filename);
@@ -426,7 +416,7 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * @throws IOException
 	 */
-	public void txabortHandler(StringTokenizer tokens, String line)
+	protected void txabortHandler(StringTokenizer tokens, String line)
 			throws TransactionException, IOException {
 		if (!transacting) {
 			throw new TransactionException(
@@ -456,7 +446,7 @@ public class ClientNode {
 	 * 
 	 * @throws IOException
 	 */
-	public void txcommitHandler(StringTokenizer tokens, String line)
+	protected void txcommitHandler(StringTokenizer tokens, String line)
 			throws TransactionException, IOException {
 		if (!transacting) {
 			throw new TransactionException(
@@ -478,7 +468,7 @@ public class ClientNode {
 	 * 
 	 * @throws IOException
 	 */
-	public void txstartHandler(StringTokenizer tokens, String line)
+	protected void txstartHandler(StringTokenizer tokens, String line)
 			throws TransactionException, IOException {
 		// this will be queued in onCommand if waitingForCommitSuccess
 		if (transacting) {
@@ -511,7 +501,7 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * @throws IOException
 	 */
-	protected void abortCurrentTransaction() {
+	private void abortCurrentTransaction() {
 		if (!transacting) {
 			return;
 		}
@@ -527,7 +517,7 @@ public class ClientNode {
 			 * Failed to write an abort to the log - if we keep going, we could
 			 * corrupt the log (since txs don't have ids)
 			 */
-			parent.restart();
+			parent.restartAsClient();
 		}
 	}
 
@@ -540,7 +530,7 @@ public class ClientNode {
 	 * unlocks still need to be after this, in which case the node might end up
 	 * printing some garbage to its log)
 	 */
-	protected void commitCurrentTransaction() {
+	private void commitCurrentTransaction() {
 		try {
 			parent.printVerbose("committing transaction");
 			parent.fs.commitTransaction(parent.addr);
@@ -550,14 +540,14 @@ public class ClientNode {
 			 * Failed to write the commit to the log or a change to disk - if we
 			 * keep going, we could corrupt the log (since txs don't have ids)
 			 */
-			parent.restart();
+			parent.restartAsClient();
 		}
 	}
 
 	/**
 	 * Perform a create RPC to the given address
 	 */
-	public void createRPC(int address, String filename) {
+	protected void createRPC(int address, String filename) {
 		parent.RIOSend(address, Protocol.CREATE,
 				Utility.stringToByteArray(filename));
 	}
@@ -565,7 +555,7 @@ public class ClientNode {
 	/**
 	 * Perform a delete RPC to the given address
 	 */
-	public void deleteRPC(int address, String filename) {
+	protected void deleteRPC(int address, String filename) {
 		parent.RIOSend(address, Protocol.DELETE,
 				Utility.stringToByteArray(filename));
 	}
@@ -576,7 +566,7 @@ public class ClientNode {
 	 * This should be the last thing done in a Handler so that we don't have to
 	 * figure out what file to unlock if the handler throws an exception
 	 */
-	protected void lockFile(String filename) {
+	private void lockFile(String filename) {
 		parent.printVerbose("client locking file: " + filename);
 		parent.logSynopticEvent("CLIENT-LOCK");
 		lockedFiles.add(filename);
@@ -585,7 +575,7 @@ public class ClientNode {
 	/**
 	 * Helper that just checks if managerAddr is still -1
 	 */
-	protected boolean managerUnknown() {
+	private boolean managerUnknown() {
 		if (managerAddr == -1) {
 			parent.printError(new UnknownManagerException());
 			return true;
@@ -598,7 +588,7 @@ public class ClientNode {
 	 * Parse what content to add to a file for put and append (the rest of the
 	 * line)
 	 */
-	protected String parseAddContent(String line, String cmd, String filename) {
+	private String parseAddContent(String line, String cmd, String filename) {
 		int parsedLength = cmd.length() + filename.length() + 2;
 		if (parsedLength >= line.length()) {
 			throw new NoSuchElementException("command content empty");
@@ -609,7 +599,7 @@ public class ClientNode {
 	/**
 	 * Updates internal waiting flag and trys to handle all queued commands
 	 */
-	protected void processWaitingForCommitQueue() {
+	private void processWaitingForCommitQueue() {
 		waitingForCommitSuccess = false;
 		for (String line : waitingForCommitQueue) {
 			parent.onCommand(line);
@@ -620,7 +610,7 @@ public class ClientNode {
 	 * Check if the client has locked the filename. Queue the passed in action
 	 * if the file is locked and return true. Otherwise return false.
 	 */
-	protected boolean queueLineIfLocked(String filename, String line) {
+	private boolean queueLineIfLocked(String filename, String line) {
 		if (lockedFiles.contains(filename)) {
 			parent.printVerbose("queueing command on locked file: " + filename
 					+ ", " + line);
@@ -644,7 +634,7 @@ public class ClientNode {
 	 * if the manager is really known at the beginning of your handler before
 	 * calling this.
 	 */
-	protected void sendToManager(int protocol) {
+	private void sendToManager(int protocol) {
 		sendToManager(protocol, Client.emptyPayload);
 	}
 
@@ -653,7 +643,7 @@ public class ClientNode {
 	 * assumes that it is known. Use managerUnknown to check if the manager is
 	 * really known at the beginning of your handler before calling this.
 	 */
-	protected void sendToManager(int protocol, byte[] payload) {
+	private void sendToManager(int protocol, byte[] payload) {
 		parent.RIOSend(managerAddr, protocol, payload);
 	}
 
@@ -669,7 +659,7 @@ public class ClientNode {
 	/**
 	 * Unlocks all files locally and clears queued txs
 	 */
-	public void unlockAll() {
+	protected void unlockAll() {
 		lockedFiles.clear();
 	}
 
@@ -678,7 +668,7 @@ public class ClientNode {
 	 * services the next requests in the queue immediately, calling it should be
 	 * the last thing you do after mutating state for your current op
 	 */
-	protected void unlockFile(String filename) {
+	private void unlockFile(String filename) {
 		parent.printVerbose("client unlocking file: " + filename);
 		parent.logSynopticEvent("CLIENT-UNLOCK");
 		lockedFiles.remove(filename);
@@ -736,7 +726,7 @@ public class ClientNode {
 			// read file contents
 			// manager guarantees you're not currently transacting on this file
 			try {
-				payload = filename + Client.delimiter
+				payload = filename + Client.packetDelimiter
 						+ parent.fs.getFile(filename);
 			} catch (IOException e) {
 				// FS failure - might as well be disconnected
@@ -824,7 +814,7 @@ public class ClientNode {
 	 */
 	protected void receiveSuccessful(int from, String msgString) {
 
-		String[] split = msgString.split(Client.delimiter);
+		String[] split = msgString.split(Client.packetDelimiter);
 		String cmd = split[0];
 
 		if (split.length < 2) {
