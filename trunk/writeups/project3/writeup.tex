@@ -100,7 +100,9 @@ They have to actually perform these operations:
 \end{verbatim}
 Following this procedure, clients are guaranteed not to dead lock while performing a transaction.
 
-The server currently makes no guarantees to clients if they do not perform requests in filename order. Clients can always abort themselves, which results in all locks freeing eventually. It would not be difficult for the manager to ensure clients lock files in order, but we haven't implemented it yet. \\
+The manager also simultaneously keeps track of all files a client has touched throughout the course of a transaction. If a client requests files out of order, the manager will notice this when trying to lock the file (by doing a string compareTo() and noticing that the requested file is less than the latest file the client has requested). The manager will then abort the transaction and release all locks for that client, preventing deadlock due to user failure.
+
+If the manager were to fail for some reason, clients can always abort themselves, which results in all locks freeing eventually.  \\
 
 \section{Transaction Semantics:} \\
 
