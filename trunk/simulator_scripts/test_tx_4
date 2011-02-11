@@ -1,0 +1,194 @@
+start 0
+start 1
+start 2
+time
+2 txstart
+time
+2 create f4
+time
+2 put f4 ZwdM
+time
+2 create f3
+time
+2 create f1
+time
+2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+1 txstart
+time
+1 get f1
+time
+1 get f1
+time
+1 get f3
+time
+1 get f3
+time
+1 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+2 txstart
+time
+2 put f3 BnzR
+time
+2 delete f1
+time
+2 delete f3
+time
+2 create f3
+time
+2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+2 txstart
+time
+2 delete f4
+time
+2 create f4
+time
+2 create f2
+time
+2 delete f3
+time
+2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+2 txstart
+time
+2 create f1
+time
+2 create f3
+time
+2 put f2 ABZn
+time
+2 append f2 mZyk
+time
+2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+1 txstart
+time
+1 get f2
+time
+1 get f1
+time
+1 get f1
+time
+1 get f4
+time
+1 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+1 txstart
+time
+1 get f3
+time
+1 get f2
+time
+1 get f3
+time
+1 get f4
+time
+1 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+2 txstart
+time
+2 delete f2
+time
+2 create f2
+time
+2 delete f1
+time
+2 delete f2
+time
+2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+2 txstart
+time
+2 create f1
+time
+2 put f3 WjPA
+time
+2 append f4 axFd
+time
+2 put f4 ebAy
+time
+2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
+2 txstart
+time
+2 put f3 Vlyf
+time
+2 append f4 hkML
+time
+2 create f2
+time
+2 delete f3
+time
+2 txcommit
+time
+time
+time
+time
+time
+time
+time
+time
