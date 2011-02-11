@@ -1,0 +1,184 @@
+start 0
+start 1
+start 2
+time
+1 txstart
+time
+1 create f4
+time
+1 create f2
+time
+1 create f1
+time
+1 create f3
+time
+1 txcommit
+time
+1 txstart
+time
+1 create f5
+time
+1 put f5 bzfj
+time
+1 append f2 QGUQ
+time
+1 delete f1
+time
+1 txcommit
+time
+1 txstart
+time
+1 delete f4
+time
+1 delete f5
+time
+1 create f1
+time
+1 create f5
+time
+1 txcommit
+time
+2 txstart
+time
+2 create f3
+time
+2 create f2
+time
+2 create f1
+time
+2 delete f3
+time
+2 txcommit
+time
+2 txstart
+time
+2 create f3
+time
+2 create f5
+time
+2 delete f3
+time
+2 delete f1
+time
+2 txcommit
+time
+1 txstart
+time
+1 delete f3
+time
+1 delete f2
+time
+1 create f2
+time
+1 append f2 OADX
+time
+1 txcommit
+time
+1 txstart
+time
+1 put f1 ZMIy
+time
+1 delete f5
+time
+1 create f5
+time
+1 delete f2
+time
+1 txcommit
+time
+1 txstart
+time
+1 delete f5
+time
+1 delete f1
+time
+1 create f3
+time
+1 create f1
+time
+1 txcommit
+time
+2 txstart
+time
+2 delete f2
+time
+2 append f5 uaYu
+time
+2 create f4
+time
+2 put f5 gKPu
+time
+2 txcommit
+time
+2 txstart
+time
+2 delete f5
+time
+2 delete f4
+time
+2 create f5
+time
+2 create f4
+time
+2 txcommit
+time
+2 txstart
+time
+2 delete f4
+time
+2 create f1
+time
+2 delete f5
+time
+2 create f4
+time
+2 txcommit
+time
+2 txstart
+time
+2 create f2
+time
+2 create f5
+time
+2 delete f4
+time
+2 delete f1
+time
+2 txcommit
+time
+1 txstart
+time
+1 append f1 PMxj
+time
+1 put f1 teHm
+time
+1 delete f3
+time
+1 create f5
+time
+1 txcommit
+time
+1 txstart
+time
+1 create f2
+time
+1 append f1 OqQT
+time
+1 create f3
+time
+1 delete f5
+time
+1 txcommit
+time
+2 txstart
+time
+2 delete f5
+time
+2 put f2 umUW
+time
+2 create f1
+time
+2 create f3
+time
+2 txcommit
+time
