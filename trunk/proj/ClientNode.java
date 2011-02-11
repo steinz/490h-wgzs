@@ -106,6 +106,9 @@ public class ClientNode {
 	 */
 	private Cache cache;
 
+	@Deprecated
+	private Queue<String> getQueue = new LinkedList<String>();
+	
 	/*
 	 * We have client side locking to handle the following type of cmd flows:
 	 * 
