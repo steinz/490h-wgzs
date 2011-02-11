@@ -490,6 +490,7 @@ public class ManagerNode {
 			this.node.fs.startTransaction(from);
 		} catch (IOException e1) {
 			this.node.printError(e1);
+			return;
 		}
 		// callback setup
 		addHeartbeatTimeout(from);
