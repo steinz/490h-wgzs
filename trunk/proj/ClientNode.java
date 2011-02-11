@@ -12,6 +12,10 @@ import java.util.StringTokenizer;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
+/*
+ * TODO: Purge uncached files from disk periodically (unless manager thinks I have RW still)
+ */
+
 /**
  * Implicit transactions do the right thing by CC
  * 
@@ -27,6 +31,44 @@ public class ClientNode {
 	private static enum CacheStatuses {
 		ReadWrite, ReadOnly
 	};
+
+	/**
+	 * Wrapper around a map from filenames to cache statuses that logs changes
+	 * 
+	 * Files not in the map should be considered invalid
+	 */
+	private static class Cache {
+		private Map<String, CacheStatuses> cache;
+		private RIONode n;
+
+		public Cache(RIONode n) {
+			this.cache = new HashMap<String, CacheStatuses>();
+			this.n = n;
+		}
+
+		public void put(String filename, CacheStatuses newStatus) {
+			n.printVerbose("changing cache status of " + filename + " to "
+					+ newStatus);
+			cache.put(filename, newStatus);
+		}
+
+		public void remove(String filename) {
+			n.printVerbose("removing " + filename + " from cache");
+			cache.remove(filename);
+		}
+
+		public boolean hasRW(String filename) {
+			return cache.get(filename) == CacheStatuses.ReadWrite;
+		}
+		
+		public boolean hasRO(String filename) {
+			return cache.get(filename) == CacheStatuses.ReadOnly;
+		}
+		
+		public boolean contains(String filename) {
+			return cache.containsKey(filename);
+		}
+	}
 
 	/**
 	 * Operation types the client can remember in a PendingClientOperation
@@ -60,10 +102,9 @@ public class ClientNode {
 	}
 
 	/**
-	 * Status of cached files on disk. Keys are filenames. Files not in here
-	 * should be considered Invalid.
+	 * Status of cached files on disk.
 	 */
-	private Map<String, CacheStatuses> cacheStatus;
+	private Cache cache;
 
 	/*
 	 * We have client side locking to handle the following type of cmd flows:
@@ -132,7 +173,7 @@ public class ClientNode {
 		this.parent = n;
 		this.maxWaitingForCommitQueueSize = maxWaitingForCommitQueueSize;
 
-		this.cacheStatus = new HashMap<String, CacheStatuses>();
+		this.cache = new Cache(parent);
 		this.pendingOperations = new HashMap<String, PendingClientOperation>();
 		this.lockedFiles = new HashSet<String>();
 		this.queuedCommands = new HashMap<String, Queue<String>>();
@@ -212,8 +253,7 @@ public class ClientNode {
 
 		if (queueLineIfLocked(filename, line)) {
 			return;
-		} else if (cacheStatus.containsKey(filename)
-				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		} else if (cache.hasRW(filename)) {
 			// have ownership - writeFile verifies existence
 			if (transacting) {
 				parent.fs.writeFileTX(parent.addr, filename, content, true);
@@ -243,8 +283,7 @@ public class ClientNode {
 
 		if (queueLineIfLocked(filename, line)) {
 			return;
-		} else if (cacheStatus.containsKey(filename)
-				&& (cacheStatus.get(filename) == CacheStatuses.ReadWrite)) {
+		} else if (cache.hasRW(filename)) {
 			// have permissions
 			if (transacting) {
 				parent.fs.createFileTX(parent.addr, filename);
@@ -284,8 +323,7 @@ public class ClientNode {
 
 		if (queueLineIfLocked(filename, line)) {
 			return;
-		} else if (cacheStatus.containsKey(filename)
-				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		} else if (cache.hasRW(filename)) {
 			// have permissions
 			if (transacting) {
 				parent.fs.deleteFileTX(parent.addr, filename);
@@ -314,7 +352,7 @@ public class ClientNode {
 
 		if (queueLineIfLocked(filename, line)) {
 			return;
-		} else if (cacheStatus.containsKey(filename)) {
+		} else if (cache.contains(filename)) {
 			// have permissions
 			String content;
 			if (transacting) {
@@ -380,8 +418,7 @@ public class ClientNode {
 
 		if (queueLineIfLocked(filename, line)) {
 			return;
-		} else if (cacheStatus.containsKey(filename)
-				&& cacheStatus.get(filename) == CacheStatuses.ReadWrite) {
+		} else if (cache.hasRW(filename)) {
 			// have ownership - writeFile verifies existence
 			if (transacting) {
 				parent.fs.writeFileTX(parent.addr, filename, content, false);
@@ -728,27 +765,24 @@ public class ClientNode {
 
 		// update permissions
 		if (keepRO) {
-			cacheStatus.put(filename, CacheStatuses.ReadOnly);
-			parent.printVerbose("changed permission level to ReadOnly on file: "
-					+ filename);
+			cache.put(filename, CacheStatuses.ReadOnly);
 		} else {
-			cacheStatus.remove(filename);
-			parent.printVerbose("losing permissions on file: " + filename);
+			cache.remove(filename);
 		}
 	}
 
 	/**
 	 * Client receives IV as a notification to mark a cached file invalid
 	 */
-	public void receiveIV(int from, String msgString) {
+	public void receiveIV(int from, String filename) {
 		if (managerUnknown()) {
 			return;
 		}
 
-		parent.printVerbose("marking invalid " + msgString);
-		cacheStatus.remove(msgString);
+		parent.printVerbose("marking invalid " + filename);
+		cache.remove(filename);
 
-		sendToManager(Protocol.IC, Utility.stringToByteArray(msgString));
+		sendToManager(Protocol.IC, Utility.stringToByteArray(filename));
 	}
 
 	// TODO: Low: Send TFS.PendingOp objects here instead of strings
@@ -763,9 +797,8 @@ public class ClientNode {
 		}
 
 		// has RO
-		cacheStatus.put(filename, CacheStatuses.ReadOnly);
-		parent.printVerbose("got ReadOnly on " + filename);
-
+		cache.put(filename, CacheStatuses.ReadOnly);
+		
 		try {
 			// update in cache
 			if (!Utility.fileExists(parent, filename)) {
@@ -833,7 +866,7 @@ public class ClientNode {
 						parent.fs.writeFile(filename, "", false);
 					}
 				}
-				cacheStatus.put(filename, CacheStatuses.ReadWrite);
+				cache.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
 			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
 				if (Utility.fileExists(parent, filename)) {
@@ -844,7 +877,7 @@ public class ClientNode {
 						parent.fs.deleteFile(filename);
 					}
 				}
-				cacheStatus.put(filename, CacheStatuses.ReadWrite);
+				cache.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
 
 			} else {
@@ -889,9 +922,7 @@ public class ClientNode {
 		}
 
 		// has RW!
-		// TODO: Make/use a helper for this that takes care of the logging
-		parent.printVerbose("got ReadWrite on " + filename);
-		cacheStatus.put(filename, CacheStatuses.ReadWrite);
+		cache.put(filename, CacheStatuses.ReadWrite);
 
 		PendingClientOperation intent = pendingOperations.get(filename);
 		pendingOperations.remove(filename);
