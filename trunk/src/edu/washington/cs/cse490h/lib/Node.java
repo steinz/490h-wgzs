@@ -63,7 +63,7 @@ public abstract class Node {
 	 * @param addr
 	 *            Address of the new node
 	 */
-	final void init(Manager manager, int addr){
+	public final void init(Manager manager, int addr){
 		this.manager = manager;
 		this.addr = addr;
 		this.drift = 0;
@@ -268,7 +268,7 @@ public abstract class Node {
 	 * Generates a user-level synoptic event in the synoptic logs
 	 * @param eventStr the string representing this event
 	 */
-	final public void logSynopticEvent(String eventStr) {
+	public void logSynopticEvent(String eventStr) {
 		String eventStrNoded = "node:" + this.toSynopticString() + " USER-EVENT " + eventStr;
 		this.manager.logEvent(this, eventStrNoded);
 	}

@@ -1,3 +1,6 @@
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * CSE 490h
  * 
@@ -10,34 +13,34 @@
  */
 public enum MessageType {
 
-	ACK(HandlingClass.RIOLayer), HandshakeCompletedEvent(HandlingClass.RIOLayer),
+	Ack(HandlingClass.RIOLayer), Handshake(HandlingClass.RIOLayer),
 
-	NOOP(HandlingClass.Client), HEARTBEAT(HandlingClass.Client), MANAGERIS(
+	Noop(HandlingClass.Client), Heartbeat(HandlingClass.Client), ManagerIs(
 			HandlingClass.Client),
 
-	CREATE(HandlingClass.ManagerNode), DELETE(HandlingClass.ManagerNode), WQ(
+	Create(HandlingClass.ManagerNode), Delete(HandlingClass.ManagerNode), WQ(
 			HandlingClass.ManagerNode), RQ(HandlingClass.ManagerNode), WC(
 			HandlingClass.ManagerNode), RC(HandlingClass.ManagerNode), IC(
-			HandlingClass.ManagerNode), WD_DELETE(HandlingClass.ManagerNode), TX_ABORT(
-			HandlingClass.ManagerNode), TX_COMMIT(HandlingClass.ManagerNode), TX_START(
+			HandlingClass.ManagerNode), WDDelete(HandlingClass.ManagerNode), TXAbort(
+			HandlingClass.ManagerNode), TXCommit(HandlingClass.ManagerNode), TXStart(
 			HandlingClass.ManagerNode),
 
 	WF(HandlingClass.ClientNode), RF(HandlingClass.ClientNode), IV(
-			HandlingClass.ClientNode), SUCCESS(HandlingClass.ClientNode), ERROR(
-			HandlingClass.ClientNode), TX_SUCCESS(HandlingClass.ClientNode), TX_FAILURE(
+			HandlingClass.ClientNode), Success(HandlingClass.ClientNode), Error(
+			HandlingClass.ClientNode), TXSuccess(HandlingClass.ClientNode), TXFailure(
 			HandlingClass.ClientNode),
 
 	WD(HandlingClass.ClientAndManagerNode), RD(
 			HandlingClass.ClientAndManagerNode),
 
 	@Deprecated
-	DATA(HandlingClass.None), @Deprecated
-	GET(HandlingClass.None), @Deprecated
-	PUT(HandlingClass.None), @Deprecated
-	APPEND(HandlingClass.None);
+	Data(HandlingClass.None), @Deprecated
+	Get(HandlingClass.None), @Deprecated
+	Put(HandlingClass.None), @Deprecated
+	Append(HandlingClass.None);
 
 	public enum HandlingClass {
-		RIOLayer, Client, ClientNode, ManagerNode, ClientAndManagerNode, None
+		RIOLayer, Client, ManagerNode, ClientNode, ClientAndManagerNode, None
 	};
 
 	/**
@@ -61,17 +64,24 @@ public enum MessageType {
 		return this.ordinal() < MAX_ORDINAL;
 	}
 
+	private static Map<Integer, MessageType> ordinalToMessageTypeCache = new HashMap<Integer, MessageType>();
+
 	/**
 	 * Turn an int ordinal into a MessageType
 	 * 
 	 * TODO: Memoize
 	 */
 	public static MessageType ordinalToMessageType(int i) {
-		for (MessageType mt : values()) {
-			if (mt.ordinal() == i) {
-				return mt;
+		MessageType cached = ordinalToMessageTypeCache.get(i);
+		if (cached == null) {
+			for (MessageType mt : values()) {
+				if (mt.ordinal() == i) {
+					cached = mt;
+					ordinalToMessageTypeCache.put(i, cached);
+					break;
+				}
 			}
 		}
-		return null;
+		return cached;
 	}
 }
