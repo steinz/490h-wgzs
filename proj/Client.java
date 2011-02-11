@@ -4,6 +4,7 @@
  */
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.StringTokenizer;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -224,12 +225,6 @@ public class Client extends RIONode {
 		super.onReceive(from, protocol, msg);
 	}
 
-	protected void receiveMANAGERIS(Integer from, byte[] msg) {
-		String msgStr = Utility.byteArrayToString(msg);
-		this.clientFunctions.managerAddr = Integer.parseInt(msgStr);
-		printInfo("setting manager address to " + from);
-	}
-
 	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
 	 * 
@@ -248,34 +243,50 @@ public class Client extends RIONode {
 
 		// TODO: If manager but not managing, send MANAGERIS to client
 
-		/*
-		 * 
-		 * // TODO: Replace massive switch w/ dynamic dispatch - started below
-		 * 
-		 * // Turn the protocol into a message type MessageType mt =
-		 * MessageType.ordinalToMessageType(protocol);
-		 * 
-		 * // Verify we have a correct message type if (mt == null) {
-		 * printError("invalid message ordinal " + protocol + " received");
-		 * return; }
-		 * 
-		 * // Find the instance to handle this message type Object instance =
-		 * null; switch (mt.handlingClass) { case Client: instance = this;
-		 * break; case ClientNode: instance = clientFunctions; break; case
-		 * ManagerNode: instance = managerFunctions; break; case
-		 * ClientAndManagerNode: instance = isManager ? managerFunctions :
-		 * clientFunctions; break; }
-		 * 
-		 * // Invalid message type for my node type (manager got client-only,
-		 * etc) if (instance == null) { printError("unhandled message type " +
-		 * mt + " received"); return; }
-		 * 
-		 * // route message try { Class<?> handlingClass = instance.getClass();
-		 * Class<?>[] paramTypes = { int.class, String.class }; Method handler =
-		 * handlingClass.getMethod("receive" + mt.name(), paramTypes);
-		 * handler.invoke(from, msgString); } catch (Exception e) {
-		 * printError(e); }
-		 */
+		// TODO: Replace massive switch w/ dynamic dispatch - started below
+
+//		// Turn the protocol into a message type
+//		MessageType mt = MessageType.ordinalToMessageType(protocol);
+//
+//		// Verify we have a correct message type
+//		if (mt == null) {
+//			printError("invalid message ordinal " + protocol + " received");
+//			return;
+//		}
+//
+//		// Find the instance to handle this message type
+//		Object instance = null;
+//		switch (mt.handlingClass) {
+//		case Client:
+//			instance = this;
+//			break;
+//		case ClientNode:
+//			instance = clientFunctions;
+//			break;
+//		case ManagerNode:
+//			instance = managerFunctions;
+//			break;
+//		case ClientAndManagerNode:
+//			instance = isManager ? managerFunctions : clientFunctions;
+//			break;
+//		}
+//
+//		// Invalid message type for my node type (manager got client-only, etc)
+//		if (instance == null) {
+//			printError("unhandled message type " + mt + " received");
+//			return;
+//		}
+//
+//		// route message
+//		try {
+//			Class<?> handlingClass = instance.getClass();
+//			Class<?>[] paramTypes = { int.class, String.class };
+//			Method handler = handlingClass.getMethod("receive" + mt.name(),
+//					paramTypes);
+//			handler.invoke(from, msgString);
+//		} catch (Exception e) {
+//			printError(e);
+//		}
 
 		try {
 			switch (protocol) {
@@ -641,6 +652,15 @@ public class Client extends RIONode {
 	 * end client and manager cache coherency functions
 	 ************************************************/
 
+	/**
+	 * 
+	 */
+	protected void receiveMANAGERIS(Integer from, byte[] msg) {
+		String msgStr = Utility.byteArrayToString(msg);
+		this.clientFunctions.managerAddr = Integer.parseInt(msgStr);
+		printInfo("setting manager address to " + from);
+	}
+	
 	public void killNode(int destAddr) {
 		if (isManager) {
 			this.managerFunctions.killNode(destAddr);

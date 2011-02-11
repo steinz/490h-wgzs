@@ -95,9 +95,9 @@ public class ReliableFileSystem {
 			StringBuilder contents = new StringBuilder();
 			PersistentStorageReader reader = n.getReader(filename);
 
-			char[] buffer = new char[1000];
+			char[] buffer = new char[1024];
 			int charsRead;
-			while ((charsRead = reader.read(buffer))!= -1) {
+			while ((charsRead = reader.read(buffer)) != -1) {
 				contents.append(buffer, 0, charsRead);
 			}
 
