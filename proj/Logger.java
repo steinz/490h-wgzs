@@ -83,11 +83,12 @@ public class Logger {
 			Throwable cause = e.getCause();
 			if (cause != null) {
 				error(n, cause);
-			}
-			errorPrintln(n, "|ERROR| " + e.toString()); 
-			StackTraceElement[] trace = e.getStackTrace();
-			for (StackTraceElement st : trace) {
-				errorPrintln(n, "|ERROR| " + st.toString());
+			} else {
+				errorPrintln(n, "|ERROR| " + e.toString());
+				StackTraceElement[] trace = e.getStackTrace();
+				for (StackTraceElement st : trace) {
+					errorPrintln(n, "|ERROR| " + st.toString());
+				}
 			}
 		}
 	}
@@ -136,7 +137,7 @@ public class Logger {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		
+
 		try {
 			BufferedWriter r = null;
 
