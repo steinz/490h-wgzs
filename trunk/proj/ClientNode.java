@@ -13,6 +13,24 @@ import java.util.StringTokenizer;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /*
+ *  TODO HIGH: Where's the file (WTF) timeout / callback from client to manager
+ *  after WQ/RQ if no response received from some client after x rounds.
+ *  
+ *  Cache coherency now works as follows:
+ *  Client sends a WQ, manager sends a WF to owner, owner sends data directly to 
+ *  client via a WD. If, after a period of time, owner hasn't sent data to requesting client
+ *  then send a ping to the manager, who will send a WF to the owner again.
+ *  
+ *  If you get a WF, assume the manager is correct and you own the file, even if you have
+ *  already set RW to RO or Invalid when previously tried to send WD/RD
+ *  
+ *  When replica receives WF for file it is replicating, it should assume real ownership of that 
+ *  file and forward to the requesting client as the original owner would (losing RW immediately)
+ *  
+ *  TODO: HIGH: Send all mutations to replica before responding to manager - RPCs?
+ */
+
+/*
  * TODO: Purge uncached files from disk periodically (unless manager thinks I have RW still)
  */
 
@@ -176,7 +194,7 @@ public class ClientNode {
 	public ClientNode(Client n, int maxWaitingForCommitQueueSize) {
 		this.parent = n;
 		this.maxWaitingForCommitQueueSize = maxWaitingForCommitQueueSize;
-		
+
 		this.cache = new Cache(parent);
 		this.pendingOperations = new HashMap<String, PendingClientOperation>();
 		this.lockedFiles = new HashSet<String>();
@@ -366,7 +384,7 @@ public class ClientNode {
 			}
 			parent.printInfo("Got file, contents below:");
 			parent.printInfo(content);
-			
+
 			getQueue.add("got " + filename + ":");
 			getQueue.add(content);
 		} else {
@@ -384,8 +402,8 @@ public class ClientNode {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = parent.getID().toString();
 		parent.printInfo("sending handshake to " + server);
-		parent.RIOSend(server, Protocol.HANDSHAKE,
-				Utility.stringToByteArray(payload));
+		parent.RIOSend(server, Protocol.HANDSHAKE, Utility
+				.stringToByteArray(payload));
 	}
 
 	/**
@@ -538,7 +556,7 @@ public class ClientNode {
 
 		try {
 			getQueue.clear();
-			
+
 			parent.printVerbose("aborting transaction");
 			transacting = false;
 
@@ -548,9 +566,9 @@ public class ClientNode {
 			queuedCommands.clear();
 			pendingOperations.clear();
 			waitingToCommit = false;
-			
+
 			parent.fs.abortTransaction(parent.addr);
-		} catch (IOException e) {			
+		} catch (IOException e) {
 			/*
 			 * Failed to write an abort to the log - if we keep going, we could
 			 * corrupt the log (since txs don't have ids)
@@ -560,7 +578,7 @@ public class ClientNode {
 			// NPE in abortTransaction on: start - crash - abort
 			parent.printError(e);
 		}
-		
+
 		processWaitingForCommitQueue();
 	}
 
@@ -591,16 +609,16 @@ public class ClientNode {
 	 * Perform a create RPC to the given address
 	 */
 	private void createRPC(int address, String filename) {
-		parent.RIOSend(address, Protocol.CREATE,
-				Utility.stringToByteArray(filename));
+		parent.RIOSend(address, Protocol.CREATE, Utility
+				.stringToByteArray(filename));
 	}
 
 	/**
 	 * Perform a delete RPC to the given address
 	 */
 	private void deleteRPC(int address, String filename) {
-		parent.RIOSend(address, Protocol.DELETE,
-				Utility.stringToByteArray(filename));
+		parent.RIOSend(address, Protocol.DELETE, Utility
+				.stringToByteArray(filename));
 	}
 
 	/**
@@ -830,7 +848,7 @@ public class ClientNode {
 		// print GET result
 		parent.printInfo("Got file, contents below:");
 		parent.printInfo(contents);
-		
+
 		getQueue.add("got " + filename + ":");
 		getQueue.add(contents);
 
@@ -920,11 +938,11 @@ public class ClientNode {
 	 */
 	public void receiveTXSuccess(int from, String empty) {
 		commitCurrentTransaction();
-		
+
 		while (getQueue.size() > 0) {
 			parent.printInfo(getQueue.poll());
 		}
-		
+
 		processWaitingForCommitQueue();
 	}
 
