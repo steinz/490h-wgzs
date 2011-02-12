@@ -5,6 +5,14 @@
 
 import java.io.IOException;
 
+class DFSException extends Exception {
+	private static final long serialVersionUID = 2140958919631674031L;
+	
+	public DFSException(String msg) {
+		super(msg);
+	}
+}
+
 class FileAlreadyExistsException extends IOException {
 	private static final long serialVersionUID = -4672741364887472499L;
 }
