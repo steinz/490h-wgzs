@@ -434,7 +434,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	 */
 	protected TransactionCache txCache;
 
-	public TransactionalFileSystem(Client n, String tempFilename,
+	public TransactionalFileSystem(DFSNode n, String tempFilename,
 			String logFilename, String logTempFilename, int purgeFrequency)
 			throws IOException {
 		// setup ReliableFileSystem

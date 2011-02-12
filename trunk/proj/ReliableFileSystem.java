@@ -30,9 +30,9 @@ public class ReliableFileSystem {
 	 * The client object this FS is associated with - used by the Persistent
 	 * Reader/Writer and for logging
 	 */
-	protected Client n;
+	protected DFSNode n;
 
-	public ReliableFileSystem(Client n, String tempFilename) throws IOException {
+	public ReliableFileSystem(DFSNode n, String tempFilename) throws IOException {
 		this.n = n;
 		this.tempFilename = tempFilename;
 

@@ -4,7 +4,7 @@
  */
 
 /**
- * TODO: HIGH: describe
+ * TODO: HIGH: move to private inner class and describe
  */
 public class QueuedFileRequest {
 	

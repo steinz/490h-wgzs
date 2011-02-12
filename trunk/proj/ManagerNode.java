@@ -150,7 +150,7 @@ public class ManagerNode {
 		}
 	}
 
-	private Client node;
+	private DFSNode node;
 	/**
 	 * List of nodes the manager is waiting for ICs from.
 	 */
@@ -202,7 +202,7 @@ public class ManagerNode {
 
 	private Cache filePermissionCache;
 
-	public ManagerNode(Client n) {
+	public ManagerNode(DFSNode n) {
 		this.node = n;
 		this.lockedFiles = new HashMap<String, Integer>();
 		this.pendingICs = new HashMap<String, List<Integer>>();
@@ -562,7 +562,7 @@ public class ManagerNode {
 
 		if (!clientHasPendingPermissions(client))
 			pendingCommitRequests.put(client, new QueuedFileRequest(client,
-					Protocol.TX_COMMIT, Client.emptyPayload));
+					Protocol.TX_COMMIT, DFSNode.emptyPayload));
 
 		transactionsInProgress.remove(client); // remove client tx
 		node.printVerbose("removed node " + client
@@ -590,7 +590,7 @@ public class ManagerNode {
 			unlockFile(filesToUnlock.get(i));
 		}
 
-		node.RIOSend(client, Protocol.TX_SUCCESS, Client.emptyPayload);
+		node.RIOSend(client, Protocol.TX_SUCCESS, DFSNode.emptyPayload);
 
 		// Clear cache
 		if (transactionTouchedFiles.remove(client) == null) {
@@ -716,7 +716,7 @@ public class ManagerNode {
 			if (transactionsInProgress.contains(client))
 				try {
 					node.fs.deleteFileTX(client, filename);
-					node.send(client, Protocol.SUCCESS, Client.emptyPayload);
+					node.send(client, Protocol.SUCCESS, DFSNode.emptyPayload);
 					node.printVerbose("Giving client: " + client
 							+ " RW on file: " + filename);
 					filePermissionCache.giveRW(client, filename);
@@ -952,7 +952,7 @@ public class ManagerNode {
 			return;
 		} else {
 			sendMsg.append(filename);
-			sendMsg.append(Client.packetDelimiter);
+			sendMsg.append(DFSNode.packetDelimiter);
 			sendMsg.append(node.fs.getFile(filename));
 		}
 
@@ -1051,7 +1051,7 @@ public class ManagerNode {
 	 */
 	private void sendSuccess(int destAddr, int protocol, String message) {
 		String msg = Protocol.protocolToString(protocol)
-				+ Client.packetDelimiter + message;
+				+ DFSNode.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		node.RIOSend(destAddr, Protocol.SUCCESS, payload);
 	}
@@ -1065,11 +1065,9 @@ public class ManagerNode {
 	 *            The protocol that failed
 	 * @param filename
 	 *            The filename for the protocol that failed
-	 * @param errorcode
-	 *            The error code
 	 */
 	private void sendError(int client, String filename, String message) {
-		String msg = filename + Client.packetDelimiter + message;
+		String msg = filename + DFSNode.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
 		node.RIOSend(client, Protocol.ERROR, payload);
 
@@ -1078,7 +1076,7 @@ public class ManagerNode {
 	}
 
 	private void sendError(int client, String filename, Exception e) {
-		String msg = filename + Client.packetDelimiter + e.getMessage();
+		String msg = filename + DFSNode.packetDelimiter + e.getMessage();
 		byte[] payload = Utility.stringToByteArray(msg);
 		node.RIOSend(client, Protocol.ERROR, payload);
 
@@ -1111,7 +1109,7 @@ public class ManagerNode {
 	public void heartbeatTimeout(Integer destAddr) {
 
 		if (transactionsInProgress.contains(destAddr)) {
-			node.RIOSend(destAddr, Protocol.HEARTBEAT, Client.emptyPayload);
+			node.RIOSend(destAddr, Protocol.HEARTBEAT, DFSNode.emptyPayload);
 			addHeartbeatTimeout(destAddr);
 		}
 		// printDebug();

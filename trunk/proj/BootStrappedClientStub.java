@@ -1,6 +1,9 @@
 import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 
+/**
+ * Client stub that runs w/o framework for testing app and middleware
+ */
 public class BootStrappedClientStub {
 
 	private Random rand = new Random(10);

@@ -11,7 +11,7 @@ import java.util.UUID;
  * Assumes the manager has address 0. Only works for up to MAX_CLIENT_COUNT
  * clients w/ addresses 0-MAX_CLIENT_COUNT.
  */
-public class PerfectInitializedClient extends PerfectClient {
+public class PerfectInitializedDFSNode extends PerfectDFSNode {
 
 	/**
 	 * number of clients for everyone to pre-initialize handshakes with. uuid

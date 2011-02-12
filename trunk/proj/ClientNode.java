@@ -163,7 +163,7 @@ public class ClientNode {
 	/**
 	 * The parent node associated with this client
 	 */
-	private Client parent;
+	private DFSNode parent;
 
 	/**
 	 * Map from filenames to the operation we want to do on them once we receive
@@ -196,7 +196,7 @@ public class ClientNode {
 	 */
 	private Queue<String> waitingForCommitQueue;
 
-	public ClientNode(Client n, int maxWaitingForCommitQueueSize) {
+	public ClientNode(DFSNode n, int maxWaitingForCommitQueueSize) {
 		this.parent = n;
 		this.maxWaitingForCommitQueueSize = maxWaitingForCommitQueueSize;
 
@@ -431,7 +431,7 @@ public class ClientNode {
 	 */
 	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
-		parent.RIOSend(server, Protocol.NOOP, Client.emptyPayload);
+		parent.RIOSend(server, Protocol.NOOP, DFSNode.emptyPayload);
 	}
 
 	/**
@@ -701,7 +701,7 @@ public class ClientNode {
 	 * calling this.
 	 */
 	private void sendToManager(int protocol) {
-		sendToManager(protocol, Client.emptyPayload);
+		sendToManager(protocol, DFSNode.emptyPayload);
 	}
 
 	/**
@@ -785,7 +785,7 @@ public class ClientNode {
 			// read file contents
 			// manager guarantees you're not currently transacting on this file
 			try {
-				payload = filename + Client.packetDelimiter
+				payload = filename + DFSNode.packetDelimiter
 						+ parent.fs.getFile(filename);
 			} catch (IOException e) {
 				// FS failure - might as well be disconnected
@@ -874,7 +874,7 @@ public class ClientNode {
 	 */
 	public void receiveSuccess(int from, String msgString) {
 
-		String[] split = msgString.split(Client.packetDelimiter);
+		String[] split = msgString.split(DFSNode.packetDelimiter);
 		String cmd = split[0];
 
 		if (split.length < 2) {
