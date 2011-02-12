@@ -9,7 +9,7 @@ import java.util.concurrent.SynchronousQueue;
  */
 
 /**
- * Client middleware
+ * middleware between DFSNode and application
  */
 public class DistributedFileSystem {
 

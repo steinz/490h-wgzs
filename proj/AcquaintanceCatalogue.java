@@ -2,6 +2,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
+/**
+ * p2pFB app stub
+ */
 public class AcquaintanceCatalogue {
 
 	private static DistributedFileSystem dfs;

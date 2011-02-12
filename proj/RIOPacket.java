@@ -13,6 +13,8 @@ import java.util.UUID;
 import edu.washington.cs.cse490h.lib.Packet;
 import edu.washington.cs.cse490h.lib.Utility;
 
+// TODO: HIGH: More Packet objects
+
 /**
  * This conveys the header for reliable, in-order message transfer. This is
  * carried in the payload of a Packet, and in turn the data being transferred is
@@ -174,7 +176,7 @@ public class RIOPacket {
 
 		return new RIOPacket(protocol, seqNum, payload, name);
 	}
-	
+
 	public String toString() {
 		return "proto:" + Protocol.protocolToString(this.protocol)
 				+ "|rio-seqNum:" + this.seqNum + "|payload:"

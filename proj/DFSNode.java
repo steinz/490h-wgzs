@@ -26,7 +26,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  * CacheCoherencey (Extended w/ Create and Delete) + 2PC Transactions + Paxos
  * Primary Manager Election + Failover
  */
-public class Client extends RIONode {
+public class DFSNode extends RIONode {
 
 	/*
 	 * TODO: ASK: I don't understand how all of this is going to get called from
@@ -290,7 +290,7 @@ public class Client extends RIONode {
 		// Find the instance to handle this message type
 		Object instance = null;
 		switch (mt.handlingClass) {
-		case Client:
+		case DFSNode:
 			instance = this;
 			break;
 		case ClientNode:

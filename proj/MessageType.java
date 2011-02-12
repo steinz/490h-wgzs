@@ -15,10 +15,10 @@ public enum MessageType {
 
 	Ack(HandlingClass.RIOLayer), Handshake(HandlingClass.RIOLayer),
 
-	Noop(HandlingClass.Client), Heartbeat(HandlingClass.Client), ManagerIs(
-			HandlingClass.Client),
+	Noop(HandlingClass.DFSNode), Heartbeat(HandlingClass.DFSNode), ManagerIs(
+			HandlingClass.DFSNode),
 
-	WD(HandlingClass.Client), RD(HandlingClass.Client),
+	WD(HandlingClass.DFSNode), RD(HandlingClass.DFSNode),
 
 	Create(HandlingClass.ManagerNode), Delete(HandlingClass.ManagerNode), WQ(
 			HandlingClass.ManagerNode), RQ(HandlingClass.ManagerNode), WC(
@@ -39,7 +39,7 @@ public enum MessageType {
 	Append(HandlingClass.None);
 
 	public enum HandlingClass {
-		RIOLayer, Client, ManagerNode, ClientNode, None
+		RIOLayer, DFSNode, ManagerNode, ClientNode, None
 	};
 
 	/**
@@ -63,12 +63,11 @@ public enum MessageType {
 		return this.ordinal() < MAX_ORDINAL;
 	}
 
-	private static Map<Integer, MessageType> ordinalToMessageTypeCache = new HashMap<Integer, MessageType>(MAX_ORDINAL);
+	private static Map<Integer, MessageType> ordinalToMessageTypeCache = new HashMap<Integer, MessageType>(
+			MAX_ORDINAL);
 
 	/**
 	 * Turn an int ordinal into a MessageType
-	 * 
-	 * TODO: Memoize
 	 */
 	public static MessageType ordinalToMessageType(int i) {
 		MessageType cached = ordinalToMessageTypeCache.get(i);
