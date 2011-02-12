@@ -537,14 +537,18 @@ public class ClientNode {
 		}
 
 		try {
+			getQueue.clear();
+			
 			parent.printVerbose("aborting transaction");
 			transacting = false;
 
 			// clear out all commands
+			parent.printVerbose("unlocking " + lockedFiles.toString());
 			lockedFiles.clear();
 			queuedCommands.clear();
 			pendingOperations.clear();
-
+			waitingToCommit = false;
+			
 			parent.fs.abortTransaction(parent.addr);
 		} catch (IOException e) {			
 			/*
@@ -556,6 +560,8 @@ public class ClientNode {
 			// NPE in abortTransaction on: start - crash - abort
 			parent.printError(e);
 		}
+		
+		processWaitingForCommitQueue();
 	}
 
 	/**
@@ -906,7 +912,7 @@ public class ClientNode {
 	 */
 	public void receiveTXFailure(int from, String empty) {
 		abortCurrentTransaction();
-		processWaitingForCommitQueue();
+		processWaitingForCommitQueue(); // TODO: redundant
 	}
 
 	/**
