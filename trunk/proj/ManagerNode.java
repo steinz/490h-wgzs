@@ -1106,29 +1106,30 @@ public class ManagerNode {
 		node.RIOSend(destAddr, Protocol.TX_FAILURE,
 				Utility.stringToByteArray(""));
 		transactionsInProgress.remove(destAddr);
-
-		// transfer ownership of files
-		for (Entry<String, Integer> entry : filePermissionCache.RW
-				.entrySet()) {
-			Integer newOwner;
-			if (entry.getValue().equals(destAddr)) {
-				String filename = entry.getKey();
-				newOwner = replicaNode.get(destAddr);
-				node.printVerbose("Node: " + destAddr
-						+ " failed. Transferring ownership" + " of file: "
-						+ filename + " to replica node: " + newOwner);
-				filePermissionCache.giveRW(newOwner, filename);
-				// if someone was waiting for this file, send a WF/RF to the
-				// replica
-				if (pendingWritePermissionRequests.remove(filename) != null) {
-					node.RIOSend(newOwner, Protocol.WF,
-							Utility.stringToByteArray(filename));
-				} else if (pendingReadPermissionRequests.remove(filename) != null) {
-					node.RIOSend(newOwner, Protocol.RF,
-							Utility.stringToByteArray(filename));
-				}
-			}
-		}
+//		
+//		// transfer ownership of files
+//		for (Entry<String, Integer> entry : filePermissionCache.RW
+//				.entrySet()) {
+//			Integer newOwner;
+//			if (entry.getValue().equals(destAddr)) {
+//				String filename = entry.getKey();
+//				newOwner = replicaNode.get(destAddr);
+//				node.printVerbose("Node: " + destAddr
+//						+ " failed. Transferring ownership" + " of file: "
+//						+ filename + " to replica node: " + newOwner);
+//				filePermissionCache.giveRW(newOwner, filename);
+//				// if someone was waiting for this file, send a WF/RF to the
+//				// replica
+//				if (pendingWritePermissionRequests.remove(filename) != null) {
+//					node.RIOSend(newOwner, Protocol.WF,
+//							Utility.stringToByteArray(filename));
+//				} else if (pendingReadPermissionRequests.remove(filename) != null) {
+//					node.RIOSend(newOwner, Protocol.RF,
+//							Utility.stringToByteArray(filename));
+//				}
+//			}
+//		}
+		
 		ArrayList<String> filesToUnlock = new ArrayList<String>();
 
 		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {

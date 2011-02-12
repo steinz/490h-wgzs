@@ -10,13 +10,13 @@
 \begin{document}
 
 \begin{center}
-{\large CSE 490h -- Project 2: Cache Coherence Writeup} \\
+{\large CSE 490h -- Project 3: Transactions Writeup} \\
 \textbf{Wayne Gerard - wayger} \\
 \textbf{Zachary Stein - steinz} \\
-January 27, 2011
+February 11, 2011
 \end{center}
 
-\section{Commands:} \\
+\section{Commands:} 
 
 Our system has two kinds of nodes: managers and clients.
 
@@ -31,9 +31,9 @@ Configuration Commands: manager, manageris <addr>, handshake <addr>
     Dev Debug Commands: debug, noop <addr>
 \end{verbatim}
 
-All operations performed outside of transactions are semantically implicity wrapped inside of a txstart and txcommit by the manager. However, in our actual implementaion, different code runs if the client is or isn't currently performing a tx for performance reasons. \\
+All operations performed outside of transactions are semantically implicitly wrapped inside of a txstart and txcommit by the manager. However, in our actual implementaion, different code runs if the client is or isn't currently performing a tx for performance reasons. 
 
-\section{File System Semantics:} \\
+\section{File System Semantics:} 
 
 A file is defined to exist and is accessible iff some node in the system created the file outside of a tx, or inside of a tx that has been committed. 
 This file will cease to be available if it is deleted outside of a tx or deleted by a committed tx.
@@ -44,15 +44,15 @@ As with our previous project, we allow one client at most to have ReadWrite acce
 Since we are not using write-through cache coherence, we expect clients to maintain responsibility for files they have RW access on. 
 We expect that clients will use replicas to appropriately clone data so that the data can be recovered if the client goes down. This
 also means that the manager will not request the updated version of these files until another client requests them. At this point,
-the manager will ask the client to send its changed version of the files forward and to revoke its local permissions on the file(s) (and
-the manager will revoke the client's permissions on the file(s) as well).
+the manager will ask the client to send its changed version of the files, and permissions on the file will be revoked. 
 
-In the event of a client failing while that client still has RW access on a file(s), the manager will transfer ownership to the client's
-replica and then request the data again.
+In project 4, clients failing will result in a transfer of file ownership to that client's replica. 
 
-If no client has ReadWrite access to a file, any number of clients can have ReadOnly access to that file. The manager explicitly invalidates these permissions before granting anyone else ReadWrite access to that file. \\
+If no client has ReadWrite access to a file, any number of clients can have ReadOnly access to that file. The manager explicitly invalidates these permissions before granting anyone else ReadWrite access to that file.
 
-\section{Serialization:} \\
+When a client loses ownership of a file, they transfer their changes to the manager. 
+
+\section{Serialization:} 
 
 We employ client-side file-level locking to prevent a client from requesting permission to the same file twice in a row.
 For example, say a client doesn't have ReadWrite access to the file test.txt and the client receives the commands:
@@ -65,9 +65,9 @@ delete test.txt
 Since the client gains RW access on test.txt after the first command, there is no need to contact the manager to perform the second command, so we queue the second operation until the fist completes.
 
 The manager, in turn, assumes the client will queue commands until they are ready for the next request to be serviced. 
-If a client requests access to the same file twice, the manager will grant them the appropriate level of access. \\
+If a client requests access to the same file twice, the manager will grant them the appropriate level of access. 
 
-\section{Transaction Scheme:} \\
+\section{Transaction Scheme:} 
 
 We decided to use two-phase locking manager-side to ensure serializable transactions for the following reasons:
 
@@ -75,10 +75,10 @@ We decided to use two-phase locking manager-side to ensure serializable transact
 	\item[Framework setup] Our framework is already suited towards two-phase locking. We already have a locking scheme in-place for cache coherency (project 2), and so the process of locking files was 
 simply expanded to lock files for the duration of a transaction, instead of for the duration of a request.
 	\item[Difficulties with optimistic concurrency] We thought about using optimistic concurrency, however this requires the server to validate all requests at the end of a transaction. This would require a log on the server recording transactions. Further, this log would have to timestamp all transactions in order to decide whether two transactions conflicted or not. Lastly, this would also required the server to be sent a copy of the client's transaction log with every commit, which we thought was unnecessary. 
-        \item[Versioning] Further, using optimistic concurrency would require some form of file versioning, in order to support rollback. We thought this approach required more space allocation than was necessary or ideal.\\
+        \item[Versioning] Further, using optimistic concurrency would require some form of file versioning, in order to support rollback. We thought this approach required more space allocation than was necessary or ideal.
 \end{description} 
 
-\section{Deadlock:} \\
+\section{Deadlock:} 
 
 One potential problem with 2PL is the possibility of deadlock.
 
@@ -87,7 +87,7 @@ For example, if a client wants to perform the following operations:
 \begin{verbatim}
         Get f2
         Put f1 foo
-\end{verbatim}\\
+\end{verbatim}
 We require the clien to actually perform these operations:
 \begin{verbatim}
         Append f1 ""
@@ -96,18 +96,62 @@ We require the clien to actually perform these operations:
 \end{verbatim}
 Following this procedure, clients are guaranteed not to dead lock while performing a transaction.
 
-The manager also simultaneously keeps track of all files a client has touched throughout the course of a transaction. If a client requests files out of order, the manager will notice this when trying to lock the file (by doing a string compareTo() and noticing that the requested file is less than the latest file the client has a lock on). The manager will then abort the transaction and release all locks for that client, preventing deadlock due to user failure.
+The manager also simultaneously keeps track of all files a client has touched throughout the course of a transaction. If a client requests files out of order, the manager will notice this when trying to lock the file. The manager will then abort the transaction and release all locks for that client, preventing deadlock due to user failure.
 
-If the manager were to fail for some reason, clients can always abort themselves, which results in all locks freeing eventually.  \\
+If the manager were to fail for some reason, clients can always abort themselves, which results in all locks freeing eventually.  
 
-\section{Transaction Semantics:} \\
+\section{Transaction Semantics:} 
 
 A client is considered to be transacting until it receives a TX\_SUCCESS or TX\_FAILURE from the manager. 
-The client will queue all commands it is given until it receives a tx response from the manager for its outstanding transaction. \\
+The client will queue all commands it is given until it receives a tx response from the manager for its outstanding transaction. 
  
-The manager will not wait for an ack on the TX\_SUCCESS or TX\_FAILURE packet before revoking that client's permissions. The RIO message layer ensures that a delayed or dropped packet won't cause a problem: if a TX\_SUCCESS packet is delayed and the manager requests a file from the client, the TX\_SUCCESS will be acted upon before any request from the manager is serviced. \\
+The manager will not wait for an ack on the TX\_SUCCESS or TX\_FAILURE packet before revoking that client's exclusive file locks. The RIO message layer ensures that a delayed or dropped packet won't cause a problem: if a TX\_SUCCESS packet is delayed and the manager requests a file from the client, the TX\_SUCCESS will be acted upon before any request from the manager is serviced. 
 
-\section{TFS Log Entry Format:} \\
+\section{Failure Handling:} 
+
+\begin{description}
+\item[Server Failures] Currently, clients block on server failures. This is within the specification of the assignment, and so we did not implement any handling of this scenario. This will be relaxed by PAXOS in assignment 4.
+\item[Client Failures] While a client is in the middle of a transaction, they are periodically sent pings by the server (heartbeat pings). If the client ceases responding to this heartbeat, then after a set number of rounds the server will assume the client went down (this functionality was largely borrowed from project 1, where servers were required to deal with client failures). If the server detects that a client went down, it will immediately release all locks the client had on any files and abort their transaction (in the event that the client is alive but unresponsive).
+
+For project 4, the server will then change ownership of any files that client had ownership of to its replica. If there were pending permission requests for this file, then the server will immediately forward that request to the appropriate replica. However, clients don't yet replicate local changes.
+
+\item[Transaction Failures] Since all transaction commands are written to a log before actually being committed, a transaction failure results in no changes to the local or remote file system occurring. Instead, the client may attempt to redo the transaction based on the type of failure that occurred, or it may simply decide to abort that transaction altogether, at which point the user would have to redo the transaction. 
+\item[Command Failures] Command failures result in an automatic transaction failure for our framework. We chose to implement this feature as opposed to the alternative (sending errors but proceeding with the transaction) because we believe that users could end up in an undesirable state if they commit a transaction that succeeds on some commands but not others. Rather than allow the client to end up in an undesirable state, we decided to abort the transaction and force the user to recommit a new transaction without the offending command. However, it would be trivial for the manager to send only errors and not a TXFailure to the client, so that the client could decide whether or not to abort. Depending on which semantics are more natural for our application, we may change our implementation. 
+\end{description}
+
+\section{Replication:} 
+
+For project 4, we intend to implement the following replication scheme:
+
+In the middle of transactions, in order to avoid potential situations where the most current copy of the file is lost, we decided to implement replication. Whenever a client changes a file locally,
+it will also replicate this action via RPC on another client (we chose a simple replication scheme, where client 1 replicates on client 2, ... client k replicates on client k+1, ... client N replicates on client 1).
+This ensures that the latest copy of a file will never be lost, even if a client fails.
+
+\section{Initializing Clients:}
+
+Clients no longer need to explicitly declare who the manager is. The manager node will need to be declared explicitly, like so:
+\begin{verbatim}
+0 manager
+\end{verbatim}
+
+Before any commands can be executed, a handshake between manager and client will need to occur. This can be accomplished via the handshake command, like so:
+\begin{verbatim}
+1 handshake 0
+\end{verbatim}
+
+It is not necessary for 0 to try and handshake with 1 in this example - only one node needs to initiate a handshake.
+
+\section{Running Test Scripts:}
+
+Test scripts should be called as follows (a sample test script is given as an example):
+
+\begin{verbatim}
+
+./clean.sh; ./compile.sh; ./execute.pl -f 0 -n Client -s -c ./simulator_scripts/test_tx_3 
+
+\end{verbatim}
+
+\section{TFS Log Entry Format:} 
 
 \begin{verbatim}
 <client_address>
@@ -117,41 +161,9 @@ The manager will not wait for an ack on the TX\_SUCCESS or TX\_FAILURE packet be
 <contents>
 \end{verbatim}
 
-contents\_line\_count is -1 for operations that don't have contents
-there is a line separator after each $<entry>$ including the contents
-tx ops don't have a filename or anything after \\
-
-\section{Failure Handling:} \\
-
-\begin{description}
-\item[Server Failures] Currently, clients block on server failures. This is within the specification of the assignment, and so we did not implement any handling of this scenario. This will be relaxed by PAXOS in assignment 4.
-\item[Client Failures] While a client is in the middle of a transaction, they are periodically sent pings by the server (heartbeat pings). If the client ceases responding to this heartbeat, then after a set number of rounds the server will assume the client went down (this functionality was largely borrowed from project 1, where servers were required to deal with client failures). If the server detects that a client went down, it will immediately release all locks the client had on any files and abort their transaction (in the event that the client is alive but unresponsive).
-
-The server will then immediately change ownership of any files that client had ownership of to its replica. If there were pending permission requests for this file, then the server will immediately forward that request to the appropriate replica. 
-
-\item[Transaction Failures] Since all transaction commands are written to a log before actually being committed, a transaction failure results in no changes to the local or remote file system occurring. Instead, the client
-may attempt to redo the transaction based on the type of failure that occurred, or it may simply decide to abort that transaction altogether, at which point the user would have to redo the transaction. 
-\item[Command Failures] Command failures result in an automatic transaction failure for our framework. We chose to implement this feature as opposed to the alternative (sending errors but proceeding with the transaction) because we believe that users could end up in an undesirable state if they commit a transaction that succeeds on some commands but not others. Rather than allow the client to end up in an undesirable state, we decided to abort the transaction and force the user to recommit a new transaction without the offending command.
-\end{description}
-\\
-
-\section{Replication:} \\
-
-For project 4, we intend to implement the following replication scheme:\\
-
-In the middle of transactions, in order to avoid potential situations where the most current copy of the file is lost, we decided to implement replication. Whenever a client changes a file locally,
-it will also replicate this action via RPC on another client (we chose a simple replication scheme, where client 1 replicates on client 2, ... client k replicates on client k+1, ... client N replicates on client 1).
-This ensures that the latest copy of a file will never be lost, even if a client fails (see below for further discussion on that topic). \\
-
-\section{Running Test Scripts:}\\
-
-Test scripts should be called as follows (a sample test script is given as an example):
-
-\begin{verbatim}
-
-./clean.sh; ./compile.sh; ./execute.pl -f 0 -n Client -s -c ./simulator_scripts/test_tx_3 
-
-\end{verbatim}
+Contents\_line\_count is -1 for operations that don't have contents.
+There is a line separator after each $<entry>$ including the contents.
+Tx ops don't have a filename or anything after the operation type.
 
 \end{document}
 
