@@ -508,7 +508,6 @@ public class ManagerNode {
 		// If this client has something in transaction touched cache, an error occurred
 		if (transactionTouchedFiles.get(client) != null){
 			node.printError("ERROR: Manager has cached transaction touched files for client: " + client);
-			// TODO: HIGH: Send the client an error? This isn't really a client problem...
 		}
 		transactionTouchedFiles.put(client, new ArrayList<String>());
 
@@ -1052,7 +1051,6 @@ public class ManagerNode {
 		pendingCommitRequests.remove(client);
 		// Clear cache
 		if (transactionTouchedFiles.remove(client) == null){
-			// TODO: HIGH: Should we even bother printing this error? A client could txstart then abort, which might result in this situation
 			node.printError("ERROR: Manager thinks this client: " + client + " has touched no files!");
 		}
 	}
