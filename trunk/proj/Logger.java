@@ -51,6 +51,8 @@ public class Logger {
 	 * Where to print error messages
 	 */
 	static PrintStream errorStream = System.err;
+	
+	private static int lineNumber = 0;
 
 	public static void verbose(Node n, String str) {
 		verbose(n, str, false);
@@ -70,12 +72,12 @@ public class Logger {
 
 	public static void info(Node n, String str) {
 		if (printInfo) {
-			infoPrintln(n, "|INFO| " + str);
+			infoPrintln(n, "   |INFO| " + str);
 		}
 	}
 
 	public static void error(Node n, String str) {
-		errorPrintln(n, "|ERROR| " + str);
+		errorPrintln(n, "  |ERROR| " + str);
 	}
 
 	public static void error(Node n, Throwable e) {
@@ -84,23 +86,23 @@ public class Logger {
 			if (cause != null) {
 				error(n, cause);
 			} else {
-				errorPrintln(n, "|ERROR| " + e.toString());
+				errorPrintln(n, "  |ERROR| " + e.toString());
 				StackTraceElement[] trace = e.getStackTrace();
 				for (StackTraceElement st : trace) {
-					errorPrintln(n, "|ERROR| " + st.toString());
+					errorPrintln(n, "  |ERROR| " + st.toString());
 				}
 			}
 		}
 	}
 
 	private static void infoPrintln(Node n, String str) {
-		infoStream.println(str);
+		infoStream.println((lineNumber++) + str);
 		writeToLog(n, str);
 	}
 
 	private static void errorPrintln(Node n, String str) {
-		errorStream.println(str);
-		writeToLog(n, str);
+		errorStream.println(lineNumber + str);
+		writeToLog(n,(lineNumber++) + str);
 	}
 
 	/**
