@@ -3,7 +3,7 @@
 OUTPUT_FILE="cse490h-wgzs.tar.gz"
 SOURCE="cse490h-wgzs/proj/*.java cse490h-wgzs/tests/*.java"
 LIB="cse490h-wgzs/jars/*.jar cse490h-wgzs/jars/lib/*.jar"
-SCRIPTS="cse490h-wgzs/*.sh cse490h-wgzs/*.pl cse490h-wgzs/*.py""
+SCRIPTS="cse490h-wgzs/*.sh cse490h-wgzs/*.pl cse490h-wgzs/*.py"
 SIM_SCRIPTS="cse490h-wgzs/simulator_scripts/Cache* cse490h-wgzs/simulator_scripts/test*"
 WRITEUPS="cse490h-wgzs/writeups/project*/*.pdf cse490h-wgzs/writeups/project*/*.png"
 OUTPUT=""
