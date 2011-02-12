@@ -241,7 +241,7 @@ public class ManagerNode {
 		if (lockedFiles.containsKey(filename)) {
 
 			// Don't care if the file is locked by the requesting client
-			if (lockedFiles.get(filename).equals(client)) {
+			if (lockedFiles.get(filename) == client) {
 				return false;
 			}
 
@@ -276,16 +276,13 @@ public class ManagerNode {
 					node.fs.deleteFileTX(client, filename);
 				} catch (TransactionException e) {
 					sendError(client, filename, e);
-					return;
 				} catch (IOException e) {
 					sendError(client, filename, e);
-					return;
-				}
+				} 
 			else
 				node.fs.deleteFile(filename);
 		} catch (IOException e) {
 			sendError(client, filename, e);
-			return;
 		}
 		// remove permissions
 
@@ -299,7 +296,6 @@ public class ManagerNode {
 		if (requester != null) {
 			// create the file which was deleted by the owner
 			createNewFile(filename, requester);
-			unlockFile(filename);
 		}
 
 		requester = pendingRPCDeleteRequests.remove(filename);
@@ -316,6 +312,8 @@ public class ManagerNode {
 		if (requester != null) {
 			sendError(requester, filename, new FileNotFoundException());
 		}
+		
+		unlockFile(filename);
 
 	}
 
@@ -328,7 +326,10 @@ public class ManagerNode {
 		}
 		// first write the file to save a local copy
 		try {
-			node.fs.writeFile(filename, contents, false);
+			if (Utility.fileExists(node, filename))
+				node.fs.writeFile(filename, contents, false);
+			else
+				node.fs.createFile(filename);
 		} catch (IOException e) {
 			sendError(client, filename, e);
 			return;
@@ -1056,7 +1057,7 @@ public class ManagerNode {
 	}
 
 	/**
-	 * This packet timed out and was a heartbeat packet. It may have been acked,
+	 * This packet timed out and was a   packet. It may have been acked,
 	 * or it may not have - it's irrelevant from the point of view of the
 	 * manager.
 	 * 
