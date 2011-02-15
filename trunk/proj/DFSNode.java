@@ -9,11 +9,6 @@ import java.util.StringTokenizer;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
-/*
- * TODO: HIGH: Verify that methods actually throw the exceptions they declare 
- * that they do throughout the project
- */
-
 /**
  * Extension to the RIONode class that adds support basic file system operations
  * 
@@ -28,6 +23,10 @@ import edu.washington.cs.cse490h.lib.Utility;
  */
 public class DFSNode extends RIONode {
 
+	/**
+	 * TODO: HIGH: Fix P1 feedback bugs
+	 */
+	
 	/*
 	 * TODO: ASK: I don't understand how all of this is going to get called from
 	 * external code. I would imagine someone would do something like:

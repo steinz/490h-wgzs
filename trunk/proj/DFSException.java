@@ -5,13 +5,33 @@
 
 import java.io.IOException;
 
-class DFSException extends Exception {
+/*
+ * TODO: HIGH: Verify that methods actually throw the exceptions they declare 
+ * that they do throughout the project and that we only catch checked exceptions 
+ * (any other exception is the result of a bug)
+ */
+
+/**
+ * Wrapper for exceptions exposed to the app using the DFS library
+ */
+public class DFSException extends Exception {
 	private static final long serialVersionUID = 2140958919631674031L;
-	
+
+	/*
+	 * TODO: HIGH: Use cause chain instead of String msgs
+	 */
+	public DFSException(Exception cause) {
+		super(cause);
+	}
+
 	public DFSException(String msg) {
 		super(msg);
 	}
 }
+
+/*
+ * TODO: We should use are own FileAlreadyExistsException too
+ */
 
 class FileAlreadyExistsException extends IOException {
 	private static final long serialVersionUID = -4672741364887472499L;

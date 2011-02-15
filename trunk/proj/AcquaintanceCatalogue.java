@@ -7,6 +7,8 @@ import java.io.InputStreamReader;
  */
 public class AcquaintanceCatalogue {
 
+	// TODO: HIGH: move to different package. Move DFS to own package
+
 	private static DistributedFileSystem dfs;
 	private static BufferedReader reader;
 	private static boolean running;
@@ -82,7 +84,7 @@ public class AcquaintanceCatalogue {
 			dfs.put(filename, contents);
 			return "put";
 		}
-		
+
 		return "invalid command";
 	}
 

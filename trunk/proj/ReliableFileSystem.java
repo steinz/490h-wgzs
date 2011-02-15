@@ -12,6 +12,8 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class ReliableFileSystem {
 
+	 // TODO: HIGH: Close writers in finally blocks
+
 	/*
 	 * TODO: Some of the FS logging is out of order
 	 * 
@@ -32,7 +34,8 @@ public class ReliableFileSystem {
 	 */
 	protected DFSNode n;
 
-	public ReliableFileSystem(DFSNode n, String tempFilename) throws IOException {
+	public ReliableFileSystem(DFSNode n, String tempFilename)
+			throws IOException {
 		this.n = n;
 		this.tempFilename = tempFilename;
 

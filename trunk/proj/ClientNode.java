@@ -247,7 +247,8 @@ public class ClientNode {
 		} catch (IllegalAccessException e) {
 			parent.printError("invalid command:" + line);
 		} catch (InvocationTargetException e) {
-			parent.printError(e);
+			// TODO: HIGH: Just pass on e.getCause() here
+			parent.printError(e); 
 			if (transacting) {
 				sendToManager(Protocol.TX_ABORT);
 				abortCurrentTransaction();
