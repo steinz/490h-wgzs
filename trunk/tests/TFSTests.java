@@ -11,7 +11,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class TFSTests {
 
-	ClientStub n;
+	DFSNodeStub n;
 	TransactionalFileSystem fs;
 	String filename = "test";
 	String putContent = "no newline";
@@ -19,8 +19,8 @@ public class TFSTests {
 
 	@Before
 	public void setUp() throws Exception {
-		Manager manager = new SimulatorStub(Client.class, 10L, "", "");
-		n = new ClientStub();
+		Manager manager = new SimulatorStub(DFSNode.class, 10L, "", "");
+		n = new DFSNodeStub();
 		n.init(manager, 0);
 
 		fs = new TransactionalFileSystem(n, ".t", ".l", ".l.t",
