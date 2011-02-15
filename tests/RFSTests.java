@@ -13,7 +13,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class RFSTests {
 
-	ClientStub n;
+	DFSNodeStub n;
 	ReliableFileSystem fs;
 	String filename = "test";
 	String putContent = "no newline";
@@ -21,8 +21,8 @@ public class RFSTests {
 
 	@Before
 	public void setUp() throws Exception {
-		Manager manager = new SimulatorStub(Client.class, 10L, "", "");
-		n = new ClientStub();
+		Manager manager = new SimulatorStub(DFSNode.class, 10L, "", "");
+		n = new DFSNodeStub();
 		n.init(manager, 0);
 
 		fs = new ReliableFileSystem(n, ".t");

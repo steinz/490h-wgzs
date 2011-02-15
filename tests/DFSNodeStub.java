@@ -1,5 +1,5 @@
-	public class ClientStub extends Client {
-		public ClientStub() {
+	public class DFSNodeStub extends DFSNode {
+		public DFSNodeStub() {
 		}
 
 		@Override
