@@ -1122,6 +1122,7 @@ class ManagerNode {
 		try {
 			String[] params = { "java.lang.Integer" };
 			cbMethod = Callback.getMethod("heartbeatTimeout", this, params);
+			cbMethod.setAccessible(true); // HACK
 		} catch (SecurityException e) {
 			node.printError(e);
 		} catch (ClassNotFoundException e) {
