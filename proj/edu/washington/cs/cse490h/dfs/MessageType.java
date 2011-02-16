@@ -1,3 +1,4 @@
+package edu.washington.cs.cse490h.dfs;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -11,7 +12,7 @@ import java.util.Map;
  * Contains details about the recognized message types and what classes can
  * handle them
  */
-public enum MessageType {
+enum MessageType {
 
 	Ack(HandlingClass.RIOLayer), Handshake(HandlingClass.RIOLayer),
 

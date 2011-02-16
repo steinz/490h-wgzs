@@ -1,3 +1,4 @@
+package edu.washington.cs.cse490h.dfs;
 import java.lang.reflect.Field;
 
 /**
@@ -11,7 +12,7 @@ import java.lang.reflect.Field;
  * 
  * TODO: HIGH: I hate this class - switch everything to use MessageType instead
  */
-public class Protocol {
+class Protocol {
 	// NOTE: Make sure this agrees w/ MessageType's ordering
 	public static final int ACK = 0;
 	public static final int HANDSHAKE = 1;
@@ -63,7 +64,7 @@ public class Protocol {
 	 */
 	private static boolean checkValidProtocol(int protocol) {
 		try {
-			Class<?> proto = Class.forName("Protocol");
+			Class<?> proto = Class.forName("edu.washington.cs.cse490h.dfs.Protocol");
 			Field[] fields = proto.getDeclaredFields();
 			for (Field field : fields) {
 				if (field.getType().equals(int.class)) {
@@ -100,7 +101,7 @@ public class Protocol {
 	 */
 	private static String generateProtocolToString(int protocol) {
 		try {
-			Class<?> proto = Class.forName("Protocol");
+			Class<?> proto = Class.forName("edu.washington.cs.cse490h.dfs.Protocol");
 			Field[] fields = proto.getDeclaredFields();
 			for (Field field : fields) {
 				if (field.getType().equals(int.class)) {

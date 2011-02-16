@@ -1,4 +1,3 @@
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -7,9 +6,10 @@ import java.io.IOException;
 import org.junit.Before;
 import org.junit.Test;
 
+import edu.washington.cs.cse490h.dfs.DFSNode;
+import edu.washington.cs.cse490h.dfs.ReliableFileSystem;
 import edu.washington.cs.cse490h.lib.Manager;
 import edu.washington.cs.cse490h.lib.Utility;
-
 
 public class RFSTests {
 
@@ -43,10 +43,9 @@ public class RFSTests {
 	}
 
 	private void createAndPutFile(boolean twoTxs, boolean newline)
-			throws TransactionException, IOException {
+			throws IOException {
 		fs.createFile(filename);
-		fs.writeFile(filename, newline ? putContentNewline
-				: putContent, false);
+		fs.writeFile(filename, newline ? putContentNewline : putContent, false);
 	}
 
 	@Test

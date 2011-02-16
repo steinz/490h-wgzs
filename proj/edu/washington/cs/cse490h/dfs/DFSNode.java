@@ -1,3 +1,5 @@
+package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -26,7 +28,7 @@ public class DFSNode extends RIONode {
 	/**
 	 * TODO: HIGH: Fix P1 feedback bugs
 	 */
-	
+
 	/*
 	 * TODO: ASK: I don't understand how all of this is going to get called from
 	 * external code. I would imagine someone would do something like:
@@ -149,6 +151,8 @@ public class DFSNode extends RIONode {
 	/**
 	 * Resets everything to the initial client state
 	 * 
+	 * Does not reset RIOLayer components
+	 * 
 	 * called by start and when things get really messed up; currently when:
 	 * 
 	 * client fails aborting/committing a transaction (can't write changes to
@@ -258,14 +262,7 @@ public class DFSNode extends RIONode {
 	}
 
 	/**
-	 * Method that is called by the RIO layer when a message is to be delivered.
-	 * 
-	 * @param from
-	 *            The address from which the message was received
-	 * @param protocol
-	 *            The protocol identifier of the message
-	 * @param msg
-	 *            The message that was received
+	 * Method called by the RIO layer when a message is to be delivered.
 	 */
 	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
 		printVerbose("received " + Protocol.protocolToString(protocol)
@@ -274,8 +271,6 @@ public class DFSNode extends RIONode {
 		String msgString = Utility.byteArrayToString(msg);
 
 		// TODO: If manager but not managing, send MANAGERIS to client
-
-		// TODO: Replace massive switch w/ dynamic dispatch - started below
 
 		// Turn the protocol into a message type
 		MessageType mt = MessageType.ordinalToMessageType(protocol);
@@ -388,6 +383,9 @@ public class DFSNode extends RIONode {
 		}
 	}
 
+	/**
+	 * TOOD: HIGH: document killNode
+	 */
 	public void killNode(int destAddr) {
 		if (isManager) {
 			this.managerFunctions.killNode(destAddr);

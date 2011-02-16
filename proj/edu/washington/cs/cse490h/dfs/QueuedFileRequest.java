@@ -1,3 +1,4 @@
+package edu.washington.cs.cse490h.dfs;
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -6,7 +7,7 @@
 /**
  * TODO: HIGH: move to private inner class and describe
  */
-public class QueuedFileRequest {
+class QueuedFileRequest {
 	
 	int from;
 	int protocol;

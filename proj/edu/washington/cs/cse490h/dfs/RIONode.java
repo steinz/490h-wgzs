@@ -1,3 +1,5 @@
+package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -98,7 +100,7 @@ public abstract class RIONode extends Node {
 				+ " with payload: " + packetBytesToString(payload));
 		super.broadcast(protocol, payload);
 	}
-	
+
 	/**
 	 * Broadcast a message with no payload
 	 */
@@ -181,5 +183,8 @@ public abstract class RIONode extends Node {
 		return "RIONode|SessionID:" + ID + "|RIOLayer:" + RIOLayer.toString();
 	}
 
+	/**
+	 * TODO: HIGH: Specify
+	 */
 	public abstract void killNode(int destAddr);
 }

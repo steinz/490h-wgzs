@@ -1,3 +1,5 @@
+package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * 
@@ -120,38 +122,51 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		/**
 		 * Returns the next PendingOperation object read from reader or null
 		 * assuming the format described in the third writeup.
+		 * 
+		 * @throws IOException
 		 */
-		public static PendingOperation fromLog(BufferedReader reader) {
-			try {
-				String sClient = reader.readLine();
-				String sOp = reader.readLine();
-				int client = Integer.parseInt(sClient);
-				Operation op = Operation.valueOf(sOp);
+		public static PendingOperation fromLog(BufferedReader reader)
+				throws IOException {
+			String sClient = reader.readLine();
+			String sOp = reader.readLine();
 
-				if (op == Operation.TXSTART || op == Operation.TXCOMMIT
-						|| op == Operation.TXABORT) {
-					return new PendingOperation(client, op);
-				}
-
-				String filename = reader.readLine();
-				String sLen = reader.readLine();
-
-				int len = Integer.parseInt(sLen);
-
-				if (len > -1) {
-					StringBuilder contents = new StringBuilder();
-					for (int i = 0; i < len; i++) {
-						contents.append(reader.readLine());
-						contents.append(lineSeparator);
-					}
-					return new PendingOperation(client, op, filename,
-							contents.toString());
-				} else {
-					return new PendingOperation(client, op, filename);
-				}
-			} catch (Exception e) {
+			if (sClient == null || sOp == null) {
 				return null;
 			}
+
+			int client = Integer.parseInt(sClient);
+			Operation op = Operation.valueOf(sOp);
+
+			if (op == Operation.TXSTART || op == Operation.TXCOMMIT
+					|| op == Operation.TXABORT) {
+				return new PendingOperation(client, op);
+			}
+
+			String filename = reader.readLine();
+			String sLen = reader.readLine();
+
+			if (filename == null || sLen == null) {
+				return null;
+			}
+
+			int len = Integer.parseInt(sLen);
+
+			if (len > -1) {
+				StringBuilder contents = new StringBuilder();
+				for (int i = 0; i < len; i++) {
+					String line = reader.readLine();
+					if (line == null) {
+						return null;
+					}
+					contents.append(line);
+					contents.append(lineSeparator);
+				}
+				return new PendingOperation(client, op, filename,
+						contents.toString());
+			} else {
+				return new PendingOperation(client, op, filename);
+			}
+
 		}
 	}
 
@@ -193,8 +208,10 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 * Apply the given operation to the RFS
 		 * 
 		 * @throws IOException
+		 * @throws TransactionLogException
 		 */
-		protected void apply(PendingOperation op) throws IOException {
+		protected void apply(PendingOperation op) throws IOException,
+				TransactionLogException {
 			switch (op.op) {
 			case CREATE:
 				if (!Utility.fileExists(fs.n, op.filename)) {
@@ -230,10 +247,11 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		 * TODO: HIGH: Can this result in double appends if the client fails
 		 * after appending? Maybe this should write a temp log first...
 		 * 
-		 * @param client
+		 * @throws TransactionLogException
 		 * @throws IOException
 		 */
-		public void commitQueue(int client) throws IOException {
+		public void commitQueue(int client) throws TransactionLogException,
+				IOException {
 			Queue<PendingOperation> clientQueue = queuedOperations.get(client);
 			for (PendingOperation op : clientQueue) {
 				apply(op);
@@ -324,10 +342,10 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		/**
 		 * Parse the log file on disk
 		 * 
-		 * @throws FileNotFoundException
+		 * @throws IOException
 		 */
 		protected Map<Integer, List<PendingOperation>> queueFromLog()
-				throws FileNotFoundException {
+				throws IOException {
 			Map<Integer, List<PendingOperation>> oldTxs = new HashMap<Integer, List<PendingOperation>>();
 
 			// read log from disk, parsing lines into PendingOperation objects
@@ -362,10 +380,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 			fs.deleteFile(logTempFilename);
 		}
 
-		/**
-		 * @throws IOException
-		 */
-		public void redoLog() throws IOException {
+		public void redoLog() throws TransactionLogException, IOException {
 			if (!Utility.fileExists(fs.n, logFilename)) {
 				// no log, so nothing to do
 				return;
@@ -456,7 +471,7 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		this.purgeFrequency = purgeFrequency;
 
 		// create or clear the log file on disk
-		// this will throw an exception if the log can't be created
+		// throws an exception if the log can't be created
 		if (Utility.fileExists(n, logFilename)) {
 			performWrite(logFilename, false, "");
 		} else {
@@ -469,7 +484,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	 */
 
 	public void createFileTX(int client, String filename)
-			throws TransactionException, IOException {
+			throws FileAlreadyExistsException, IOException,
+			TransactionException {
 
 		boolean exists = fileExistsTX(client, filename);
 		if (exists) {
@@ -482,8 +498,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		txCache.enque(client, op);
 	}
 
-	public void deleteFileTX(int client, String filename) throws IOException,
-			TransactionException {
+	public void deleteFileTX(int client, String filename)
+			throws FileNotFoundException, IOException, TransactionException {
 		boolean exists = fileExistsTX(client, filename);
 		if (!exists) {
 			throw new FileNotFoundException();
@@ -511,7 +527,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 		return exists;
 	}
 
-	public String getFileTX(int client, String filename) throws IOException {
+	public String getFileTX(int client, String filename)
+			throws FileNotFoundException, IOException {
 		// Look through op queue for ops in this tx that altered this file
 		String putContents = null;
 		Queue<String> appendsQueue = new LinkedList<String>();
@@ -576,7 +593,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 	}
 
 	public void writeFileTX(int client, String filename, String contents,
-			boolean append) throws IOException, TransactionException {
+			boolean append) throws FileNotFoundException, IOException,
+			TransactionException {
 		boolean exists = fileExistsTX(client, filename);
 		if (!exists) {
 			throw new FileNotFoundException();

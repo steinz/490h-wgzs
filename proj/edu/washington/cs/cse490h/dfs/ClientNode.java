@@ -1,3 +1,5 @@
+package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -32,7 +34,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  *  When replica receives WF for file it is replicating, it should assume real ownership of that 
  *  file and forward to the requesting client as the original owner would (losing RW immediately)
  *  
- *  TODO: HIGH: Send all mutations to replica before responding to manager - RPCs?
+ *  TODO: HIGH: Send all mutations to replica before responding to manager (use RPCs?)
  */
 
 /*
@@ -46,7 +48,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  * handle commands passed in by onCommand - onCommand dynamically dispatches
  * commands to the method named <cmdName>Handler.
  */
-public class ClientNode {
+class ClientNode {
 
 	/**
 	 * Possible cache statuses
@@ -58,7 +60,8 @@ public class ClientNode {
 	/**
 	 * Wrapper around a map from filenames to cache statuses that logs changes
 	 * 
-	 * Files not in the map should be considered invalid
+	 * Files not in the map should be considered invalid unless the manager
+	 * requests them
 	 */
 	private static class Cache {
 		private Map<String, CacheStatuses> cache;
@@ -88,6 +91,9 @@ public class ClientNode {
 			return cache.get(filename) == CacheStatuses.ReadOnly;
 		}
 
+		/**
+		 * equivalent to hasRO || hasRW
+		 */
 		public boolean contains(String filename) {
 			return cache.containsKey(filename);
 		}
@@ -144,6 +150,8 @@ public class ClientNode {
 	 * less likely to get confused
 	 */
 
+	// TODO: Encapsulate locker in class
+
 	/**
 	 * List of files locked on the client's side
 	 */
@@ -187,7 +195,7 @@ public class ClientNode {
 	private boolean waitingForCommitSuccess;
 
 	/**
-	 * True iff the client is waiting to satisfy all PendingOperations to commit
+	 * True iff the client is waiting to unlock some files to commit
 	 */
 	private boolean waitingToCommit;
 
@@ -224,7 +232,7 @@ public class ClientNode {
 
 		if (waitingForCommitSuccess
 				&& waitingForCommitQueue.size() > maxWaitingForCommitQueueSize) {
-			// TODO: just invoke receivedTxFailure here?
+			// TODO: just abort transaction here?
 			parent.restartAsClient();
 			return;
 		} else if (waitingForCommitSuccess) {
@@ -247,8 +255,7 @@ public class ClientNode {
 		} catch (IllegalAccessException e) {
 			parent.printError("invalid command:" + line);
 		} catch (InvocationTargetException e) {
-			// TODO: HIGH: Just pass on e.getCause() here
-			parent.printError(e); 
+			parent.printError(e.getCause());
 			if (transacting) {
 				sendToManager(Protocol.TX_ABORT);
 				abortCurrentTransaction();
@@ -270,11 +277,14 @@ public class ClientNode {
 	 * @throws IOException
 	 * 
 	 * @throws TransactionException
+	 * @throws UnknownManagerException
 	 */
 	public void appendHandler(StringTokenizer tokens, String line)
-			throws IOException, TransactionException {
-		// TODO: I think I found a framework bug - "append 1 test  world" is
-		// losing the extra space
+			throws IOException, TransactionException, UnknownManagerException {
+		/*
+		 * TODO: I think I found a framework bug - "append 1 test  world" is
+		 * losing the extra space
+		 */
 
 		String filename = tokens.nextToken();
 		String content = parseAddContent(line, "append", filename);
@@ -290,10 +300,14 @@ public class ClientNode {
 			}
 		} else {
 			// lock and request ownership
-			sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
-			pendingOperations.put(filename, new PendingClientOperation(
-					ClientOperation.APPEND, content));
-			lockFile(filename);
+			if (managerAddr == -1) {
+				throw new UnknownManagerException();
+			} else {
+				sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+				pendingOperations.put(filename, new PendingClientOperation(
+						ClientOperation.APPEND, content));
+				lockFile(filename);
+			}
 		}
 	}
 
@@ -373,9 +387,10 @@ public class ClientNode {
 	 * Get read access for a file and then get its contents
 	 * 
 	 * @throws IOException
+	 * @throws UnknownManagerException
 	 */
 	public void getHandler(StringTokenizer tokens, String line)
-			throws IOException {
+			throws IOException, UnknownManagerException {
 		String filename = tokens.nextToken();
 
 		if (queueLineIfLocked(filename, line)) {
@@ -395,9 +410,13 @@ public class ClientNode {
 			getQueue.add(content);
 		} else {
 			// lock and get permissions
-			parent.printVerbose("requesting read access for " + filename);
-			sendToManager(Protocol.RQ, Utility.stringToByteArray(filename));
-			lockFile(filename);
+			if (managerAddr == -1) {
+				throw new UnknownManagerException();
+			} else {
+				parent.printVerbose("requesting read access for " + filename);
+				sendToManager(Protocol.RQ, Utility.stringToByteArray(filename));
+				lockFile(filename);
+			}
 		}
 	}
 
@@ -408,8 +427,8 @@ public class ClientNode {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = parent.getID().toString();
 		parent.printInfo("sending handshake to " + server);
-		parent.RIOSend(server, Protocol.HANDSHAKE, Utility
-				.stringToByteArray(payload));
+		parent.RIOSend(server, Protocol.HANDSHAKE,
+				Utility.stringToByteArray(payload));
 	}
 
 	/**
@@ -441,9 +460,10 @@ public class ClientNode {
 	 * @throws IOException
 	 * 
 	 * @throws TransactionException
+	 * @throws UnknownManagerException
 	 */
 	public void putHandler(StringTokenizer tokens, String line)
-			throws IOException, TransactionException {
+			throws IOException, TransactionException, UnknownManagerException {
 		String filename = tokens.nextToken();
 		String content = parseAddContent(line, "put", filename);
 
@@ -458,10 +478,14 @@ public class ClientNode {
 			}
 		} else {
 			// lock and request ownership
-			sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
-			pendingOperations.put(filename, new PendingClientOperation(
-					ClientOperation.PUT, content));
-			lockFile(filename);
+			if (managerAddr == -1) {
+				throw new UnknownManagerException();
+			} else {
+				sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+				pendingOperations.put(filename, new PendingClientOperation(
+						ClientOperation.PUT, content));
+				lockFile(filename);
+			}
 		}
 	}
 
@@ -470,15 +494,20 @@ public class ClientNode {
 	 * 
 	 * @throws TransactionException
 	 * @throws IOException
+	 * @throws UnknownManagerException
 	 */
 	public void txabortHandler(StringTokenizer tokens, String line)
-			throws TransactionException, IOException {
+			throws TransactionException, IOException, UnknownManagerException {
 		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
 		} else {
-			abortCurrentTransaction();
-			sendToManager(Protocol.TX_ABORT);
+			if (managerAddr == -1) {
+				throw new UnknownManagerException();
+			} else {
+				abortCurrentTransaction();
+				sendToManager(Protocol.TX_ABORT);
+			}
 		}
 	}
 
@@ -500,9 +529,10 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * 
 	 * @throws IOException
+	 * @throws UnknownManagerException
 	 */
 	public void txcommitHandler(StringTokenizer tokens, String line)
-			throws TransactionException, IOException {
+			throws TransactionException, IOException, UnknownManagerException {
 		if (!transacting) {
 			throw new TransactionException(
 					"client not performing a transaction");
@@ -511,8 +541,12 @@ public class ClientNode {
 			parent.printVerbose("queueing commit");
 		} else {
 			// transacting is updated when a response is received
-			waitingForCommitSuccess = true;
-			sendToManager(Protocol.TX_COMMIT);
+			if (managerAddr == -1) {
+				throw new UnknownManagerException();
+			} else {
+				waitingForCommitSuccess = true;
+				sendToManager(Protocol.TX_COMMIT);
+			}
 		}
 	}
 
@@ -522,17 +556,22 @@ public class ClientNode {
 	 * @throws TransactionException
 	 * 
 	 * @throws IOException
+	 * @throws UnknownManagerException
 	 */
 	public void txstartHandler(StringTokenizer tokens, String line)
-			throws TransactionException, IOException {
+			throws TransactionException, IOException, UnknownManagerException {
 		// this will be queued in onCommand if waitingForCommitSuccess
 		if (transacting) {
 			throw new TransactionException(
 					"client already performing a transaction");
 		} else {
-			transacting = true;
-			parent.fs.startTransaction(parent.addr);
-			sendToManager(Protocol.TX_START);
+			if (managerAddr == -1) {
+				throw new UnknownManagerException();
+			} else {
+				transacting = true;
+				parent.fs.startTransaction(parent.addr);
+				sendToManager(Protocol.TX_START);
+			}
 		}
 	}
 
@@ -581,6 +620,7 @@ public class ClientNode {
 			 */
 			parent.restartAsClient();
 		} catch (NullPointerException e) {
+			// TODO: HIGH: why does this happen..?
 			// NPE in abortTransaction on: start - crash - abort
 			parent.printError(e);
 		}
@@ -615,16 +655,16 @@ public class ClientNode {
 	 * Perform a create RPC to the given address
 	 */
 	private void createRPC(int address, String filename) {
-		parent.RIOSend(address, Protocol.CREATE, Utility
-				.stringToByteArray(filename));
+		parent.RIOSend(address, Protocol.CREATE,
+				Utility.stringToByteArray(filename));
 	}
 
 	/**
 	 * Perform a delete RPC to the given address
 	 */
 	private void deleteRPC(int address, String filename) {
-		parent.RIOSend(address, Protocol.DELETE, Utility
-				.stringToByteArray(filename));
+		parent.RIOSend(address, Protocol.DELETE,
+				Utility.stringToByteArray(filename));
 	}
 
 	/**
@@ -655,7 +695,8 @@ public class ClientNode {
 	 * Parse what content to add to a file for put and append (the rest of the
 	 * line)
 	 */
-	private String parseAddContent(String line, String cmd, String filename) {
+	private String parseAddContent(String line, String cmd, String filename)
+			throws NoSuchElementException {
 		int parsedLength = cmd.length() + filename.length() + 2;
 		if (parsedLength >= line.length()) {
 			throw new NoSuchElementException("command content empty");
@@ -796,9 +837,6 @@ public class ClientNode {
 		}
 
 		// send update to manager
-		parent.printVerbose("sending "
-				+ Protocol.protocolToString(responseProtocol) + " to manager "
-				+ filename);
 		sendToManager(responseProtocol, Utility.stringToByteArray(payload));
 
 		// update permissions
@@ -905,6 +943,7 @@ public class ClientNode {
 						parent.fs.writeFile(filename, "", false);
 					}
 				}
+				// TODO: HIGH: If I abort later, I still have RW? Currently inconsistent
 				cache.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
 			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
@@ -925,7 +964,10 @@ public class ClientNode {
 						+ Protocol.protocolToString(Protocol.SUCCESS)
 						+ " packet");
 			}
-		} catch (Exception e) {
+		} catch (IOException e) {
+			parent.printError(e);
+			abortCurrentTransaction();
+		} catch (TransactionException e) {
 			parent.printError(e);
 			abortCurrentTransaction();
 		}
@@ -936,7 +978,7 @@ public class ClientNode {
 	 */
 	public void receiveTXFailure(int from, String empty) {
 		abortCurrentTransaction();
-		processWaitingForCommitQueue(); // TODO: redundant
+		processWaitingForCommitQueue(); // redundant
 	}
 
 	/**
