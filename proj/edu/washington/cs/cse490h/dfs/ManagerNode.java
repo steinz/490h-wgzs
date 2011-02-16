@@ -484,11 +484,6 @@ class ManagerNode {
 	 * @param filename
 	 */
 	private void lockFile(String filename, Integer client) {
-		/**
-		 * TODO: Detect if client is performing operations out of filename order
-		 * during transaction.
-		 */
-
 		node.printVerbose("manager locking file: " + filename);
 		node.logSynopticEvent("MANAGER-LOCK");
 		lockedFiles.put(filename, client);

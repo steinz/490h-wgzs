@@ -944,13 +944,17 @@ class ClientNode {
 						parent.fs.writeFile(filename, "", false);
 					}
 				}
-				// TODO: HIGH: If I abort later, I still have RW? Currently inconsistent
 				cache.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
 			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
 				// might not exist here
 				if (transacting) {
 					if (parent.fs.fileExistsTX(parent.addr, filename)) {
+						/*
+						 * TODO: HIGH: If I abort later, I still have RW, but
+						 * don't have the newest version of the file - this is
+						 * currently inconsistent
+						 */
 						parent.fs.deleteFileTX(parent.addr, filename);
 					}
 				} else {
