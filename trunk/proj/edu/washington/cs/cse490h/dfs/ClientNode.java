@@ -216,7 +216,7 @@ class ClientNode {
 		this.waitingForCommitSuccess = false;
 		this.waitingForCommitQueue = new LinkedList<String>();
 		this.waitingToCommit = false;
-		this.managerAddr = 0; // TODO: learn this somehow
+		this.managerAddr = -1; // TODO: learn this somehow
 	}
 
 	public void onCommand(String line) {
@@ -622,6 +622,7 @@ class ClientNode {
 		} catch (NullPointerException e) {
 			// TODO: HIGH: why does this happen..?
 			// NPE in abortTransaction on: start - crash - abort
+			// (null fs? abort triggered by handshake)
 			parent.printError(e);
 		}
 

@@ -47,6 +47,7 @@ class OutChannel {
 		try {
 			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
+			onTimeoutMethod.setAccessible(true); // HACK
 			RIOPacket newPkt = new RIOPacket(protocol, ++lastSeqNumSent,
 					payload, ID);
 			unACKedPackets.put(lastSeqNumSent, newPkt);
@@ -132,6 +133,7 @@ class OutChannel {
 		try {
 			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
+			onTimeoutMethod.setAccessible(true); // HACK
 			RIOPacket riopkt = unACKedPackets.get(seqNum);
 
 			StringBuilder sb = n.appendNodeAddress();
