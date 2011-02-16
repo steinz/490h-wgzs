@@ -10,8 +10,6 @@ import edu.washington.cs.cse490h.dfs.DFSException;
  */
 public class AcquaintanceCatalogue {
 
-	// TODO: HIGH: move to different package. Move DFS to own package
-
 	private static DistributedFileSystem dfs;
 	private static BufferedReader reader;
 	private static boolean running;

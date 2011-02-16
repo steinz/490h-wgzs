@@ -65,7 +65,7 @@ public class DistributedFileSystem {
 	private BlockingQueue<String> getQueue;
 
 	public DistributedFileSystem() {
-		commandQueue = new SynchronousQueue<String>();
+		commandQueue = new SynchronousQueue<String>(); 
 		resultQueue = new SynchronousQueue<String>();
 		getQueue = new ArrayBlockingQueue<String>(1);
 
