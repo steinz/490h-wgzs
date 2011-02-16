@@ -21,6 +21,8 @@ public class AcquaintanceCatalogue {
 		reader = new BufferedReader(new InputStreamReader(System.in));
 		running = true;
 
+		// login
+		
 		while (running) {
 			try {
 				repl();
@@ -31,6 +33,10 @@ public class AcquaintanceCatalogue {
 	}
 
 	private static void repl() throws Exception {
+		print(sup("zuck"));
+		print(viewFriends("zuck"));
+		print("1 - view friends");
+		print("2 - poke someone");
 		String input = read();
 		String output = eval(input);
 		print(output);
@@ -89,6 +95,32 @@ public class AcquaintanceCatalogue {
 		}
 
 		return "invalid command";
+	}
+
+	private static void addFriend(String you, String friend)
+			throws DFSException {
+		dfs.tryCreate(you + "_friend_list");
+		dfs.tryCreate(friend + "_friend_list");
+
+		dfs.txStart();
+		dfs.append(you + "_friend_list", friend + "\n");
+		dfs.append(friend + "_friend_list", you + "\n");
+		dfs.txCommit();
+
+	}
+
+	private static void poke(String you, String friend) throws DFSException {
+		dfs.tryCreate(friend + "_pokes");
+		dfs.append(friend + "_pokes", you + "\n");
+	}
+
+	private static String viewFriends(String you) throws DFSException {
+		return dfs.get(you + "_friend_list");
+	}
+	
+	private static String sup(String you) throws DFSException {
+		return dfs.get(you + "_pokes");
+
 	}
 
 	private static void print(String output) {

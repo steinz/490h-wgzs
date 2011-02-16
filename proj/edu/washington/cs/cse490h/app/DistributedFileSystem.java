@@ -97,6 +97,15 @@ public class DistributedFileSystem {
 	public void create(String filename) throws DFSException {
 		op("create " + filename);
 	}
+	
+	public void tryCreate(String filename) {
+		try {
+			create(filename);
+		} catch (DFSException e) {
+			// if already exists, ignore
+			// else throw
+		}
+	}
 
 	public void delete(String filename) throws DFSException {
 		op("delete " + filename);

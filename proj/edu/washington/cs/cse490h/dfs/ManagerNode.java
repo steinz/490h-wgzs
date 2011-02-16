@@ -28,13 +28,16 @@ import edu.washington.cs.cse490h.lib.Utility;
  * Primary mutation duplications to backups via in memory RPCs
  * If half managers down, system stalls, but can recover RW/RO lists by querying clients
  *  
- * If backups think primary is down (nothing received for x rounds, alive? ping unanswered for 
- * y round), try to elect a new Primary via Paxos between managers:
+ * Leases on primaries - after X rounds, auto elect a new primary via Paxos.
+ *  
+ * If backups think primary is down , try to elect a new Primary via Paxos between managers:
  * Lowest address known is assumed to be lead.
  * Elect new manager, tell all clients, continue.
  * 
  * Packets received during Paxos? Assume being sent to down manager, so ignore everything
  * until new primary is elected.
+ * 
+ * Queue to separate class
  */
 
 //NOTE: Implicit transactions are handled by cache coherency!
@@ -432,7 +435,7 @@ class ManagerNode {
 		destAddr = pendingRPCDeleteRequests.remove(filename);
 		if (destAddr != null) {
 			if (foundPendingRequest) {
-				sendError(client, filename, new UnknownManagerException());
+				sendError(client, filename, new FileNotFoundException());
 				return;
 			}
 			foundPendingRequest = true;
