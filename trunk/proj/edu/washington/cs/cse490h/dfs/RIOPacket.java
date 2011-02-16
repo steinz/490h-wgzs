@@ -1,3 +1,4 @@
+package edu.washington.cs.cse490h.dfs;
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -20,7 +21,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  * carried in the payload of a Packet, and in turn the data being transferred is
  * carried in the payload of the RIOPacket packet.
  */
-public class RIOPacket {
+class RIOPacket {
 
 	public static final int MAX_PACKET_SIZE = Packet.MAX_PAYLOAD_SIZE;
 	public static final int HEADER_SIZE = 21;

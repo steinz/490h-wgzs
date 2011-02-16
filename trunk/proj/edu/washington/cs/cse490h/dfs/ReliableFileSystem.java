@@ -1,3 +1,5 @@
+package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * 
@@ -6,13 +8,14 @@
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+
 import edu.washington.cs.cse490h.lib.PersistentStorageReader;
 import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
 import edu.washington.cs.cse490h.lib.Utility;
 
 public class ReliableFileSystem {
 
-	 // TODO: HIGH: Close writers in finally blocks
+	// TODO: HIGH: Close writers in finally blocks
 
 	/*
 	 * TODO: Some of the FS logging is out of order
@@ -49,7 +52,8 @@ public class ReliableFileSystem {
 	 *            the file to create
 	 * @throws IOException
 	 */
-	public void createFile(String filename) throws IOException {
+	public void createFile(String filename) throws FileAlreadyExistsException,
+			IOException {
 		logAccess(filename, "creating");
 
 		if (Utility.fileExists(n, filename)) {
@@ -68,13 +72,14 @@ public class ReliableFileSystem {
 	 *            the file to delete
 	 * @throws IOException
 	 */
-	public void deleteFile(String filename) throws IOException {
+	public void deleteFile(String filename) throws FileNotFoundException,
+			IOException {
 		logAccess(filename, "deleting");
 
 		if (!Utility.fileExists(n, filename)) {
 			throw new FileNotFoundException();
 		} else {
-			PersistentStorageWriter writer = n.getWriter(filename, false);
+			PersistentStorageWriter writer = n.getWriter(filename, true);
 			if (!writer.delete()) {
 				throw new IOException("delete failed");
 			}
@@ -88,7 +93,8 @@ public class ReliableFileSystem {
 	 * @param filename
 	 * @throws IOException
 	 */
-	public String getFile(String filename) throws IOException {
+	public String getFile(String filename) throws FileNotFoundException,
+			IOException {
 
 		logAccess(filename, "getting");
 
@@ -120,7 +126,7 @@ public class ReliableFileSystem {
 	 * @throws IOException
 	 */
 	public void writeFile(String filename, String contents, boolean append)
-			throws IOException {
+			throws FileNotFoundException, IOException {
 
 		if (!Utility.fileExists(n, filename)) {
 			throw new FileNotFoundException();

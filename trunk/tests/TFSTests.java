@@ -3,9 +3,13 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import edu.washington.cs.cse490h.dfs.DFSNode;
+import edu.washington.cs.cse490h.dfs.DFSException;
+import edu.washington.cs.cse490h.dfs.TransactionalFileSystem;
 import edu.washington.cs.cse490h.lib.Manager;
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -25,11 +29,16 @@ public class TFSTests {
 
 		fs = new TransactionalFileSystem(n, ".t", ".l", ".l.t",
 				Integer.MAX_VALUE);
-		fs.deleteFile(".l");
 
 		if (Utility.fileExists(n, filename)) {
 			fs.deleteFile(filename);
 		}
+	}
+	
+	@After
+	public void tearDown() throws Exception {
+		fs.deleteFile(".l");
+		fs.deleteFile(filename);
 	}
 
 	@Test
@@ -45,7 +54,7 @@ public class TFSTests {
 	}
 
 	private void createAndPutFile(boolean twoTxs, boolean newline)
-			throws TransactionException, IOException {
+			throws DFSException, IOException {
 		fs.startTransaction(n.addr);
 		fs.createFileTX(n.addr, filename);
 		if (twoTxs) {

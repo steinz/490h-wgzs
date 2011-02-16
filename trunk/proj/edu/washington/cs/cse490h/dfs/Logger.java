@@ -1,3 +1,5 @@
+package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -15,7 +17,7 @@ import edu.washington.cs.cse490h.lib.PersistentStorageWriter;
 /**
  * Convenience logging methods
  */
-public class Logger {
+class Logger {
 
 	// TODO: Replace with java.util.logging.Logger
 
@@ -51,7 +53,7 @@ public class Logger {
 	 * Where to print error messages
 	 */
 	static PrintStream errorStream = System.err;
-	
+
 	private static int lineNumber = 0;
 
 	public static void verbose(Node n, String str) {
@@ -82,15 +84,10 @@ public class Logger {
 
 	public static void error(Node n, Throwable e) {
 		if (printError) {
-			Throwable cause = e.getCause();
-			if (cause != null) {
-				error(n, cause);
-			} else {
-				errorPrintln(n, "  |ERROR| " + e.toString());
-				StackTraceElement[] trace = e.getStackTrace();
-				for (StackTraceElement st : trace) {
-					errorPrintln(n, "  |ERROR| " + st.toString());
-				}
+			errorPrintln(n, "  |ERROR| " + e.toString());
+			StackTraceElement[] trace = e.getStackTrace();
+			for (StackTraceElement st : trace) {
+				errorPrintln(n, "  |ERROR| " + st.toString());
 			}
 		}
 	}
@@ -102,7 +99,7 @@ public class Logger {
 
 	private static void errorPrintln(Node n, String str) {
 		errorStream.println(lineNumber + str);
-		writeToLog(n,(lineNumber++) + str);
+		writeToLog(n, (lineNumber++) + str);
 	}
 
 	/**
@@ -131,14 +128,14 @@ public class Logger {
 	// TODO: LOW: keep the writer open between entries
 
 	private static void writeToLog(Node n, String message) {
-//		try {
-//			PersistentStorageWriter writer = n.getWriter(LOG_FILE, true);
-//			writer.write(message);
-//			writer.newLine();
-//			writer.close();
-//		} catch (IOException e) {
-//			e.printStackTrace();
-//		}
+		// try {
+		// PersistentStorageWriter writer = n.getWriter(LOG_FILE, true);
+		// writer.write(message);
+		// writer.newLine();
+		// writer.close();
+		// } catch (IOException e) {
+		// e.printStackTrace();
+		// }
 
 		try {
 			BufferedWriter r = null;

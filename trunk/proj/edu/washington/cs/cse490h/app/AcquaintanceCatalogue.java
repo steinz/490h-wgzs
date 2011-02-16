@@ -1,6 +1,9 @@
+package edu.washington.cs.cse490h.app;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import edu.washington.cs.cse490h.dfs.DFSException;
 
 /**
  * p2pFB app stub

@@ -1,3 +1,5 @@
+package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -20,7 +22,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  * At a minimum, the student should extend/modify this layer to provide
  * reliable, in-order message delivery, even in the presence of node failures.
  */
-public class ReliableInOrderMsgLayer {
+class ReliableInOrderMsgLayer {
 	public static int TIMEOUT = 5;
 
 	private HashMap<Integer, InChannel> inConnections;
@@ -92,7 +94,7 @@ public class ReliableInOrderMsgLayer {
 
 			if (riopkt.getUUID().equals(n.getID())
 					&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
-				
+
 				LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
 
 				for (RIOPacket p : toBeDelivered) {

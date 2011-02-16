@@ -59,6 +59,7 @@ public class Callback {
 	 *             method throws an exception
 	 */
 	public void invoke() throws IllegalAccessException, InvocationTargetException {
+		method.setAccessible(true);
 		method.invoke(obj, params);
 	}
 

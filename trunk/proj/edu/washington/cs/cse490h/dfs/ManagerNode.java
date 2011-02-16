@@ -1,3 +1,4 @@
+package edu.washington.cs.cse490h.dfs;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -49,7 +50,7 @@ import edu.washington.cs.cse490h.lib.Utility;
  * Replica scheme: 1 -> 2 2 -> 3 3 -> 4 4 -> 5 5 -> 1
  */
 
-public class ManagerNode {
+class ManagerNode {
 
 	/**
 	 * A list of locked files (cache coherency)

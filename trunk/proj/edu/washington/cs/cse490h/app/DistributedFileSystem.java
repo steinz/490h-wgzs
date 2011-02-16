@@ -1,6 +1,10 @@
+package edu.washington.cs.cse490h.app;
+
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.SynchronousQueue;
+
+import edu.washington.cs.cse490h.dfs.DFSException;
 
 /**
  * CSE 490h
@@ -17,9 +21,9 @@ public class DistributedFileSystem {
 		private BlockingQueue<String> commandQueue;
 		private BlockingQueue<String> resultQueue;
 		private BlockingQueue<String> getQueue;
-		//Client client;
+		// Client client;
 		BootStrappedClientStub client;
-		
+
 		public ClientThread(BlockingQueue<String> commandQueue,
 				BlockingQueue<String> resultQueue,
 				BlockingQueue<String> getQueue) {
@@ -32,7 +36,8 @@ public class DistributedFileSystem {
 		public void run() {
 			// start client
 			// client = new Client(commandQueue, resultQueue, getQueue);
-			client = new BootStrappedClientStub(commandQueue, resultQueue, getQueue);
+			client = new BootStrappedClientStub(commandQueue, resultQueue,
+					getQueue);
 			// TODO: initialize client on framework
 		}
 	}

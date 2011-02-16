@@ -1,9 +1,11 @@
+package edu.washington.cs.cse490h.dfs;
+
+import java.io.IOException;
+
 /**
  * CSE 490h
  * @author wayger, steinz
  */
-
-import java.io.IOException;
 
 /*
  * TODO: HIGH: Verify that methods actually throw the exceptions they declare 
@@ -27,21 +29,21 @@ public class DFSException extends Exception {
 	public DFSException(String msg) {
 		super(msg);
 	}
-}
 
-/*
- * TODO: We should use are own FileAlreadyExistsException too
- */
+	public DFSException() {
+		super();
+	}
+}
 
 class FileAlreadyExistsException extends IOException {
 	private static final long serialVersionUID = -4672741364887472499L;
 }
 
-class NotClientException extends Exception {
+class NotClientException extends DFSException {
 	private static final long serialVersionUID = 2823129727550319441L;
 }
 
-class NotManagerException extends Exception {
+class NotManagerException extends DFSException {
 	private static final long serialVersionUID = -2133442099641600446L;
 
 	public NotManagerException() {
@@ -61,7 +63,7 @@ class PacketPackException extends Exception {
 	}
 }
 
-class TransactionException extends Exception {
+class TransactionException extends DFSException {
 	private static final long serialVersionUID = -7296103807819087346L;
 
 	public TransactionException(String str) {
@@ -77,6 +79,6 @@ class TransactionLogException extends IOException {
 	}
 }
 
-class UnknownManagerException extends Exception {
+class UnknownManagerException extends DFSException {
 	private static final long serialVersionUID = 6525390876463186997L;
 }

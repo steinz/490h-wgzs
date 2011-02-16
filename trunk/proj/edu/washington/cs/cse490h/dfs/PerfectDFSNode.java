@@ -1,3 +1,4 @@
+package edu.washington.cs.cse490h.dfs;
 /**
  * CSE 490h
  * @author wayger, steinz
