@@ -5,6 +5,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 
 import edu.washington.cs.cse490h.dfs.DFSException;
+import edu.washington.cs.cse490h.dfs.PerfectInitializedDFSNode;
+import edu.washington.cs.cse490h.lib.Manager;
+import edu.washington.cs.cse490h.lib.Simulator;
 
 /**
  * CSE 490h
@@ -17,11 +20,14 @@ import edu.washington.cs.cse490h.dfs.DFSException;
  */
 public class DistributedFileSystem {
 
+	public static Manager clientManager;
+
 	private class ClientThread extends Thread {
 		private BlockingQueue<String> commandQueue;
 		private BlockingQueue<String> resultQueue;
 		private BlockingQueue<String> getQueue;
-		// Client client;
+		// private DFSNode node;
+
 		BootStrappedClientStub client;
 
 		public ClientThread(BlockingQueue<String> commandQueue,
@@ -35,9 +41,11 @@ public class DistributedFileSystem {
 
 		public void run() {
 			// start client
-			// client = new Client(commandQueue, resultQueue, getQueue);
+			// node = new AppDFSNode(commandQueue, resultQueue, getQueue);
+
 			client = new BootStrappedClientStub(commandQueue, resultQueue,
 					getQueue);
+
 			// TODO: initialize client on framework
 		}
 	}
@@ -65,7 +73,16 @@ public class DistributedFileSystem {
 	private BlockingQueue<String> getQueue;
 
 	public DistributedFileSystem() {
-		commandQueue = new SynchronousQueue<String>(); 
+		if (clientManager == null) {
+			try {
+				clientManager = new Simulator(PerfectInitializedDFSNode.class,
+						74L, "", "");
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		commandQueue = new SynchronousQueue<String>();
 		resultQueue = new SynchronousQueue<String>();
 		getQueue = new ArrayBlockingQueue<String>(1);
 
@@ -97,7 +114,7 @@ public class DistributedFileSystem {
 	public void create(String filename) throws DFSException {
 		op("create " + filename);
 	}
-	
+
 	public void tryCreate(String filename) {
 		try {
 			create(filename);

@@ -32,9 +32,10 @@ public class AcquaintanceCatalogue {
 
 	private static void repl() throws Exception {
 		print(sup("zuck"));
-		print(viewFriends("zuck"));
+		print("=====COMMANDS=====");
 		print("1 - view friends");
 		print("2 - poke someone");
+		print("==================");
 		String input = read();
 		String output = eval(input);
 		print(output);
@@ -53,6 +54,12 @@ public class AcquaintanceCatalogue {
 		}
 		String cmd = split[0].toLowerCase();
 
+		if (cmd.equals("1")) {
+			return viewFriends("zuck");
+		} else if (cmd.equals("2")) {
+			poke("zuck", "brian");
+		}
+		
 		if (cmd.equals("txabort")) {
 			dfs.txAbort();
 			return "aborted";
