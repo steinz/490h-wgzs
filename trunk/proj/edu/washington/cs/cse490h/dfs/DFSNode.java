@@ -106,7 +106,15 @@ public class DFSNode extends RIONode {
 	protected DFSThread dfsThread;
 
 	/*
-	 * NOTE: when iterating through elements
+	 * NOTE: when iterating through elements in map,
+	 * 
+	 * synchronized(m) {
+	 * 
+	 * Iterator i ...
+	 * 
+	 * }
+	 * 
+	 * (see Collections.synchronizedMap javadoc)
 	 */
 
 	/**
@@ -116,7 +124,7 @@ public class DFSNode extends RIONode {
 
 	protected BlockingQueue<DFSPacket> packetQueue;
 
-	protected Map<String, DFSPacket> expectedPackets;
+	protected Map<String, BlockingQueue<DFSPacket>> expectedPackets;
 
 	/**
 	 * Starts the node as a client
@@ -126,7 +134,7 @@ public class DFSNode extends RIONode {
 		commandQueue = new LinkedBlockingQueue<String>();
 		packetQueue = new LinkedBlockingQueue<DFSPacket>();
 		expectedPackets = Collections
-				.synchronizedMap(new HashMap<String, DFSPacket>());
+				.synchronizedMap(new HashMap<String, BlockingQueue<DFSPacket>>());
 
 		restartAsClient();
 	}
@@ -204,19 +212,14 @@ public class DFSNode extends RIONode {
 		printVerbose("received " + Protocol.protocolToString(protocol)
 				+ " from Universe, giving to RIOLayer");
 
-		/*
-		 * Manager restarted or is talking to you for the first time - whatever
-		 * a client was doing has been abandoned by the manager, so unlock
-		 * everything locally
-		 * 
-		 * TODO: Pull some of the RIO HANDSHAKE handling up here?
-		 */
+		// TODO: HIGH: abortTX if handshake
 		if (!isManager && protocol == Protocol.HANDSHAKE) {
-			try {
-				commandQueue.put("handshake");
-			} catch (InterruptedException e) {
-				throw new RuntimeException(e);
-			}
+			/*
+			 * TODO: HIGH: How to notify thread..?
+			 * 
+			 * expectedPackets.put(filename, new ContentlessPacket(int from,
+			 * MessageType.HANDSHAKE));
+			 */
 		}
 
 		super.onReceive(from, protocol, msg);
@@ -249,10 +252,9 @@ public class DFSNode extends RIONode {
 		 * blocking-response packets -> expectedPackets by name for client to
 		 * find... maybe this should just be a hand off instead of a map
 		 */
-		
-		
+
 		// TODO: Dynamic Dispatch should probably move into DFSThread
-		
+
 		// Find the instance to handle this message type
 		Object instance = null;
 		switch (mt.handlingClass) {
@@ -270,7 +272,8 @@ public class DFSNode extends RIONode {
 		// Invalid message type for my node type
 		// (manager got client-only, etc)
 		if (instance == null) {
-			throw new RuntimeException("unhandled message type " + mt + " received");
+			throw new RuntimeException("unhandled message type " + mt
+					+ " received");
 		}
 
 		// route message
