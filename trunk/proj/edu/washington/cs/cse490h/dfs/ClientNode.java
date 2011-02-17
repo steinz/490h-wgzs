@@ -20,6 +20,10 @@ import java.util.StringTokenizer;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /*
+ * TODO: HIGH: Use RuntimeExceptions for failures we can't handle (FS ops?)
+ */
+
+/*
  *  TODO HIGH: Where's the file (WTF) timeout / callback from client to manager
  *  after WQ/RQ if no response received from some client after x rounds.
  *  
@@ -134,9 +138,6 @@ class ClientNode {
 	 * Status of cached files on disk.
 	 */
 	private Cache cache;
-
-	@Deprecated
-	private Queue<String> getQueue = new LinkedList<String>();
 
 	/*
 	 * We have client side locking to handle the following type of cmd flows:
@@ -405,9 +406,6 @@ class ClientNode {
 			}
 			parent.printInfo("Got file, contents below:");
 			parent.printInfo(content);
-
-			getQueue.add("got " + filename + ":");
-			getQueue.add(content);
 		} else {
 			// lock and get permissions
 			if (managerAddr == -1) {
@@ -600,8 +598,6 @@ class ClientNode {
 		}
 
 		try {
-			getQueue.clear();
-
 			parent.printVerbose("aborting transaction");
 			transacting = false;
 
@@ -806,13 +802,11 @@ class ClientNode {
 	 */
 	private void receiveF(String msgString, String RForWF,
 			int responseProtocol, boolean keepRO) {
-		if (managerUnknown()) {
-			return;
-		}
 
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
-
+		int requester = Integer.parseInt(tokens.nextToken());
+		
 		/*
 		 * No reason to check CacheStatus since anything on my disk was
 		 * committed to the manager
@@ -837,8 +831,8 @@ class ClientNode {
 			}
 		}
 
-		// send update to manager
-		sendToManager(responseProtocol, Utility.stringToByteArray(payload));
+		// send update to requester
+		parent.RIOSend(requester, responseProtocol, Utility.stringToByteArray(payload));
 
 		// update permissions
 		if (keepRO) {
@@ -894,14 +888,7 @@ class ClientNode {
 		parent.printInfo("Got file, contents below:");
 		parent.printInfo(contents);
 
-		getQueue.add("got " + filename + ":");
-		getQueue.add(contents);
-
-		// send rc
-		parent.printVerbose("sending rc to manager for " + filename);
-		sendToManager(Protocol.RC, Utility.stringToByteArray(filename));
-
-		// unlock the file for local use
+		sendToManager(Protocol.RC, Utility.stringToByteArray(filename)); 
 		unlockFile(filename);
 	}
 
@@ -991,11 +978,6 @@ class ClientNode {
 	 */
 	public void receiveTXSuccess(int from, String empty) {
 		commitCurrentTransaction();
-
-		while (getQueue.size() > 0) {
-			parent.printInfo(getQueue.poll());
-		}
-
 		processWaitingForCommitQueue();
 	}
 
@@ -1020,7 +1002,7 @@ class ClientNode {
 		}
 
 		try {
-			// Managers version is always correct, so write straight to RFS
+			// Incoming version is always correct, so write straight to RFS
 			if (!Utility.fileExists(parent, filename)) {
 				parent.fs.createFile(filename);
 			}
@@ -1065,7 +1047,6 @@ class ClientNode {
 			return;
 		}
 
-		// send wc and unlock locally
 		sendToManager(Protocol.WC, Utility.stringToByteArray(filename));
 		unlockFile(filename);
 	}
