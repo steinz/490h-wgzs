@@ -15,7 +15,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class ReliableFileSystem {
 
-	// TODO: HIGH: Close writers in finally blocks
+	// TODO: EC: Stream large files somehow
 
 	/*
 	 * TODO: Some of the FS logging is out of order
@@ -80,10 +80,13 @@ public class ReliableFileSystem {
 			throw new FileNotFoundException();
 		} else {
 			PersistentStorageWriter writer = n.getWriter(filename, true);
-			if (!writer.delete()) {
-				throw new IOException("delete failed");
+			try {
+				if (!writer.delete()) {
+					throw new IOException("delete failed");
+				}
+			} finally {
+				writer.close();
 			}
-			writer.close();
 		}
 	}
 
@@ -101,17 +104,20 @@ public class ReliableFileSystem {
 		if (!Utility.fileExists(n, filename)) {
 			throw new FileNotFoundException();
 		} else {
-			StringBuilder contents = new StringBuilder();
 			PersistentStorageReader reader = n.getReader(filename);
+			try {
+				StringBuilder contents = new StringBuilder();
 
-			char[] buffer = new char[1024];
-			int charsRead;
-			while ((charsRead = reader.read(buffer)) != -1) {
-				contents.append(buffer, 0, charsRead);
+				char[] buffer = new char[1024];
+				int charsRead;
+				while ((charsRead = reader.read(buffer)) != -1) {
+					contents.append(buffer, 0, charsRead);
+				}
+
+				return contents.toString();
+			} finally {
+				reader.close();
 			}
-
-			reader.close();
-			return contents.toString();
 		}
 	}
 
@@ -165,15 +171,9 @@ public class ReliableFileSystem {
 	 *            ex) "getting"
 	 */
 	protected void logAccess(String filename, String operation, String content) {
-		StringBuilder msg = new StringBuilder();
-		msg.append(operation.toLowerCase());
-		msg.append(" file: ");
-		msg.append(filename);
-		if (content != null) {
-			msg.append(" content: ");
-			msg.append(content);
-		}
-		n.printVerbose(msg.toString());
+		String msg = operation.toLowerCase() + " file: " + filename
+				+ (content == null ? "" : " content: " + content);
+		n.printVerbose(msg);
 		if (filename.equals(tempFilename)) {
 			n.logSynopticEvent(operation.toUpperCase() + "-TEMP-FILE");
 		} else {
@@ -190,7 +190,6 @@ public class ReliableFileSystem {
 	 */
 	protected void writeTempFile(String filename) throws IOException {
 		String oldContent = getFile(filename);
-
 		performWrite(tempFilename, false, oldContent.toString());
 	}
 
@@ -208,8 +207,12 @@ public class ReliableFileSystem {
 		}
 
 		PersistentStorageWriter writer = n.getWriter(filename, append);
-		writer.write(contents);
-		writer.close();
+		;
+		try {
+			writer.write(contents);
+		} finally {
+			writer.close();
+		}
 	}
 
 	/**
@@ -232,6 +235,6 @@ public class ReliableFileSystem {
 		String content = tempFile.substring(newline + lineSeparator.length());
 
 		performWrite(filename, false, content);
-		deleteFile(tempFilename);
+		deleteFile(tempFilename); // TODO: OPT: Keep writer open from before
 	}
 }

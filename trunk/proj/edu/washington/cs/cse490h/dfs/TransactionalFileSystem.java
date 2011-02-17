@@ -161,8 +161,8 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 					contents.append(line);
 					contents.append(lineSeparator);
 				}
-				return new PendingOperation(client, op, filename,
-						contents.toString());
+				return new PendingOperation(client, op, filename, contents
+						.toString());
 			} else {
 				return new PendingOperation(client, op, filename);
 			}
@@ -350,18 +350,22 @@ public class TransactionalFileSystem extends ReliableFileSystem {
 
 			// read log from disk, parsing lines into PendingOperation objects
 			PersistentStorageReader reader = fs.n.getReader(logFilename);
-			PendingOperation op = PendingOperation.fromLog(reader);
-			while (op != null) {
-				List<PendingOperation> clientQueue = oldTxs.get(op.client);
-				if (clientQueue == null) {
-					clientQueue = new ArrayList<PendingOperation>();
-					oldTxs.put(op.client, clientQueue);
+			try {
+				PendingOperation op = PendingOperation.fromLog(reader);
+				while (op != null) {
+					List<PendingOperation> clientQueue = oldTxs.get(op.client);
+					if (clientQueue == null) {
+						clientQueue = new ArrayList<PendingOperation>();
+						oldTxs.put(op.client, clientQueue);
+					}
+					clientQueue.add(op);
+					op = PendingOperation.fromLog(reader);
 				}
-				clientQueue.add(op);
-				op = PendingOperation.fromLog(reader);
-			}
 
-			return oldTxs;
+				return oldTxs;
+			} finally {
+				reader.close();
+			}
 		}
 
 		/**
