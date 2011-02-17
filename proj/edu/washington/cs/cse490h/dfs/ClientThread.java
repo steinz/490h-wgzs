@@ -9,6 +9,10 @@ public class ClientThread extends DFSThread {
 	/*
 	 * TODO: HIGH: What is the elegant way to implement locking here?
 	 */
+	
+	/*
+	 * TODO: HIGH: Async or Sync FS ops from App layer?
+	 */
 
 	public ClientThread(DFSNode node) throws IOException {
 		super(node);
@@ -27,7 +31,7 @@ public class ClientThread extends DFSThread {
 					// EXAMPLE
 					boolean remoteGet = true;
 					if (remoteGet) {
-						String filename = "tset";
+						String filename = "test";
 						BlockingQueue<DFSPacket> q = node.expectedPackets
 								.get(filename);
 						if (q == null) {
@@ -39,6 +43,9 @@ public class ClientThread extends DFSThread {
 						node.RIOSend(managerAddr, MessageType.RQ, filename);
 						DFSPacket response = node.expectedPackets.get(filename)
 								.take();
+						if (response.type == MessageType.Error) {
+							node.
+						}
 					}
 					// EXAMPLE END
 				}
