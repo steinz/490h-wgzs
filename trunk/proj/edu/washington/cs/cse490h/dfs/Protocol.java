@@ -48,6 +48,12 @@ class Protocol {
 	@Deprecated
 	public static final int APPEND = 28;
 
+	public static final int PREPARE = 29;
+	public static final int PROMISE_DENIAL = 30;
+	public static final int PROMISE = 31;
+	public static final int ACCEPT = 32;
+	public static final int ACCEPTED = 33;
+	
 	/**
 	 * Exclusive max valid message type
 	 */
