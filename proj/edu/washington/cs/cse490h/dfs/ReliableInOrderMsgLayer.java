@@ -57,7 +57,7 @@ class ReliableInOrderMsgLayer {
 		try {
 			RIOPacket riopkt = RIOPacket.unpack(msg);
 
-			if (riopkt.getProtocol() == Protocol.HANDSHAKE) {
+			if (riopkt.getType() == MessageType.Handshake) {
 				riopkt = mapUUID(from, riopkt);
 			}
 			// ack the packet immediately, then deal with handshakes, if not a
@@ -67,14 +67,14 @@ class ReliableInOrderMsgLayer {
 
 			byte[] seqNumByteArray = Utility.stringToByteArray(""
 					+ riopkt.getSeqNum());
-			n.send(from, Protocol.ACK, seqNumByteArray);
+			n.send(from, MessageType.Ack, seqNumByteArray);
 
 			// check if UUID is what we think it is.
 			if (!(riopkt.getUUID().equals(n.getID()))) {
 				// if it's not, we should initiate a handshake immediately and
 				// makea new channel to clear our cache of bad packets from an
 				// old session
-				RIOSend(from, Protocol.HANDSHAKE,
+				RIOSend(from, MessageType.Handshake,
 						Utility.stringToByteArray(n.getID().toString()));
 
 				// Don't send failure to client - they've crashed since they
@@ -93,13 +93,13 @@ class ReliableInOrderMsgLayer {
 			}
 
 			if (riopkt.getUUID().equals(n.getID())
-					&& riopkt.getProtocol() != Protocol.HANDSHAKE) {
+					&& riopkt.getType() != MessageType.Handshake) {
 
 				LinkedList<RIOPacket> toBeDelivered = in.gotPacket(riopkt);
 
 				for (RIOPacket p : toBeDelivered) {
 					// deliver in-order the next sequence of packets
-					n.onRIOReceive(from, p.getProtocol(), p.getPayload());
+					n.onRIOReceive(from, p.getType(), p.getPayload());
 				}
 			}
 		} catch (PacketPackException e) {
@@ -157,7 +157,7 @@ class ReliableInOrderMsgLayer {
 	 * @param payload
 	 *            The payload to be sent
 	 */
-	public void RIOSend(int destAddr, int protocol, byte[] payload) {
+	public void RIOSend(int destAddr, MessageType type, byte[] payload) {
 		OutChannel out = outConnections.get(destAddr);
 		if (out == null) {
 			out = new OutChannel(this, destAddr);
@@ -169,7 +169,7 @@ class ReliableInOrderMsgLayer {
 		if (ID == null)
 			ID = n.getID();
 
-		out.sendRIOPacket(n, protocol, payload, ID);
+		out.sendRIOPacket(n, type, payload, ID);
 	}
 
 	/**

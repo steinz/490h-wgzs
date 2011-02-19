@@ -1,4 +1,5 @@
 package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -27,7 +28,7 @@ class RIOPacket {
 	public static final int HEADER_SIZE = 21;
 	public static final int MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - HEADER_SIZE;
 
-	private int protocol;
+	private MessageType type;
 	private int seqNum;
 	private byte[] payload;
 	private UUID ID;
@@ -42,15 +43,14 @@ class RIOPacket {
 	 * @param payload
 	 *            The payload of the packet.
 	 */
-	public RIOPacket(int protocol, int seqNum, byte[] payload, UUID ID)
+	public RIOPacket(MessageType type, int seqNum, byte[] payload, UUID ID)
 			throws IllegalArgumentException {
-		if (!Protocol.isPktProtocolValid(protocol)
-				|| payload.length > MAX_PAYLOAD_SIZE) {
+		if (!type.isPktProtocolValid() || payload.length > MAX_PAYLOAD_SIZE) {
 			throw new IllegalArgumentException(
 					"Illegal arguments given to RIOPacket");
 		}
 
-		this.protocol = protocol;
+		this.type = type;
 		this.seqNum = seqNum;
 		this.payload = payload;
 		this.ID = ID;
@@ -59,8 +59,8 @@ class RIOPacket {
 	/**
 	 * @return The protocol number
 	 */
-	public int getProtocol() {
-		return this.protocol;
+	public MessageType getType() {
+		return this.type;
 	}
 
 	/**
@@ -90,8 +90,8 @@ class RIOPacket {
 	 * @param newProtocol
 	 *            The new protocol
 	 */
-	public void setProtocol(int newProtocol) {
-		this.protocol = newProtocol;
+	public void setType(MessageType newType) {
+		this.type = newType;
 	}
 
 	/**
@@ -126,7 +126,7 @@ class RIOPacket {
 			out.writeLong(IDMostSignificantBits);
 			out.writeLong(IDLeastSignificantBits);
 
-			out.writeByte(protocol);
+			out.writeByte(type.ordinal());
 			out.writeInt(seqNum);
 
 			out.write(payload, 0, payload.length);
@@ -162,6 +162,7 @@ class RIOPacket {
 		UUID name = new UUID(mostSigBits, leastSigBits);
 
 		int protocol = in.readByte();
+		MessageType mt = MessageType.ordinalToMessageType(protocol);
 		int seqNum = in.readInt();
 
 		byte[] payload = new byte[packet.length - HEADER_SIZE];
@@ -175,12 +176,11 @@ class RIOPacket {
 			throw new PacketPackException("failed to read entire payload");
 		}
 
-		return new RIOPacket(protocol, seqNum, payload, name);
+		return new RIOPacket(mt, seqNum, payload, name);
 	}
 
 	public String toString() {
-		return "proto:" + Protocol.protocolToString(this.protocol)
-				+ "|rio-seqNum:" + this.seqNum + "|payload:"
-				+ Utility.byteArrayToString(payload);
+		return "proto:" + type.name() + "|rio-seqNum:" + this.seqNum
+				+ "|payload:" + Utility.byteArrayToString(payload);
 	}
 }

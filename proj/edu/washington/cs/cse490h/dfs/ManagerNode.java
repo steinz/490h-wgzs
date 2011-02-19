@@ -1,4 +1,5 @@
 package edu.washington.cs.cse490h.dfs;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -11,6 +12,8 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.Map.Entry;
+
+import org.apache.bcel.generic.GOTO;
 
 import edu.washington.cs.cse490h.lib.Callback;
 import edu.washington.cs.cse490h.lib.Utility;
@@ -240,11 +243,9 @@ class ManagerNode {
 		filePermissionCache.giveRW(client, filename);
 
 		// send success to requester
-		node
-				.printVerbose("sending "
-						+ Protocol.protocolToString(Protocol.SUCCESS) + " to "
-						+ client);
-		sendSuccess(client, Protocol.CREATE, filename);
+		node.printVerbose("sending " + MessageType.Success.name() + " to "
+				+ client);
+		sendSuccess(client, MessageType.Create, filename);
 	}
 
 	private void deleteExistingFile(String filename, int client) {
@@ -261,10 +262,10 @@ class ManagerNode {
 		filePermissionCache.revoke(filename);
 
 		// no one had permissions, so send success
-		sendSuccess(client, Protocol.DELETE, filename);
+		sendSuccess(client, MessageType.Delete, filename);
 	}
 
-	private boolean queueRequestIfLocked(int client, int protocol,
+	private boolean queueRequestIfLocked(int client, MessageType type,
 			String filename) {
 		if (lockedFiles.containsKey(filename)) {
 
@@ -279,9 +280,9 @@ class ManagerNode {
 				requests = new LinkedList<QueuedFileRequest>();
 				queuedFileRequests.put(filename, requests);
 			}
-			node.printVerbose("Queuing " + Protocol.protocolToString(protocol)
-					+ " client " + client + " on " + filename);
-			requests.add(new QueuedFileRequest(client, protocol, Utility
+			node.printVerbose("Queuing " + type.name() + " client " + client
+					+ " on " + filename);
+			requests.add(new QueuedFileRequest(client, type, Utility
 					.stringToByteArray(filename)));
 			return true;
 		} else {
@@ -379,7 +380,7 @@ class ManagerNode {
 		Integer destAddr = pendingReadPermissionRequests.remove(filename);
 		if (destAddr != null) {
 			try {
-				sendFile(destAddr, filename, Protocol.RD);
+				sendFile(destAddr, filename, MessageType.RD);
 			} catch (IOException e) {
 				sendError(client, filename, e);
 				return;
@@ -451,7 +452,7 @@ class ManagerNode {
 			}
 			foundPendingRequest = true;
 			try {
-				sendFile(destAddr, filename, Protocol.WD);
+				sendFile(destAddr, filename, MessageType.WD);
 			} catch (IOException e) {
 				sendError(client, filename, e.getMessage());
 				return;
@@ -545,9 +546,8 @@ class ManagerNode {
 		// If this client has something in transaction touched cache, an error
 		// occurred
 		if (transactionTouchedFiles.get(client) != null) {
-			node
-					.printError("ERROR: Manager has cached transaction touched files for client: "
-							+ client);
+			node.printError("ERROR: Manager has cached transaction touched files for client: "
+					+ client);
 		}
 		transactionTouchedFiles.put(client, new ArrayList<String>());
 
@@ -561,7 +561,7 @@ class ManagerNode {
 
 		if (!clientHasPendingPermissions(client))
 			pendingCommitRequests.put(client, new QueuedFileRequest(client,
-					Protocol.TX_COMMIT, DFSNode.emptyPayload));
+					MessageType.TXCommit, DFSNode.emptyPayload));
 
 		transactionsInProgress.remove(client); // remove client tx
 		node.printVerbose("removed node " + client
@@ -589,7 +589,7 @@ class ManagerNode {
 			unlockFile(filesToUnlock.get(i));
 		}
 
-		node.RIOSend(client, Protocol.TX_SUCCESS, DFSNode.emptyPayload);
+		node.RIOSend(client, MessageType.TXSuccess, DFSNode.emptyPayload);
 
 		// Clear cache
 		if (transactionTouchedFiles.remove(client) == null) {
@@ -631,7 +631,7 @@ class ManagerNode {
 	 */
 	public void receiveCreate(int client, String filename) {
 
-		if (queueRequestIfLocked(client, Protocol.CREATE, filename)) {
+		if (queueRequestIfLocked(client, MessageType.Create, filename)) {
 			return;
 		}
 
@@ -639,7 +639,7 @@ class ManagerNode {
 		Integer rw = filePermissionCache.hasRW(filename);
 
 		if (rw != null) {
-			sendRequest(rw, filename, Protocol.WF);
+			sendRequest(rw, filename, MessageType.WF);
 			pendingRPCCreateRequests.put(filename, client);
 			lockFile(filename, client);
 		} else if (checkExistence(filename)) {
@@ -650,7 +650,7 @@ class ManagerNode {
 			if (transactionsInProgress.contains(client)) {
 				try {
 					node.fs.createFileTX(client, filename);
-					sendSuccess(client, Protocol.CREATE, filename);
+					sendSuccess(client, MessageType.Create, filename);
 					filePermissionCache.giveRW(client, filename);
 					node.printVerbose("Giving " + client + " RW on file: "
 							+ filename);
@@ -672,7 +672,7 @@ class ManagerNode {
 	}
 
 	public void receiveDelete(int client, String filename) {
-		if (queueRequestIfLocked(client, Protocol.DELETE, filename)) {
+		if (queueRequestIfLocked(client, MessageType.Delete, filename)) {
 			return;
 		}
 
@@ -693,7 +693,7 @@ class ManagerNode {
 			return;
 		} else if (rw != null && rw != client) {
 			// Someone other than the requester has RW status, get updates
-			sendRequest(rw, filename, Protocol.WF);
+			sendRequest(rw, filename, MessageType.WF);
 			waitingForResponses = true;
 		} else if (ro.size() != 0) {
 			pendingICs.put(filename, ro);
@@ -702,7 +702,7 @@ class ManagerNode {
 				 * Send invalidate requests to everyone with RO (doesn't include
 				 * the requester)
 				 */
-				sendRequest(i, filename, Protocol.IV);
+				sendRequest(i, filename, MessageType.IV);
 			}
 			waitingForResponses = true;
 		}
@@ -715,7 +715,7 @@ class ManagerNode {
 			if (transactionsInProgress.contains(client))
 				try {
 					node.fs.deleteFileTX(client, filename);
-					node.send(client, Protocol.SUCCESS, DFSNode.emptyPayload);
+					node.send(client, MessageType.Success, DFSNode.emptyPayload);
 					node.printVerbose("Giving client: " + client
 							+ " RW on file: " + filename);
 					filePermissionCache.giveRW(client, filename);
@@ -750,15 +750,18 @@ class ManagerNode {
 	}
 
 	public void receiveRQ(int client, String filename) {
-		receiveQ(client, filename, Protocol.RQ, Protocol.RD, Protocol.RF, true);
+		receiveQ(client, filename, MessageType.RQ, MessageType.RD,
+				MessageType.RF, true);
 	}
 
 	public void receiveWQ(int client, String filename) {
-		receiveQ(client, filename, Protocol.WQ, Protocol.WD, Protocol.WF, false);
+		receiveQ(client, filename, MessageType.WQ, MessageType.WD,
+				MessageType.WF, false);
 	}
 
-	private void receiveQ(int client, String filename, int receivedProtocol,
-			int responseProtocol, int forwardingProtocol, boolean preserveROs) {
+	private void receiveQ(int client, String filename,
+			MessageType receivedProtocol, MessageType responseProtocol,
+			MessageType forwardingProtocol, boolean preserveROs) {
 
 		// check if locked
 		if (queueRequestIfLocked(client, receivedProtocol, filename)) {
@@ -793,7 +796,7 @@ class ManagerNode {
 		if (rw != null) {
 			// Get updates
 			sendRequest(rw, filename, forwardingProtocol);
-			if (receivedProtocol == Protocol.RQ) {
+			if (receivedProtocol == MessageType.RQ) {
 				pendingReadPermissionRequests.put(filename, client);
 			} else {
 				pendingWritePermissionRequests.put(filename, client);
@@ -806,7 +809,7 @@ class ManagerNode {
 			for (int i : ro) {
 				// Invalidate all ROs
 				if (i != client) {
-					sendRequest(i, filename, Protocol.IV);
+					sendRequest(i, filename, MessageType.IV);
 
 					List<Integer> list = pendingICs.get(filename);
 					if (list == null) {
@@ -817,7 +820,7 @@ class ManagerNode {
 
 				}
 			}
-			if (receivedProtocol == Protocol.RQ) {
+			if (receivedProtocol == MessageType.RQ) {
 				pendingReadPermissionRequests.put(filename, client);
 			} else {
 				pendingWritePermissionRequests.put(filename, client);
@@ -847,9 +850,8 @@ class ManagerNode {
 
 		int destAddr;
 		if (!pendingICs.containsKey(filename)) {
-			node
-					.printError("Manager has no record of this filename in pending ICs: "
-							+ filename);
+			node.printError("Manager has no record of this filename in pending ICs: "
+					+ filename);
 			sendError(client, filename, new UnknownManagerException());
 			return;
 		}
@@ -888,14 +890,14 @@ class ManagerNode {
 			if (pendingWritePermissionRequests.containsKey(filename)) {
 				destAddr = pendingWritePermissionRequests.remove(filename);
 				try {
-					sendFile(destAddr, filename, Protocol.WD);
+					sendFile(destAddr, filename, MessageType.WD);
 				} catch (IOException e) {
 					sendError(client, filename, e.getMessage());
 					return;
 				}
 			} else {
 				destAddr = pendingRPCDeleteRequests.remove(filename);
-				sendSuccess(destAddr, Protocol.DELETE, filename);
+				sendSuccess(destAddr, MessageType.Delete, filename);
 			}
 		} else {
 			// still waiting for more ICs
@@ -941,7 +943,7 @@ class ManagerNode {
 	 * 
 	 * @throws IOException
 	 */
-	private void sendFile(int to, String filename, int protocol)
+	private void sendFile(int to, String filename, MessageType type)
 			throws IOException {
 		StringBuilder sendMsg = new StringBuilder();
 
@@ -956,7 +958,7 @@ class ManagerNode {
 		}
 
 		byte[] payload = Utility.stringToByteArray(sendMsg.toString());
-		node.RIOSend(to, protocol, payload);
+		node.RIOSend(to, type, payload);
 	}
 
 	/**
@@ -975,7 +977,7 @@ class ManagerNode {
 			QueuedFileRequest nextRequest = outstandingRequests.poll();
 			if (nextRequest != null) {
 				queuedRequester = nextRequest.from;
-				node.onRIOReceive(nextRequest.from, nextRequest.protocol,
+				node.onRIOReceive(nextRequest.from, nextRequest.type,
 						nextRequest.msg);
 			}
 		}
@@ -986,7 +988,7 @@ class ManagerNode {
 			if (clientHasPendingPermissions(queuedRequester)) {
 				QueuedFileRequest commitRequest = pendingCommitRequests
 						.remove(queuedRequester);
-				node.onRIOReceive(commitRequest.from, commitRequest.protocol,
+				node.onRIOReceive(commitRequest.from, commitRequest.type,
 						commitRequest.msg);
 			}
 		}
@@ -1039,20 +1041,19 @@ class ManagerNode {
 	 * Helper that sends a request for the provided filename to the provided
 	 * client using the provided protocol
 	 */
-	private void sendRequest(int client, String filename, int protocol) {
+	private void sendRequest(int client, String filename, MessageType type) {
 		byte[] payload = Utility.stringToByteArray(filename);
-		node.RIOSend(client, protocol, payload);
+		node.RIOSend(client, type, payload);
 	}
 
 	/**
 	 * Sends a successful message for the given protocol from the manager to the
 	 * client
 	 */
-	private void sendSuccess(int destAddr, int protocol, String message) {
-		String msg = Protocol.protocolToString(protocol)
-				+ DFSNode.packetDelimiter + message;
+	private void sendSuccess(int destAddr, MessageType type, String message) {
+		String msg = type.name() + DFSNode.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
-		node.RIOSend(destAddr, Protocol.SUCCESS, payload);
+		node.RIOSend(destAddr, MessageType.Success, payload);
 	}
 
 	/**
@@ -1068,7 +1069,7 @@ class ManagerNode {
 	private void sendError(int client, String filename, String message) {
 		String msg = filename + DFSNode.packetDelimiter + message;
 		byte[] payload = Utility.stringToByteArray(msg);
-		node.RIOSend(client, Protocol.ERROR, payload);
+		node.RIOSend(client, MessageType.Error, payload);
 
 		// tx cleanup
 		txFailureCleanup(client);
@@ -1077,7 +1078,7 @@ class ManagerNode {
 	private void sendError(int client, String filename, Exception e) {
 		String msg = filename + DFSNode.packetDelimiter + e.getMessage();
 		byte[] payload = Utility.stringToByteArray(msg);
-		node.RIOSend(client, Protocol.ERROR, payload);
+		node.RIOSend(client, MessageType.Error, payload);
 
 		// tx cleanup
 		txFailureCleanup(client);
@@ -1085,9 +1086,7 @@ class ManagerNode {
 
 	private void txFailureCleanup(int client) {
 
-		node
-				.RIOSend(client, Protocol.TX_FAILURE, Utility
-						.stringToByteArray(""));
+		node.RIOSend(client, MessageType.TXFailure, node.emptyPayload);
 		transactionsInProgress.remove(client);
 		unlockFilesForClient(client);
 		pendingCommitRequests.remove(client);
@@ -1108,7 +1107,7 @@ class ManagerNode {
 	public void heartbeatTimeout(Integer destAddr) {
 
 		if (transactionsInProgress.contains(destAddr)) {
-			node.RIOSend(destAddr, Protocol.HEARTBEAT, DFSNode.emptyPayload);
+			node.RIOSend(destAddr, MessageType.Heartbeat, DFSNode.emptyPayload);
 			addHeartbeatTimeout(destAddr);
 		}
 		// printDebug();
@@ -1143,10 +1142,10 @@ class ManagerNode {
 	 */
 	protected void killNode(int destAddr) {
 		// might as well send a txabort just in case this node is alive
-		node.RIOSend(destAddr, Protocol.TX_FAILURE, Utility
-				.stringToByteArray(""));
+		node.RIOSend(destAddr, MessageType.TXFailure,
+				Utility.stringToByteArray(""));
 		transactionsInProgress.remove(destAddr);
-		//		
+		//
 		// // transfer ownership of files
 		// for (Entry<String, Integer> entry : filePermissionCache.RW
 		// .entrySet()) {

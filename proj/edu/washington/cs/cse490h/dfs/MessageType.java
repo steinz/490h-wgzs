@@ -1,4 +1,5 @@
 package edu.washington.cs.cse490h.dfs;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -19,6 +20,7 @@ enum MessageType {
 	Noop(HandlingClass.DFSNode), Heartbeat(HandlingClass.DFSNode), ManagerIs(
 			HandlingClass.DFSNode),
 
+			// TODO: HIGH: Client only now
 	WD(HandlingClass.DFSNode), RD(HandlingClass.DFSNode),
 
 	Create(HandlingClass.ManagerNode), Delete(HandlingClass.ManagerNode), WQ(
@@ -37,10 +39,14 @@ enum MessageType {
 	Data(HandlingClass.None), @Deprecated
 	Get(HandlingClass.None), @Deprecated
 	Put(HandlingClass.None), @Deprecated
-	Append(HandlingClass.None);
+	Append(HandlingClass.None),
+	
+	Prepare(HandlingClass.PaxosNode), PromiseDenial(HandlingClass.PaxosNode),
+	Promise(HandlingClass.PaxosNode), Accept(HandlingClass.PaxosNode),
+	Accepted(HandlingClass.PaxosNode);
 
 	public enum HandlingClass {
-		RIOLayer, DFSNode, ManagerNode, ClientNode, None
+		RIOLayer, DFSNode, ClientNode, ManagerNode, PaxosNode, None
 	};
 
 	/**
