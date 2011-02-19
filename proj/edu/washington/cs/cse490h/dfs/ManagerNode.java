@@ -13,8 +13,6 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.Map.Entry;
 
-import org.apache.bcel.generic.GOTO;
-
 import edu.washington.cs.cse490h.lib.Callback;
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -45,19 +43,24 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 //NOTE: Implicit transactions are handled by cache coherency!
 
-/*
- * TODO: HIGH: If a client trys to do an operation that requires RW, make sure they have RW and abort 
- * them or send them a failure if they don't (see Writeup 3 > FS Semantics > Paragraph 4 )
+// TODO: High: When you come back up, ask other managers for current permission states
+// TODO: High: Block until a majority of replicas accept your changes, if you are the primary.
+/**
+ * Other todos:
+ * TODO: High: Replicas should respond to clients with a "manager is" packet, and not do anything.
  */
-// TODO: HIGH: TEST: Need to handle aborts, failures, and successes - every handler code path should end by sending something to the client (except {W,R,I}C) - this comment should persist
-// TODO: Replicas - if client <x> goes down, and someone is requesting this file, we should request a copy from its replica
-// TODO: I would like to push the manager to a separate subpackage entirely and have separate classes for the node, permission queues, etc.
+
+// TODO: High: Manager needs a separate data structure (ownership) of who last had RW on the file
+
+
 /**
  * Replica scheme: 1 -> 2 2 -> 3 3 -> 4 4 -> 5 5 -> 1
  */
 
 class ManagerNode {
 
+	private static Set<Integer> managers;
+	
 	/**
 	 * A list of locked files (cache coherency)
 	 */
@@ -188,6 +191,12 @@ class ManagerNode {
 	 * occur before requests are handled
 	 */
 	private Map<Integer, QueuedFileRequest> pendingCommitRequests;
+	
+	/**
+	 * A map of filename -> the last known owner of this file. Useful if all nodes have RO and the manager needs
+	 * to tell the requester where to pull the file from.
+	 */
+	private Map<String, Integer> fileOwners;
 
 	/**
 	 * A map detailing who replicates who, for example, replicaNode.get(1) = 2
@@ -223,6 +232,7 @@ class ManagerNode {
 		this.replicaNode = new HashMap<Integer, Integer>();
 		this.filePermissionCache = new Cache(node);
 		this.transactionTouchedFiles = new HashMap<Integer, List<String>>();
+		this.fileOwners = new HashMap<String, Integer>();
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -241,6 +251,7 @@ class ManagerNode {
 		node.printVerbose("Changing status of client: " + client
 				+ " to RW for file: " + filename);
 		filePermissionCache.giveRW(client, filename);
+		fileOwners.put(filename, client);
 
 		// send success to requester
 		node.printVerbose("sending " + MessageType.Success.name() + " to "
@@ -260,6 +271,7 @@ class ManagerNode {
 
 		node.printVerbose("Blanking all permissions for file: " + filename);
 		filePermissionCache.revoke(filename);
+		fileOwners.remove(filename);
 
 		// no one had permissions, so send success
 		sendSuccess(client, MessageType.Delete, filename);
@@ -346,137 +358,6 @@ class ManagerNode {
 
 		unlockFile(filename);
 
-	}
-
-	public void receiveRD(int client, String filename, String contents) {
-
-		// make sure this client actually had RW to begin with
-		if (filePermissionCache.hasRW(filename) != client) {
-			sendError(client, filename, new TransactionException(
-					"Error: client " + client + " does not have RW on file: "
-							+ filename));
-			return;
-		}
-		// first write the file to save a local copy
-		try {
-			if (Utility.fileExists(node, filename))
-				node.fs.writeFile(filename, contents, false);
-			else
-				node.fs.createFile(filename);
-		} catch (IOException e) {
-			sendError(client, filename, e);
-			return;
-		}
-
-		/*
-		 * send out a RD to anyone requesting this - unlike for WD, this
-		 * shouldn't be a create or delete (which require RW, so send W{F,D}
-		 * messages instead)
-		 */
-		filePermissionCache.giveRO(client, filename);
-		node.printVerbose("Revoking permission on file: " + filename
-				+ " for client: " + client);
-
-		Integer destAddr = pendingReadPermissionRequests.remove(filename);
-		if (destAddr != null) {
-			try {
-				sendFile(destAddr, filename, MessageType.RD);
-			} catch (IOException e) {
-				sendError(client, filename, e);
-				return;
-			}
-
-			// Add to RO list
-			filePermissionCache.giveRO(destAddr, filename);
-		}
-
-	}
-
-	public void receiveWD(int client, String filename, String contents) {
-
-		/*
-		 * TODO: LOW: No need to do this for deletes or creates (although for
-		 * creates it might give us a newer file version, which might be nice)
-		 */
-		// first write the file to save a local copy
-
-		// make sure this client actually had RW to begin with
-		if (filePermissionCache.hasRW(filename) != client) {
-			sendError(client, filename, new TransactionException(
-					"Error: client " + client + " does not have RW on file: "
-							+ filename));
-			return;
-		}
-
-		// check for blank contents
-		if (contents.equals(null))
-			contents = "";
-		try {
-			node.fs.writeFile(filename, contents, false);
-		} catch (IOException e) {
-			sendError(client, filename, e);
-			return;
-		}
-
-		// look for pending request
-		boolean foundPendingRequest = false;
-		node.printVerbose("Revoking permission on file: " + filename
-				+ " for client: " + client);
-		filePermissionCache.revoke(filename);
-
-		// check creates
-		Integer destAddr = pendingRPCCreateRequests.remove(filename);
-		if (destAddr != null) {
-			foundPendingRequest = true;
-			sendError(destAddr, filename, new FileAlreadyExistsException());
-			return;
-		}
-
-		// check deletes
-		destAddr = pendingRPCDeleteRequests.remove(filename);
-		if (destAddr != null) {
-			if (foundPendingRequest) {
-				sendError(client, filename, new FileNotFoundException());
-				return;
-			}
-			foundPendingRequest = true;
-			deleteExistingFile(filename, destAddr);
-		}
-
-		// check CC
-		destAddr = pendingWritePermissionRequests.remove(filename);
-		if (destAddr != null) {
-			if (foundPendingRequest) {
-				sendError(client, filename, new UnknownManagerException());
-				return;
-			}
-			foundPendingRequest = true;
-			try {
-				sendFile(destAddr, filename, MessageType.WD);
-			} catch (IOException e) {
-				sendError(client, filename, e.getMessage());
-				return;
-			}
-		}
-
-		if (!foundPendingRequest) {
-
-			sendError(client, filename, new UnknownManagerException());
-			return;
-		}
-
-		// update the status of the client who sent the WD
-		Integer rw = filePermissionCache.hasRW(filename);
-		if (rw == null || rw != client) {
-			node.printError("WD received client client w/o RW"); // for now
-			sendError(client, filename, "Privilege Disagreement Exception");
-			// TODO: Actually implement the exception
-			return;
-		} else {
-			node.printVerbose("Blanking ownership permissions for file: "
-					+ filename);
-			filePermissionCache.revoke(filename);
-		}
 	}
 
 	/**
@@ -652,6 +533,7 @@ class ManagerNode {
 					node.fs.createFileTX(client, filename);
 					sendSuccess(client, MessageType.Create, filename);
 					filePermissionCache.giveRW(client, filename);
+					fileOwners.put(filename, client);
 					node.printVerbose("Giving " + client + " RW on file: "
 							+ filename);
 					lockFile(filename, client);
@@ -719,6 +601,7 @@ class ManagerNode {
 					node.printVerbose("Giving client: " + client
 							+ " RW on file: " + filename);
 					filePermissionCache.giveRW(client, filename);
+					fileOwners.put(filename, client);
 				} catch (TransactionException e) {
 					node.printError(e);
 				} catch (IOException e) {
@@ -962,6 +845,7 @@ class ManagerNode {
 	}
 
 	/**
+>>>>>>> .r304
 	 * Unlocks filename and checks if there is another request to service
 	 */
 	private void unlockFile(String filename) {
@@ -1145,29 +1029,29 @@ class ManagerNode {
 		node.RIOSend(destAddr, MessageType.TXFailure,
 				Utility.stringToByteArray(""));
 		transactionsInProgress.remove(destAddr);
-		//
-		// // transfer ownership of files
-		// for (Entry<String, Integer> entry : filePermissionCache.RW
-		// .entrySet()) {
-		// Integer newOwner;
-		// if (entry.getValue().equals(destAddr)) {
-		// String filename = entry.getKey();
-		// newOwner = replicaNode.get(destAddr);
-		// node.printVerbose("Node: " + destAddr
-		// + " failed. Transferring ownership" + " of file: "
-		// + filename + " to replica node: " + newOwner);
-		// filePermissionCache.giveRW(newOwner, filename);
-		// // if someone was waiting for this file, send a WF/RF to the
-		// // replica
-		// if (pendingWritePermissionRequests.remove(filename) != null) {
-		// node.RIOSend(newOwner, Protocol.WF,
-		// Utility.stringToByteArray(filename));
-		// } else if (pendingReadPermissionRequests.remove(filename) != null) {
-		// node.RIOSend(newOwner, Protocol.RF,
-		// Utility.stringToByteArray(filename));
-		// }
-		// }
-		// }
+		
+		// transfer ownership of files
+		for (Entry<String, Integer> entry : filePermissionCache.RW.entrySet()) {
+			Integer newOwner;
+			if (entry.getValue().equals(destAddr)) {
+				String filename = entry.getKey();
+				newOwner = replicaNode.get(destAddr);
+				node.printVerbose("Node: " + destAddr
+						+ " failed. Transferring ownership" + " of file: "
+						+ filename + " to replica node: " + newOwner);
+				filePermissionCache.giveRW(newOwner, filename);
+				fileOwners.put(filename, newOwner);
+				// if someone was waiting for this file, send a WF/RF to the
+				// replica
+				if (pendingWritePermissionRequests.remove(filename) != null) {
+					node.RIOSend(newOwner, MessageType.WF,
+							Utility.stringToByteArray(filename));
+				} else if (pendingReadPermissionRequests.remove(filename) != null) {
+					node.RIOSend(newOwner, MessageType.RF,
+							Utility.stringToByteArray(filename));
+				}
+			}
+		}
 
 		ArrayList<String> filesToUnlock = new ArrayList<String>();
 
