@@ -8,9 +8,11 @@ package edu.washington.cs.cse490h.dfs;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
@@ -186,6 +188,11 @@ class ClientNode {
 	private Map<String, Queue<String>> queuedCommands;
 
 	/**
+	 * This node's replicas
+	 */
+	private List<Integer> replicas;
+	
+	/**
 	 * Whether or not the client is currently performing a transaction
 	 */
 	private boolean transacting;
@@ -208,11 +215,12 @@ class ClientNode {
 	public ClientNode(DFSNode n, int maxWaitingForCommitQueueSize) {
 		this.parent = n;
 		this.maxWaitingForCommitQueueSize = maxWaitingForCommitQueueSize;
-
+		
 		this.cache = new Cache(parent);
 		this.pendingOperations = new HashMap<String, PendingClientOperation>();
 		this.lockedFiles = new HashSet<String>();
 		this.queuedCommands = new HashMap<String, Queue<String>>();
+		this.replicas = new ArrayList<Integer>();
 		this.transacting = false;
 		this.waitingForCommitSuccess = false;
 		this.waitingForCommitQueue = new LinkedList<String>();
@@ -272,6 +280,11 @@ class ClientNode {
 	 * begin commandHandlers
 	 *******************************/
 
+	/*
+	 * TODO: I think I found a framework bug - "append 1 test  world" is
+	 * losing the extra space
+	 */
+	
 	/**
 	 * Get ownership of a file and append to it
 	 * 
@@ -282,11 +295,6 @@ class ClientNode {
 	 */
 	public void appendHandler(StringTokenizer tokens, String line)
 			throws IOException, TransactionException, UnknownManagerException {
-		/*
-		 * TODO: I think I found a framework bug - "append 1 test  world" is
-		 * losing the extra space
-		 */
-
 		String filename = tokens.nextToken();
 		String content = parseAddContent(line, "append", filename);
 
@@ -298,6 +306,7 @@ class ClientNode {
 				parent.fs.writeFileTX(parent.addr, filename, content, true);
 			} else {
 				parent.fs.writeFile(filename, content, true);
+				replicateWrite(filename, content, true);
 			}
 		} else {
 			// lock and request ownership
@@ -333,6 +342,7 @@ class ClientNode {
 				parent.fs.createFileTX(parent.addr, filename);
 			} else {
 				parent.fs.createFile(filename);
+				replicateCreate(filename);
 			}
 		} else {
 			// lock and perform rpc
@@ -373,6 +383,7 @@ class ClientNode {
 				parent.fs.deleteFileTX(parent.addr, filename);
 			} else {
 				parent.fs.deleteFile(filename);
+				replicateDelete(filename);
 			}
 		} else {
 			// lock and perform rpc
@@ -475,6 +486,7 @@ class ClientNode {
 				parent.fs.writeFileTX(parent.addr, filename, content, false);
 			} else {
 				parent.fs.writeFile(filename, content, false);
+				replicateWrite(filename, content, false);
 			}
 		} else {
 			// lock and request ownership
@@ -490,6 +502,13 @@ class ClientNode {
 		}
 	}
 
+	public void replicasareHandler(StringTokenizer tokens, String line) {
+		// TODO: HIGH: Document
+		while (tokens.hasMoreTokens()) {
+			replicas.add(Integer.parseInt(tokens.nextToken()));
+		}
+	}
+	
 	/**
 	 * Sends a TX_ABORT if performing a transaction
 	 * 
@@ -735,6 +754,18 @@ class ClientNode {
 			return false;
 		}
 	}
+	
+	private void replicateCreate(String filename) {
+		
+	}
+	
+	private void replicateDelete(String filename) {
+		
+	}
+	
+	private void replicateWrite(String filename, String content, boolean append) {
+		
+	}
 
 	/**
 	 * Convenience wrapper of RIOSend that sends a message with an empty payload
@@ -871,9 +902,6 @@ class ClientNode {
 			return;
 		}
 
-		// has RO
-		cache.put(filename, CacheStatuses.ReadOnly);
-
 		try {
 			// update in cache
 			if (!Utility.fileExists(parent, filename)) {
@@ -892,6 +920,9 @@ class ClientNode {
 		parent.printInfo("Got file, contents below:");
 		parent.printInfo(contents);
 
+		// has RO
+		cache.put(filename, CacheStatuses.ReadOnly);
+		
 		sendToManager(MessageType.RC, Utility.stringToByteArray(filename));
 		unlockFile(filename);
 	}
@@ -923,6 +954,7 @@ class ClientNode {
 						parent.fs.createFileTX(parent.addr, filename);
 					} else {
 						parent.fs.createFile(filename);
+						replicateCreate(filename);
 					}
 				} else {
 					/*
@@ -951,6 +983,7 @@ class ClientNode {
 				} else {
 					if (Utility.fileExists(parent, filename)) {
 						parent.fs.deleteFile(filename);
+						replicateDelete(filename);
 					}
 				}
 				cache.put(filename, CacheStatuses.ReadWrite);
@@ -993,9 +1026,6 @@ class ClientNode {
 			return;
 		}
 
-		// has RW!
-		cache.put(filename, CacheStatuses.ReadWrite);
-
 		PendingClientOperation intent = pendingOperations.get(filename);
 		pendingOperations.remove(filename);
 
@@ -1027,6 +1057,7 @@ class ClientNode {
 							intent.content, false);
 				} else {
 					parent.fs.writeFile(filename, intent.content, false);
+					replicateWrite(filename, intent.content, false);
 				}
 				break;
 			case APPEND:
@@ -1035,6 +1066,7 @@ class ClientNode {
 							intent.content, true);
 				} else {
 					parent.fs.writeFile(filename, intent.content, true);
+					replicateWrite(filename, intent.content, true);
 				}
 				break;
 			default:
@@ -1050,6 +1082,9 @@ class ClientNode {
 			return;
 		}
 
+		// has RW!
+		cache.put(filename, CacheStatuses.ReadWrite);
+		
 		sendToManager(MessageType.WC, Utility.stringToByteArray(filename));
 		unlockFile(filename);
 	}
