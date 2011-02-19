@@ -1086,7 +1086,7 @@ class ManagerNode {
 
 	private void txFailureCleanup(int client) {
 
-		node.RIOSend(client, MessageType.TXFailure, node.emptyPayload);
+		node.RIOSend(client, MessageType.TXFailure, DFSNode.emptyPayload);
 		transactionsInProgress.remove(client);
 		unlockFilesForClient(client);
 		pendingCommitRequests.remove(client);
