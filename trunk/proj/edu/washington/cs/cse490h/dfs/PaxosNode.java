@@ -18,8 +18,10 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class PaxosNode {
 
+	public static final int leaseTimeout = 50;
+	
 	enum NodeTypes {
-		Learner, Acceptor, Proposer
+		Acceptor, Proposer
 	}
 
 	// What type of node this PaxosNode is
@@ -35,14 +37,17 @@ public class PaxosNode {
 	// as well.
 	private Set<Integer> knownAcceptors;
 
+	// TODO: High: This may be redundant with the above
+	private Set<Integer> knownManagers;
+	
+	
 	// The list of possible values for a proposer to choose. If it's empty, the
 	// proposer assumes it can choose anything (but chooses 1 for simplicity).
 	private Set<Integer> possibleValues;
+	
+	private int proposersResponded;
 
-	// The list of proposers who have responded.
-	// TODO: High - is this necessary? A simple count could suffice, but...
-	private Set<Integer> proposersResponded;
-
+	
 	// The value the proposer has decided on
 	private int chosenValue;
 
@@ -55,24 +60,47 @@ public class PaxosNode {
 	// The last value this node accepted. Assumed to be -1 if it has not
 	// accepted any values for this instance.
 	private int lastValueAccepted;
-
-	// For now, assumed there is a distinguished learner
-	private int learnerAddress;
-
+	
 	private DFSNode node;
 
-	public PaxosNode(DFSNode n) {
+	public PaxosNode(DFSNode n, Set<Integer> managers) {
 		this.node = n;
 		this.nodeType = NodeTypes.Acceptor; // By default, a node is assumed to
 											// be an acceptor
-		this.knownAcceptors = new HashSet<Integer>();
+		this.knownAcceptors = managers;
+		this.knownManagers = managers;
 		this.lastProposalNumberSent = -1;
 		this.largestProposalNumberAccepted = -1;
 		this.lastValueAccepted = -1;
 		this.possibleValues = new HashSet<Integer>();
-		this.proposersResponded = new HashSet<Integer>();
+		this.proposersResponded = 0;
 	}
 
+	/**
+	 * Each node assumes they are the leader node and sends this message to the list of managers.
+	 */
+	public void leaderVote(){
+		this.nodeType = NodeTypes.Proposer;
+		Iterator<Integer> i = knownManagers.iterator();
+		while (i.hasNext()){
+			this.node.RIOSend(i.next(), MessageType.Leader);
+		}
+	}
+	
+	/**
+	 * The node just quickly checks if the node they received this message from has a lower address. Otherwise, it sends out 
+	 * its own address just in case it didn't get the indication to start a leader election.
+	 * @param from The sender
+	 */
+	public void leaderReceive(int from){
+		if (from < this.node.addr){
+			this.nodeType = NodeTypes.Acceptor;
+		} else
+			leaderVote();
+		
+	}
+	
+	
 	/**
 	 * Select a proposal number and send it to each acceptor. Don't need to
 	 * worry about a quorum yet - if not enough acceptors are on, won't proceed
@@ -104,10 +132,9 @@ public class PaxosNode {
 	 * @from Assumed to be the proposer's address
 	 * @proposalNumber The proposal number this node is proposing
 	 */
-	public void promise(int from, int proposalNumber) {
-		if (!nodeType.equals(NodeTypes.Acceptor)
-				&& !nodeType.equals(NodeTypes.Learner)) {
-			// TODO: High - throw an error!
+	public void receivePromise(int from, int proposalNumber) {
+		if (!nodeType.equals(NodeTypes.Acceptor)) {
+			// TODO: throw an error!
 			return;
 		}
 
@@ -140,15 +167,15 @@ public class PaxosNode {
 	 * @lastValueChosen The last value chosen by this acceptor. -1 if the
 	 *                  acceptor has never chosen a value.
 	 */
-	public void accept(int from, int lastValueChosen) {
+	public void receiveAccept(int from, int lastValueChosen) {
 
 		if (lastValueChosen != -1) {
 			possibleValues.add(lastValueChosen);
 		}
 
-		proposersResponded.add(from);
+		proposersResponded++;
 
-		if (proposersResponded.size() < (knownAcceptors.size() / 2))
+		if (proposersResponded < (knownAcceptors.size() / 2))
 			return;
 
 		// A majority has responded, so continue on
@@ -170,11 +197,11 @@ public class PaxosNode {
 	}
 
 	/*
-	 * If the Acceptor receives an Accept! message for a proposal it has not
-	 * promised not to accept in 1b, then it Accepts the value.
+	 * If the acceptor receives an accept message for a proposal it has promised
+	 * to accept, then it accepts the value.
 	 * 
-	 * Each Acceptor sends an Accepted message to the Proposer and every
-	 * Learner.
+	 * Each acceptor then sends an accepted message to the proposer, and every learner.
+	 * 
 	 */
 	/**
 	 * The acceptor validates this value, if an error hasn't occurred. Sends a
@@ -184,8 +211,8 @@ public class PaxosNode {
 	 * @proposalNumber The proposal number, used for validation
 	 * @value The chosen value
 	 */
-	public void accepted(int from, int proposalNumber, int value) {
-
+	public void receiveAccepted(int from, int proposalNumber, int value) {
+		
 		// Did we even promise this proposal number?
 		if (proposalNumber < largestProposalNumberAccepted) {
 			// TODO: High - Throw an error!
@@ -195,11 +222,6 @@ public class PaxosNode {
 
 		this.node.RIOSend(
 				from,
-				MessageType.Accepted,
-				Utility.stringToByteArray(lastProposalNumberSent + " "
-						+ chosenValue));
-		this.node.RIOSend(
-				learnerAddress,
 				MessageType.Accepted,
 				Utility.stringToByteArray(lastProposalNumberSent + " "
 						+ chosenValue));
