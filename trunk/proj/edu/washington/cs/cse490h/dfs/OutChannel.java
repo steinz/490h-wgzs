@@ -42,19 +42,19 @@ class OutChannel {
 	 * @param ID
 	 *            What the node thinks the ID of the recipient node is currently
 	 */
-	protected void sendRIOPacket(RIONode n, int protocol, byte[] payload,
+	protected void sendRIOPacket(RIONode n, MessageType type, byte[] payload,
 			UUID ID) {
 		try {
 			Method onTimeoutMethod = Callback.getMethod("onTimeout", parent,
 					new String[] { "java.lang.Integer", "java.lang.Integer" });
 			onTimeoutMethod.setAccessible(true); // HACK
-			RIOPacket newPkt = new RIOPacket(protocol, ++lastSeqNumSent,
+			RIOPacket newPkt = new RIOPacket(type, ++lastSeqNumSent,
 					payload, ID);
 			unACKedPackets.put(lastSeqNumSent, newPkt);
 
 			resendCounts.put(newPkt, 0);
 
-			n.send(destAddr, protocol, newPkt.pack());
+			n.send(destAddr, type, newPkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
 					destAddr, lastSeqNumSent }),
 					ReliableInOrderMsgLayer.TIMEOUT);
@@ -140,10 +140,10 @@ class OutChannel {
 			sb.append("resending packet ");
 			sb.append(riopkt.getSeqNum());
 			sb.append(" protocol: ");
-			sb.append(Protocol.protocolToString(riopkt.getProtocol()));
+			sb.append(riopkt.getType().name());
 			Logger.verbose(parent.n, sb.toString());
 
-			n.send(destAddr, riopkt.getProtocol(), riopkt.pack());
+			n.send(destAddr, riopkt.getType(), riopkt.pack());
 			n.addTimeout(new Callback(onTimeoutMethod, parent, new Object[] {
 					destAddr, seqNum }), ReliableInOrderMsgLayer.TIMEOUT);
 		} catch (Exception e) {

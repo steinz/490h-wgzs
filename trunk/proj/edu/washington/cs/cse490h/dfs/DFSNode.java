@@ -7,12 +7,7 @@ package edu.washington.cs.cse490h.dfs;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.StringTokenizer;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -95,46 +90,65 @@ public class DFSNode extends RIONode {
 	protected static final String packetDelimiter = " ";
 
 	/**
+	 * Name of the temp file used by write when append is false
+	 */
+	protected static final String tempFilename = ".temp";
+
+	/**
+	 * Name of the log file used by FS transactions
+	 */
+	protected static final String logFilename = ".log";
+
+	/**
+	 * Name of the temp file used when purging the log
+	 */
+	protected static final String logTempFilename = ".log.temp";
+
+	/**
+	 * Purge the log every fsPurgeFrequency commits/aborts
+	 * 
+	 * TODO: raise for prod
+	 */
+	protected static final int fsPurgeFrequency = 5;
+
+	/**
+	 * The maximum number of commands the client will queue before timing out
+	 * and restarting the node
+	 */
+	protected static int clientMaxWaitingForCommitQueueSize = 10;
+
+	/**
 	 * Whether or not this node is a manager node
 	 */
 	protected boolean isManager;
 
 	/**
-	 * The library visible thread implementing multiple message operations with
-	 * blocking calls
+	 * Encapsulates manager functionality
 	 */
-	protected DFSThread dfsThread;
-
-	/*
-	 * NOTE: when iterating through elements in map,
-	 * 
-	 * synchronized(m) {
-	 * 
-	 * Iterator i ...
-	 * 
-	 * }
-	 * 
-	 * (see Collections.synchronizedMap javadoc)
-	 */
+	private ManagerNode managerFunctions;
 
 	/**
-	 * Queue of commands waiting to be handled by the dfsThread
+	 * Encapsulates paxos functionality
 	 */
-	protected BlockingQueue<String> commandQueue;
+	private PaxosNode paxosFunctions;
+	
+	/**
+	 * Encapsulates client functionality
+	 */
+	protected ClientNode clientFunctions;
 
-	protected BlockingQueue<DFSPacket> packetQueue;
-
-	protected Map<String, BlockingQueue<DFSPacket>> expectedPackets;
+	/**
+	 * FS for this node
+	 */
+	protected TransactionalFileSystem fs;
 
 	/**
 	 * Starts the node as a client
 	 */
 	@Override
 	public void start() {
-		commandQueue = new LinkedBlockingQueue<String>();
-		packetQueue = new LinkedBlockingQueue<DFSPacket>();
-		expectedPackets = Collections
-				.synchronizedMap(new HashMap<String, BlockingQueue<DFSPacket>>());
+		// Wipe the server log
+		// Logger.eraseLog(this);
 
 		restartAsClient();
 	}
@@ -157,16 +171,11 @@ public class DFSNode extends RIONode {
 	public void restartAsClient() {
 		printInfo("(re)starting as client");
 
-		// tells the existing thread to stop handling commands
-		dfsThread.interrupt();
-
+		nullify();
 		this.isManager = false;
-		try {
-			dfsThread = new ClientThread(this);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-		dfsThread.run();
+		this.clientFunctions = new ClientNode(this,
+				clientMaxWaitingForCommitQueueSize);
+		restartFS();
 	}
 
 	/**
@@ -175,18 +184,41 @@ public class DFSNode extends RIONode {
 	public void restartAsManager() {
 		printInfo("(re)starting as manager");
 
-		// tells the existing thread to stop executing
-		dfsThread.interrupt();
-
+		nullify();
 		this.isManager = true;
-		try {
-			dfsThread = new ManagerThread(this);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-		dfsThread.run();
+		this.managerFunctions = new ManagerNode(this);
+		this.paxosFunctions = new PaxosNode(this);
+		restartFS();
 
-		broadcast(Protocol.MANAGERIS, Utility.stringToByteArray(this.addr + ""));
+		broadcast(MessageType.ManagerIs,
+				Utility.stringToByteArray(this.addr + ""));
+	}
+
+	private void nullify() {
+		fs = null;
+		managerFunctions = null;
+		clientFunctions = null;
+	}
+
+	/**
+	 * Nulls the old fs and tries to create a new one
+	 * 
+	 * fs instantiation cleans up failed puts and redoes committed transactions
+	 * in the log
+	 */
+	private void restartFS() {
+		try {
+			fs = new TransactionalFileSystem(this, tempFilename, logFilename,
+					logTempFilename, fsPurgeFrequency);
+		} catch (IOException e) {
+			/*
+			 * TODO: for clients, it should be okay to try again here w/
+			 * recovery turned off since the files can be recovered from
+			 * elsewhere, but managers should stay down here since their FS is
+			 * corrupt
+			 */
+			printError(e);
+		}
 	}
 
 	/**
@@ -200,26 +232,40 @@ public class DFSNode extends RIONode {
 	 */
 	public void onCommand(String line) {
 		printVerbose("received command: " + line);
-		try {
-			commandQueue.put(line);
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
+
+		if (!isManager) {
+			clientFunctions.onCommand(line);
+		} else {
+			// managerFunctions.onCommand(line);
+			printError("manager currently supports no commands");
 		}
 	}
 
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
-		printVerbose("received " + Protocol.protocolToString(protocol)
+		// Turn the protocol into a message type
+		MessageType mt = MessageType.ordinalToMessageType(protocol);
+
+		printVerbose("received " + mt.name()
 				+ " from Universe, giving to RIOLayer");
 
-		// TODO: HIGH: abortTX if handshake
-		if (!isManager && protocol == Protocol.HANDSHAKE) {
-			/*
-			 * TODO: HIGH: How to notify thread..?
-			 * 
-			 * expectedPackets.put(filename, new ContentlessPacket(int from,
-			 * MessageType.HANDSHAKE));
-			 */
+		// Updates manager address as soon as possible
+		if (mt == MessageType.ManagerIs) {
+			String msgStr = Utility.byteArrayToString(msg);
+			receiveManagerIs(from, msgStr);
+			return;
+		}
+
+		/*
+		 * Manager restarted or is talking to you for the first time - whatever
+		 * a client was doing has been abandoned by the manager, so unlock
+		 * everything locally
+		 * 
+		 * TODO: Pull some of the RIO HANDSHAKE handling up here?
+		 */
+		if (!isManager && mt == MessageType.Handshake) {
+			// TODO: restart?
+			clientFunctions.abortCurrentTransaction();
 		}
 
 		super.onReceive(from, protocol, msg);
@@ -228,36 +274,16 @@ public class DFSNode extends RIONode {
 	/**
 	 * Method called by the RIO layer when a message is to be delivered.
 	 */
-	public void onRIOReceive(Integer from, int protocol, byte[] msg) {
-		printVerbose("received " + Protocol.protocolToString(protocol)
-				+ " from RIOLayer, handling");
+	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
+		printVerbose("received " + type.name() + " from RIOLayer, handling");
 
-		MessageType mt = MessageType.ordinalToMessageType(protocol);
-
-		// Verify we have a correct message type
-		if (mt == null) {
-			throw new RuntimeException("invalid message ordinal " + protocol
-					+ " received");
-		}
+		String msgString = Utility.byteArrayToString(msg);
 
 		// TODO: If manager but not managing, send MANAGERIS to client
 
-		DFSPacket packet = DFSPacket.unpack(from, mt, msg);
-
-		/*
-		 * TOOD: HIGH: figure out where to put the packet
-		 * 
-		 * non blocking packets -> packetQueue
-		 * 
-		 * blocking-response packets -> expectedPackets by name for client to
-		 * find... maybe this should just be a hand off instead of a map
-		 */
-
-		// TODO: Dynamic Dispatch should probably move into DFSThread
-
 		// Find the instance to handle this message type
 		Object instance = null;
-		switch (mt.handlingClass) {
+		switch (type.handlingClass) {
 		case DFSNode:
 			instance = this;
 			break;
@@ -267,20 +293,16 @@ public class DFSNode extends RIONode {
 		case ManagerNode:
 			instance = managerFunctions;
 			break;
-		}
-
-		// Invalid message type for my node type
-		// (manager got client-only, etc)
-		if (instance == null) {
-			throw new RuntimeException("unhandled message type " + mt
-					+ " received");
+		case PaxosNode:
+			instance = paxosFunctions;
+			break;
 		}
 
 		// route message
 		try {
 			Class<?> handlingClass = instance.getClass();
 			Class<?>[] paramTypes = { int.class, String.class };
-			Method handler = handlingClass.getMethod("receive" + mt.name(),
+			Method handler = handlingClass.getMethod("receive" + type.name(),
 					paramTypes);
 			Object[] args = { from, msgString };
 			handler.invoke(instance, args);

@@ -60,58 +60,85 @@ public abstract class RIONode extends Node {
 
 	@Override
 	public void onReceive(Integer from, int protocol, byte[] msg) {
-		if (protocol == Protocol.ACK) {
+		// Turn the protocol into a message type
+		MessageType mt = MessageType.ordinalToMessageType(protocol);
+		
+		if (mt == MessageType.Ack) {
 			RIOLayer.RIOAckReceive(from, msg);
 		} else {
 			RIOLayer.RIODataReceive(from, msg);
 		}
 	}
 
+	/**
+	 * Use send(int, MessageType, byte[]) externally
+	 */
 	@Override
+	@Deprecated
 	public void send(int destAddr, int protocol, byte[] payload) {
-		printVerbose("sending " + Protocol.protocolToString(protocol) + " to "
-				+ destAddr + " with payload: " + packetBytesToString(payload));
 		super.send(destAddr, protocol, payload);
 	}
 
 	/**
-	 * Send a message using the reliable, in-order delivery layer
+	 * Send a message
 	 */
-	public void RIOSend(int destAddr, int protocol, byte[] payload) {
-		printVerbose("rio-sending " + Protocol.protocolToString(protocol)
-				+ " to " + destAddr + " with payload: "
-				+ packetBytesToString(payload));
-		RIOLayer.RIOSend(destAddr, protocol, payload);
+	public void send(int destAddr, MessageType type, byte[] payload) {
+		printVerbose("sending " + type.name() + " to " + destAddr
+				+ " with payload: " + packetBytesToString(payload));
+		send(destAddr, type.ordinal(), payload);
 	}
 
 	/**
-	 * Send a message using the reliable, in-order delivery layer with no
-	 * payload
+	 * Send a message with no payload
 	 */
-	public void RIOSend(int destAddr, int protocol) {
-		RIOSend(destAddr, protocol, emptyPayload);
+	public void send(int destAddr, MessageType type) {
+		send(destAddr, type, emptyPayload);
+	}
+
+	/**
+	 * Send a message using the rio layer with no payload
+	 */
+	public void RIOSend(int destAddr, MessageType type) {
+		RIOSend(destAddr, type, emptyPayload);
+	}
+
+	/**
+	 * Send a message using the rio layer
+	 */
+	public void RIOSend(int destAddr, MessageType type, byte[] payload) {
+		printVerbose("rio-sending " + type.name() + " to " + destAddr
+				+ " with payload: " + packetBytesToString(payload));
+		RIOLayer.RIOSend(destAddr, type, payload);
+	}
+
+	/**
+	 * Use broadcast(MessageType, byte[]) externally
+	 */
+	@Deprecated
+	public void broadcast(int protocol, byte[] payload) {
+		super.broadcast(protocol, payload);
 	}
 
 	/**
 	 * Broadcast a message
 	 */
-	public void broadcast(int protocol, byte[] payload) {
-		printVerbose("broadcasting " + Protocol.protocolToString(protocol)
-				+ " with payload: " + packetBytesToString(payload));
-		super.broadcast(protocol, payload);
+	public void broadcast(MessageType type, byte[] payload) {
+		printVerbose("broadcasting " + type.name() + " with payload: "
+				+ packetBytesToString(payload));
+		broadcast(type.ordinal(), payload);
 	}
 
 	/**
 	 * Broadcast a message with no payload
 	 */
-	public void broadcast(int protocol) {
-		broadcast(protocol, emptyPayload);
+	public void broadcast(MessageType type) {
+		broadcast(type, emptyPayload);
 	}
 
 	/**
 	 * Method that is called by the RIO layer when a message is to be delivered.
 	 */
-	public abstract void onRIOReceive(Integer from, int protocol, byte[] msg);
+	public abstract void onRIOReceive(Integer from, MessageType protocol, byte[] msg);
 
 	/**
 	 * Prepend the node address and then call Logger.verbose.

@@ -1,4 +1,5 @@
 package edu.washington.cs.cse490h.dfs;
+
 /**
  * CSE 490h
  * @author wayger, steinz
@@ -8,14 +9,14 @@ package edu.washington.cs.cse490h.dfs;
  * TODO: HIGH: move to private inner class and describe
  */
 class QueuedFileRequest {
-	
+
 	int from;
-	int protocol;
+	MessageType type;
 	byte[] msg;
-	
-	public QueuedFileRequest(int addr, int prot, byte[] buf) {
-			from = addr;
-			protocol = prot;
-			msg = buf;
+
+	public QueuedFileRequest(int addr, MessageType type, byte[] buf) {
+		this.from = addr;
+		this.type = type;
+		this.msg = buf;
 	}
 }

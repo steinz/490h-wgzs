@@ -258,7 +258,7 @@ class ClientNode {
 		} catch (InvocationTargetException e) {
 			parent.printError(e.getCause());
 			if (transacting) {
-				sendToManager(Protocol.TX_ABORT);
+				sendToManager(MessageType.TXAbort);
 				abortCurrentTransaction();
 			}
 			/*
@@ -304,7 +304,8 @@ class ClientNode {
 			if (managerAddr == -1) {
 				throw new UnknownManagerException();
 			} else {
-				sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+				sendToManager(MessageType.WQ,
+						Utility.stringToByteArray(filename));
 				pendingOperations.put(filename, new PendingClientOperation(
 						ClientOperation.APPEND, content));
 				lockFile(filename);
@@ -412,7 +413,8 @@ class ClientNode {
 				throw new UnknownManagerException();
 			} else {
 				parent.printVerbose("requesting read access for " + filename);
-				sendToManager(Protocol.RQ, Utility.stringToByteArray(filename));
+				sendToManager(MessageType.RQ,
+						Utility.stringToByteArray(filename));
 				lockFile(filename);
 			}
 		}
@@ -425,7 +427,7 @@ class ClientNode {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = parent.getID().toString();
 		parent.printInfo("sending handshake to " + server);
-		parent.RIOSend(server, Protocol.HANDSHAKE,
+		parent.RIOSend(server, MessageType.Handshake,
 				Utility.stringToByteArray(payload));
 	}
 
@@ -449,7 +451,7 @@ class ClientNode {
 	 */
 	public void noopHandler(StringTokenizer tokens, String line) {
 		int server = Integer.parseInt(tokens.nextToken());
-		parent.RIOSend(server, Protocol.NOOP, DFSNode.emptyPayload);
+		parent.RIOSend(server, MessageType.Noop, DFSNode.emptyPayload);
 	}
 
 	/**
@@ -479,7 +481,8 @@ class ClientNode {
 			if (managerAddr == -1) {
 				throw new UnknownManagerException();
 			} else {
-				sendToManager(Protocol.WQ, Utility.stringToByteArray(filename));
+				sendToManager(MessageType.WQ,
+						Utility.stringToByteArray(filename));
 				pendingOperations.put(filename, new PendingClientOperation(
 						ClientOperation.PUT, content));
 				lockFile(filename);
@@ -504,7 +507,7 @@ class ClientNode {
 				throw new UnknownManagerException();
 			} else {
 				abortCurrentTransaction();
-				sendToManager(Protocol.TX_ABORT);
+				sendToManager(MessageType.TXAbort);
 			}
 		}
 	}
@@ -543,7 +546,7 @@ class ClientNode {
 				throw new UnknownManagerException();
 			} else {
 				waitingForCommitSuccess = true;
-				sendToManager(Protocol.TX_COMMIT);
+				sendToManager(MessageType.TXCommit);
 			}
 		}
 	}
@@ -568,7 +571,7 @@ class ClientNode {
 			} else {
 				transacting = true;
 				parent.fs.startTransaction(parent.addr);
-				sendToManager(Protocol.TX_START);
+				sendToManager(MessageType.TXStart);
 			}
 		}
 	}
@@ -652,7 +655,7 @@ class ClientNode {
 	 * Perform a create RPC to the given address
 	 */
 	private void createRPC(int address, String filename) {
-		parent.RIOSend(address, Protocol.CREATE,
+		parent.RIOSend(address, MessageType.Create,
 				Utility.stringToByteArray(filename));
 	}
 
@@ -660,7 +663,7 @@ class ClientNode {
 	 * Perform a delete RPC to the given address
 	 */
 	private void deleteRPC(int address, String filename) {
-		parent.RIOSend(address, Protocol.DELETE,
+		parent.RIOSend(address, MessageType.Delete,
 				Utility.stringToByteArray(filename));
 	}
 
@@ -739,8 +742,8 @@ class ClientNode {
 	 * if the manager is really known at the beginning of your handler before
 	 * calling this.
 	 */
-	private void sendToManager(int protocol) {
-		sendToManager(protocol, DFSNode.emptyPayload);
+	private void sendToManager(MessageType type) {
+		sendToManager(type, DFSNode.emptyPayload);
 	}
 
 	/**
@@ -748,8 +751,8 @@ class ClientNode {
 	 * assumes that it is known. Use managerUnknown to check if the manager is
 	 * really known at the beginning of your handler before calling this.
 	 */
-	private void sendToManager(int protocol, byte[] payload) {
-		parent.RIOSend(managerAddr, protocol, payload);
+	private void sendToManager(MessageType type, byte[] payload) {
+		parent.RIOSend(managerAddr, type, payload);
 	}
 
 	/**
@@ -801,12 +804,12 @@ class ClientNode {
 	 * Client receives {W,R}F as a request to propagate their changes
 	 */
 	private void receiveF(String msgString, String RForWF,
-			int responseProtocol, boolean keepRO) {
+			MessageType responseProtocol, boolean keepRO) {
 
 		StringTokenizer tokens = new StringTokenizer(msgString);
 		String filename = tokens.nextToken();
 		int requester = Integer.parseInt(tokens.nextToken());
-		
+
 		/*
 		 * No reason to check CacheStatus since anything on my disk was
 		 * committed to the manager
@@ -816,7 +819,7 @@ class ClientNode {
 
 		if (!Utility.fileExists(parent, msgString)) {
 			// no file on disk, file was deleted
-			responseProtocol = Protocol.WD_DELETE;
+			responseProtocol = MessageType.WDDelete;
 			payload = filename;
 		} else {
 			// read file contents
@@ -832,7 +835,8 @@ class ClientNode {
 		}
 
 		// send update to requester
-		parent.RIOSend(requester, responseProtocol, Utility.stringToByteArray(payload));
+		parent.RIOSend(requester, responseProtocol,
+				Utility.stringToByteArray(payload));
 
 		// update permissions
 		if (keepRO) {
@@ -853,7 +857,7 @@ class ClientNode {
 		parent.printVerbose("marking invalid " + filename);
 		cache.remove(filename);
 
-		sendToManager(Protocol.IC, Utility.stringToByteArray(filename));
+		sendToManager(MessageType.IC, Utility.stringToByteArray(filename));
 	}
 
 	// TODO: Low: Send TFS.PendingOp objects here instead of strings
@@ -879,7 +883,7 @@ class ClientNode {
 		} catch (IOException e) {
 			if (transacting) {
 				abortCurrentTransaction();
-				sendToManager(Protocol.TX_ABORT);
+				sendToManager(MessageType.TXAbort);
 			}
 			return;
 		}
@@ -888,12 +892,12 @@ class ClientNode {
 		parent.printInfo("Got file, contents below:");
 		parent.printInfo(contents);
 
-		sendToManager(Protocol.RC, Utility.stringToByteArray(filename)); 
+		sendToManager(MessageType.RC, Utility.stringToByteArray(filename));
 		unlockFile(filename);
 	}
 
 	public void receiveRF(int from, String filename) {
-		receiveF(filename, "RF", Protocol.RD, true);
+		receiveF(filename, "RF", MessageType.RD, true);
 	}
 
 	/**
@@ -905,15 +909,15 @@ class ClientNode {
 		String cmd = split[0];
 
 		if (split.length < 2) {
-			parent.printError("received empty "
-					+ Protocol.protocolToString(Protocol.SUCCESS) + " packet");
+			parent.printError("received empty " + MessageType.Success.name()
+					+ " packet");
 			return;
 		}
 
 		String filename = split[1];
 
 		try {
-			if (cmd.equals(Protocol.protocolToString(Protocol.CREATE))) {
+			if (cmd.equals(MessageType.Create.name())) {
 				if (!Utility.fileExists(parent, filename)) {
 					if (transacting) {
 						parent.fs.createFileTX(parent.addr, filename);
@@ -933,7 +937,7 @@ class ClientNode {
 				}
 				cache.put(filename, CacheStatuses.ReadWrite);
 				unlockFile(filename);
-			} else if (cmd.equals(Protocol.protocolToString(Protocol.DELETE))) {
+			} else if (cmd.equals(MessageType.Delete.name())) {
 				// might not exist here
 				if (transacting) {
 					if (parent.fs.fileExistsTX(parent.addr, filename)) {
@@ -953,8 +957,7 @@ class ClientNode {
 				unlockFile(filename);
 			} else {
 				parent.printError("received invalid cmd " + cmd + " in "
-						+ Protocol.protocolToString(Protocol.SUCCESS)
-						+ " packet");
+						+ MessageType.Success.name() + " packet");
 			}
 		} catch (IOException e) {
 			parent.printError(e);
@@ -1010,7 +1013,7 @@ class ClientNode {
 		} catch (IOException e) {
 			if (transacting) {
 				abortCurrentTransaction();
-				sendToManager(Protocol.TX_ABORT);
+				sendToManager(MessageType.TXAbort);
 			}
 			return;
 		}
@@ -1042,17 +1045,17 @@ class ClientNode {
 			parent.printError(e);
 			if (transacting) {
 				abortCurrentTransaction();
-				sendToManager(Protocol.TX_ABORT);
+				sendToManager(MessageType.TXAbort);
 			}
 			return;
 		}
 
-		sendToManager(Protocol.WC, Utility.stringToByteArray(filename));
+		sendToManager(MessageType.WC, Utility.stringToByteArray(filename));
 		unlockFile(filename);
 	}
 
 	public void receiveWF(int from, String filename) {
-		receiveF(filename, "WF", Protocol.WD, false);
+		receiveF(filename, "WF", MessageType.WD, false);
 	}
 
 	/*************************************************

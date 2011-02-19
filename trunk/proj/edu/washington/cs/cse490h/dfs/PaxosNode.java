@@ -89,7 +89,7 @@ public class PaxosNode {
 
 		Iterator<Integer> iter = knownAcceptors.iterator();
 		while (iter.hasNext()) {
-			this.node.RIOSend(iter.next(), Protocol.PREPARE,
+			this.node.RIOSend(iter.next(), MessageType.Prepare,
 					Utility.stringToByteArray(lastProposalNumberSent + ""));
 		}
 
@@ -114,14 +114,14 @@ public class PaxosNode {
 		if (proposalNumber < largestProposalNumberAccepted) {
 			this.node.RIOSend(
 					from,
-					Protocol.PROMISE_DENIAL,
+					MessageType.PromiseDenial,
 					Utility.stringToByteArray(largestProposalNumberAccepted
 							+ ""));
 		}
 
 		else { // accept it and update
 			largestProposalNumberAccepted = proposalNumber;
-			this.node.RIOSend(from, Protocol.PROMISE,
+			this.node.RIOSend(from, MessageType.Promise,
 					Utility.stringToByteArray(lastValueAccepted + ""));
 		}
 	}
@@ -162,7 +162,7 @@ public class PaxosNode {
 		while (iter.hasNext()) {
 			this.node.RIOSend(
 					iter.next(),
-					Protocol.ACCEPT,
+					MessageType.Accept,
 					Utility.stringToByteArray(lastProposalNumberSent + " "
 							+ chosenValue));
 		}
@@ -195,12 +195,12 @@ public class PaxosNode {
 
 		this.node.RIOSend(
 				from,
-				Protocol.ACCEPTED,
+				MessageType.Accepted,
 				Utility.stringToByteArray(lastProposalNumberSent + " "
 						+ chosenValue));
 		this.node.RIOSend(
 				learnerAddress,
-				Protocol.ACCEPTED,
+				MessageType.Accepted,
 				Utility.stringToByteArray(lastProposalNumberSent + " "
 						+ chosenValue));
 	}
