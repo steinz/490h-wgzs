@@ -7,6 +7,7 @@ package edu.washington.cs.cse490h.dfs;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.StringTokenizer;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -131,7 +132,7 @@ public class DFSNode extends RIONode {
 	 * Encapsulates paxos functionality
 	 */
 	private PaxosNode paxosFunctions;
-	
+
 	/**
 	 * Encapsulates client functionality
 	 */
@@ -170,7 +171,6 @@ public class DFSNode extends RIONode {
 	 */
 	public void restartAsClient() {
 		printInfo("(re)starting as client");
-
 		nullify();
 		this.isManager = false;
 		this.clientFunctions = new ClientNode(this,
