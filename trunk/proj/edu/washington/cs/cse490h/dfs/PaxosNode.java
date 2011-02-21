@@ -1,9 +1,11 @@
 package edu.washington.cs.cse490h.dfs;
 
+import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
+import edu.washington.cs.cse490h.lib.Callback;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /**
@@ -19,7 +21,8 @@ import edu.washington.cs.cse490h.lib.Utility;
 public class PaxosNode {
 
 	public static final int leaseTimeout = 50;
-	
+	public static final int electionTimeout = 4;
+
 	enum NodeTypes {
 		Acceptor, Proposer
 	}
@@ -33,21 +36,15 @@ public class PaxosNode {
 	// and increment from there.
 	private int lastProposalNumberSent;
 
-	// The list of known acceptors. NOTE: Learners are assumed to be acceptors
-	// as well.
-	private Set<Integer> knownAcceptors;
-
 	// TODO: High: This may be redundant with the above
 	private Set<Integer> knownManagers;
-	
-	
+
 	// The list of possible values for a proposer to choose. If it's empty, the
 	// proposer assumes it can choose anything (but chooses 1 for simplicity).
 	private Set<Integer> possibleValues;
-	
+
 	private int proposersResponded;
 
-	
 	// The value the proposer has decided on
 	private int chosenValue;
 
@@ -60,14 +57,13 @@ public class PaxosNode {
 	// The last value this node accepted. Assumed to be -1 if it has not
 	// accepted any values for this instance.
 	private int lastValueAccepted;
-	
+
 	private DFSNode node;
 
 	public PaxosNode(DFSNode n, Set<Integer> managers) {
 		this.node = n;
 		this.nodeType = NodeTypes.Acceptor; // By default, a node is assumed to
 											// be an acceptor
-		this.knownAcceptors = managers;
 		this.knownManagers = managers;
 		this.lastProposalNumberSent = -1;
 		this.largestProposalNumberAccepted = -1;
@@ -77,30 +73,59 @@ public class PaxosNode {
 	}
 
 	/**
-	 * Each node assumes they are the leader node and sends this message to the list of managers.
+	 * Just in case I can't do this like I imagine (just making a new instance
+	 * from the managernode)
 	 */
-	public void leaderVote(){
+	private void resetNode() {
+		this.lastProposalNumberSent = -1;
+		this.largestProposalNumberAccepted = -1;
+		this.lastValueAccepted = -1;
+		this.possibleValues = new HashSet<Integer>();
+		this.proposersResponded = 0;
+	}
+
+	/**
+	 * Each node assumes they are the leader node and sends this message to the
+	 * list of managers.
+	 */
+	public void leaderVote() {
 		this.nodeType = NodeTypes.Proposer;
 		Iterator<Integer> i = knownManagers.iterator();
-		while (i.hasNext()){
-			this.node.RIOSend(i.next(), MessageType.Leader);
+		while (i.hasNext()) {
+			int next = i.next();
+			if (next != this.node.addr)
+				this.node.RIOSend(next, MessageType.Leader);
 		}
+
+		// callback to send prepare messages after a set amount of time
+		Method cbMethod = null;
+		try {
+			cbMethod = Callback.getMethod("prepare", this, null);
+			cbMethod.setAccessible(true); // HACK
+		} catch (Exception e) {
+			node.printError(e);
+			e.printStackTrace();
+		}
+		Callback cb = new Callback(cbMethod, this, null);
+		node.addTimeout(cb, electionTimeout);
 	}
-	
+
 	/**
-	 * The node just quickly checks if the node they received this message from has a lower address. Otherwise, it sends out 
-	 * its own address just in case it didn't get the indication to start a leader election.
-	 * @param from The sender
+	 * The node just quickly checks if the node they received this message from
+	 * has a lower address. Otherwise, it sends out its own address just in case
+	 * it didn't get the indication to start a leader election.
+	 * 
+	 * @param from
+	 *            The sender
 	 */
-	public void leaderReceive(int from){
-		if (from < this.node.addr){
+	public void receiveLeader(int from) {
+		if (from < this.node.addr) {
 			this.nodeType = NodeTypes.Acceptor;
 		} else
 			leaderVote();
-		
+
 	}
-	
-	
+
 	/**
 	 * Select a proposal number and send it to each acceptor. Don't need to
 	 * worry about a quorum yet - if not enough acceptors are on, won't proceed
@@ -115,10 +140,12 @@ public class PaxosNode {
 
 		lastProposalNumberSent++;
 
-		Iterator<Integer> iter = knownAcceptors.iterator();
+		Iterator<Integer> iter = knownManagers.iterator();
 		while (iter.hasNext()) {
-			this.node.RIOSend(iter.next(), MessageType.Prepare,
-					Utility.stringToByteArray(lastProposalNumberSent + ""));
+			int next = iter.next();
+			if (next != this.node.addr)
+				this.node.RIOSend(iter.next(), MessageType.Prepare,
+						Utility.stringToByteArray(lastProposalNumberSent + ""));
 		}
 
 	}
@@ -134,7 +161,6 @@ public class PaxosNode {
 	 */
 	public void receivePromise(int from, int proposalNumber) {
 		if (!nodeType.equals(NodeTypes.Acceptor)) {
-			// TODO: throw an error!
 			return;
 		}
 
@@ -185,45 +211,76 @@ public class PaxosNode {
 		} else
 			chosenValue = 1;
 
-		Iterator<Integer> iter = knownAcceptors.iterator();
+		Iterator<Integer> iter = knownManagers.iterator();
 		while (iter.hasNext()) {
-			this.node.RIOSend(
+			int next = iter.next()
+			if (next != this.node.addr){
+				this.node.RIOSend(
 					iter.next(),
 					MessageType.Accept,
 					Utility.stringToByteArray(lastProposalNumberSent + " "
 							+ chosenValue));
+			}
 		}
 
 	}
 
-	/*
-	 * If the acceptor receives an accept message for a proposal it has promised
-	 * to accept, then it accepts the value.
-	 * 
-	 * Each acceptor then sends an accepted message to the proposer, and every learner.
-	 * 
-	 */
 	/**
-	 * The acceptor validates this value, if an error hasn't occurred. Sends a
-	 * message to the proposer and learner(s).
+	 * Funcationality varies depending on recipient type.
+	 * 
+	 * ACCEPTOR The acceptor validates this value, if an error hasn't occurred.
+	 * Sends a message to the learner, which is also the proposer.
+	 * 
+	 * PROPOSER/LEARNER The proposer informs all acceptors that a new value has
+	 * been chosen, and that this paxos session is finished. After the timeout
+	 * elapses, the proposer should initiate a new leader selection, though if
+	 * not one of the acceptors will.
 	 * 
 	 * @from The proposer
 	 * @proposalNumber The proposal number, used for validation
 	 * @value The chosen value
 	 */
 	public void receiveAccepted(int from, int proposalNumber, int value) {
-		
-		// Did we even promise this proposal number?
-		if (proposalNumber < largestProposalNumberAccepted) {
-			// TODO: High - Throw an error!
+
+		if (nodeType.equals(NodeTypes.Acceptor)) {
+
+			if (proposalNumber < largestProposalNumberAccepted) {
+				// TODO: High - Throw an error!
+			}
+
+			lastValueAccepted = value;
+
+			this.node.RIOSend(
+					from,
+					MessageType.Accepted,
+					Utility.stringToByteArray(lastProposalNumberSent + " "
+							+ chosenValue));
+		} else {
+
 		}
-
-		lastValueAccepted = value;
-
-		this.node.RIOSend(
-				from,
-				MessageType.Accepted,
-				Utility.stringToByteArray(lastProposalNumberSent + " "
-						+ chosenValue));
 	}
+
+	/**
+	 * An indication from the learner (who is also the proposer) that this
+	 * session of paxos is finalized, and that the proposer has been chosen as
+	 * the new primary. Initiates a callback that forces a new session of paxos
+	 * to start after the lease expires.
+	 * 
+	 * @param from
+	 *            The proposer/learner
+	 */
+	public void receivedFinished(int from) {
+
+		Method cbMethod = null;
+		try {
+			cbMethod = Callback.getMethod("leaderVote", this, null);
+			cbMethod.setAccessible(true); // HACK
+		} catch (Exception e) {
+			node.printError(e);
+			e.printStackTrace();
+		}
+		Callback cb = new Callback(cbMethod, this, null);
+		node.addTimeout(cb, leaseTimeout);
+	}
+
 }
