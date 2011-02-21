@@ -93,6 +93,7 @@ class ClientNode {
 			return cache.get(filename) == CacheStatuses.ReadWrite;
 		}
 
+		@SuppressWarnings("unused")
 		public boolean hasRO(String filename) {
 			return cache.get(filename) == CacheStatuses.ReadOnly;
 		}
@@ -215,7 +216,7 @@ class ClientNode {
 	public ClientNode(DFSNode n, int maxWaitingForCommitQueueSize) {
 		this.parent = n;
 		this.maxWaitingForCommitQueueSize = maxWaitingForCommitQueueSize;
-		
+
 		this.cache = new Cache(parent);
 		this.pendingOperations = new HashMap<String, PendingClientOperation>();
 		this.lockedFiles = new HashSet<String>();
@@ -281,10 +282,10 @@ class ClientNode {
 	 *******************************/
 
 	/*
-	 * TODO: I think I found a framework bug - "append 1 test  world" is
-	 * losing the extra space
+	 * TODO: I think I found a framework bug - "append 1 test  world" is losing
+	 * the extra space
 	 */
-	
+
 	/**
 	 * Get ownership of a file and append to it
 	 * 
@@ -306,15 +307,15 @@ class ClientNode {
 				parent.fs.writeFileTX(parent.addr, filename, content, true);
 			} else {
 				parent.fs.writeFile(filename, content, true);
-				replicateWrite(filename, content, true);
 			}
+			replicateWrite(filename, content, true);
 		} else {
 			// lock and request ownership
 			if (managerAddr == -1) {
 				throw new UnknownManagerException();
 			} else {
-				sendToManager(MessageType.WQ,
-						Utility.stringToByteArray(filename));
+				sendToManager(MessageType.WQ, Utility
+						.stringToByteArray(filename));
 				pendingOperations.put(filename, new PendingClientOperation(
 						ClientOperation.APPEND, content));
 				lockFile(filename);
@@ -424,8 +425,8 @@ class ClientNode {
 				throw new UnknownManagerException();
 			} else {
 				parent.printVerbose("requesting read access for " + filename);
-				sendToManager(MessageType.RQ,
-						Utility.stringToByteArray(filename));
+				sendToManager(MessageType.RQ, Utility
+						.stringToByteArray(filename));
 				lockFile(filename);
 			}
 		}
@@ -438,8 +439,8 @@ class ClientNode {
 		int server = Integer.parseInt(tokens.nextToken());
 		String payload = parent.getID().toString();
 		parent.printInfo("sending handshake to " + server);
-		parent.RIOSend(server, MessageType.Handshake,
-				Utility.stringToByteArray(payload));
+		parent.RIOSend(server, MessageType.Handshake, Utility
+				.stringToByteArray(payload));
 	}
 
 	/**
@@ -493,8 +494,8 @@ class ClientNode {
 			if (managerAddr == -1) {
 				throw new UnknownManagerException();
 			} else {
-				sendToManager(MessageType.WQ,
-						Utility.stringToByteArray(filename));
+				sendToManager(MessageType.WQ, Utility
+						.stringToByteArray(filename));
 				pendingOperations.put(filename, new PendingClientOperation(
 						ClientOperation.PUT, content));
 				lockFile(filename);
@@ -505,10 +506,13 @@ class ClientNode {
 	public void replicasareHandler(StringTokenizer tokens, String line) {
 		// TODO: HIGH: Document
 		while (tokens.hasMoreTokens()) {
-			replicas.add(Integer.parseInt(tokens.nextToken()));
+			int replica = Integer.parseInt(tokens.nextToken());
+			replicas.add(replica);
+			parent.RIOSend(replica, MessageType.ReplicaStartReplicating,
+					Utility.stringToByteArray(parent.addr + ""));
 		}
 	}
-	
+
 	/**
 	 * Sends a TX_ABORT if performing a transaction
 	 * 
@@ -525,6 +529,7 @@ class ClientNode {
 			if (managerAddr == -1) {
 				throw new UnknownManagerException();
 			} else {
+				replicateTXAbort();
 				abortCurrentTransaction();
 				sendToManager(MessageType.TXAbort);
 			}
@@ -589,6 +594,7 @@ class ClientNode {
 				throw new UnknownManagerException();
 			} else {
 				transacting = true;
+				replicateTXStart();
 				parent.fs.startTransaction(parent.addr);
 				sendToManager(MessageType.TXStart);
 			}
@@ -674,16 +680,16 @@ class ClientNode {
 	 * Perform a create RPC to the given address
 	 */
 	private void createRPC(int address, String filename) {
-		parent.RIOSend(address, MessageType.Create,
-				Utility.stringToByteArray(filename));
+		parent.RIOSend(address, MessageType.Create, Utility
+				.stringToByteArray(filename));
 	}
 
 	/**
 	 * Perform a delete RPC to the given address
 	 */
 	private void deleteRPC(int address, String filename) {
-		parent.RIOSend(address, MessageType.Delete,
-				Utility.stringToByteArray(filename));
+		parent.RIOSend(address, MessageType.Delete, Utility
+				.stringToByteArray(filename));
 	}
 
 	/**
@@ -754,17 +760,66 @@ class ClientNode {
 			return false;
 		}
 	}
-	
+
+	/*
+	 * TODO: HIGH: Replicate all file mutations on replicas
+	 * 
+	 * TODO: HIGH: These messages should never timeout, or they should tell the
+	 * replica they are out of date upon next contact if they do
+	 */
+
+	/**
+	 * Tell the replica to create filename
+	 */
 	private void replicateCreate(String filename) {
-		
+		sendToReplicas(MessageType.ReplicaCreate, Utility
+				.stringToByteArray(filename));
 	}
-	
+
+	/**
+	 * Tell the replica to delete filename
+	 */
 	private void replicateDelete(String filename) {
-		
+		sendToReplicas(MessageType.ReplicaDelete, Utility
+				.stringToByteArray(filename));
 	}
-	
+
+	/**
+	 * Called when this client restarts to inform the replicas anything in
+	 * progress should be aborted
+	 */
+	protected void replicateRestart() {
+		sendToReplicas(MessageType.ReplicaTXAbort);
+	}
+
+	/**
+	 * Tell the replicas the current tx has been aborted
+	 */
+	private void replicateTXAbort() {
+		sendToReplicas(MessageType.ReplicaTXAbort);
+	}
+
+	/**
+	 * Tell the replicas the current tx has been committed
+	 */
+	private void replicateTXCommit() {
+		sendToReplicas(MessageType.ReplicaTXCommit);
+	}
+
+	/**
+	 * Tell the replicas a tx is starting
+	 */
+	private void replicateTXStart() {
+		sendToReplicas(MessageType.ReplicaTXStart);
+	}
+
+	/**
+	 * Tell the replicas to update filename with content
+	 */
 	private void replicateWrite(String filename, String content, boolean append) {
-		
+		sendToReplicas(append ? MessageType.ReplicaAppend
+				: MessageType.ReplicaPut, Utility.stringToByteArray(filename
+				+ DFSNode.packetDelimiter + content));
 	}
 
 	/**
@@ -784,6 +839,25 @@ class ClientNode {
 	 */
 	private void sendToManager(MessageType type, byte[] payload) {
 		parent.RIOSend(managerAddr, type, payload);
+	}
+
+	/**
+	 * Sends the provided message with no payload to all of this node's replicas
+	 * 
+	 * TODO: HIGH: Resend if lost because of handshake - outChannel needs to
+	 * support sends that don't timeout or drop because of handshakes
+	 */
+	private void sendToReplicas(MessageType type) {
+		sendToReplicas(type, DFSNode.emptyPayload);
+	}
+
+	/**
+	 * Sends the provided message to all of this node's replicas
+	 */
+	private void sendToReplicas(MessageType type, byte[] payload) {
+		for (int i : replicas) {
+			parent.RIOSend(i, type, payload);
+		}
 	}
 
 	/**
@@ -866,8 +940,8 @@ class ClientNode {
 		}
 
 		// send update to requester
-		parent.RIOSend(requester, responseProtocol,
-				Utility.stringToByteArray(payload));
+		parent.RIOSend(requester, responseProtocol, Utility
+				.stringToByteArray(payload));
 
 		// update permissions
 		if (keepRO) {
@@ -890,16 +964,22 @@ class ClientNode {
 
 		sendToManager(MessageType.IC, Utility.stringToByteArray(filename));
 	}
-
-	// TODO: Low: Send TFS.PendingOp objects here instead of strings
-
+	
 	/**
 	 * @param msgString
 	 *            <filename> <contents> ex) test hello world
 	 */
-	public void receiveRD(int from, String filename, String contents) {
+	public void receiveRD(int from, String msgString) {
 		if (managerUnknown()) {
 			return;
+		}
+
+		// parse packet
+		StringTokenizer tokens = new StringTokenizer(msgString);
+		String filename = tokens.nextToken();
+		String contents = "";
+		if (tokens.hasMoreTokens()) {
+			contents = msgString.substring(filename.length() + 1);
 		}
 
 		try {
@@ -922,11 +1002,11 @@ class ClientNode {
 
 		// has RO
 		cache.put(filename, CacheStatuses.ReadOnly);
-		
+
 		sendToManager(MessageType.RC, Utility.stringToByteArray(filename));
 		unlockFile(filename);
 	}
-
+	
 	public void receiveRF(int from, String filename) {
 		receiveF(filename, "RF", MessageType.RD, true);
 	}
@@ -1005,6 +1085,7 @@ class ClientNode {
 	 * Transaction failed
 	 */
 	public void receiveTXFailure(int from, String empty) {
+		replicateTXAbort();
 		abortCurrentTransaction();
 		processWaitingForCommitQueue(); // redundant
 	}
@@ -1013,6 +1094,7 @@ class ClientNode {
 	 * Transaction succeeded
 	 */
 	public void receiveTXSuccess(int from, String empty) {
+		replicateTXCommit();
 		commitCurrentTransaction();
 		processWaitingForCommitQueue();
 	}
@@ -1021,9 +1103,17 @@ class ClientNode {
 	 * @param msgString
 	 *            <filename> <contents> ex) test hello world
 	 */
-	public void receiveWD(int from, String filename, String contents) {
+	public void receiveWD(int from, String msgString) {
 		if (managerUnknown()) {
 			return;
+		}
+
+		// parse packet
+		StringTokenizer tokens = new StringTokenizer(msgString);
+		String filename = tokens.nextToken();
+		String contents = "";
+		if (tokens.hasMoreTokens()) {
+			contents = msgString.substring(filename.length() + 1);
 		}
 
 		PendingClientOperation intent = pendingOperations.get(filename);
@@ -1084,7 +1174,7 @@ class ClientNode {
 
 		// has RW!
 		cache.put(filename, CacheStatuses.ReadWrite);
-		
+
 		sendToManager(MessageType.WC, Utility.stringToByteArray(filename));
 		unlockFile(filename);
 	}

@@ -7,8 +7,8 @@ package edu.washington.cs.cse490h.dfs;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.StringTokenizer;
+import java.util.HashSet;
+import java.util.Set;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -57,6 +57,10 @@ public class DFSNode extends RIONode {
 	 * We should have AT LEAST one QZ on interfacing/architecture - how to
 	 * actually build FB on top of this (tying in an interface / webserver /
 	 * whatever) doesn't seem trivial.
+	 */
+
+	/*
+	 * TODO: EC: Use Protocol Buffers to clean up message formats
 	 */
 
 	/*
@@ -116,7 +120,23 @@ public class DFSNode extends RIONode {
 	 * The maximum number of commands the client will queue before timing out
 	 * and restarting the node
 	 */
-	protected static int clientMaxWaitingForCommitQueueSize = 10;
+	protected static final int clientMaxWaitingForCommitQueueSize = 10;
+
+	/**
+	 * A magic set of managers used for configuration of the simulator (managers
+	 * must know other managers' addresses)
+	 */
+	protected static Set<Integer> managerList = new HashSet<Integer>();
+
+	/**
+	 * Encapsulates client functionality
+	 */
+	protected ClientNode clientFunctions;
+
+	/**
+	 * FS for this node
+	 */
+	protected TransactionalFileSystem fs;
 
 	/**
 	 * Whether or not this node is a manager node
@@ -132,16 +152,8 @@ public class DFSNode extends RIONode {
 	 * Encapsulates paxos functionality
 	 */
 	private PaxosNode paxosFunctions;
-
-	/**
-	 * Encapsulates client functionality
-	 */
-	protected ClientNode clientFunctions;
-
-	/**
-	 * FS for this node
-	 */
-	protected TransactionalFileSystem fs;
+	
+	private ReplicaNode replicaFunctions;
 
 	/**
 	 * Starts the node as a client
@@ -176,6 +188,10 @@ public class DFSNode extends RIONode {
 		this.clientFunctions = new ClientNode(this,
 				clientMaxWaitingForCommitQueueSize);
 		restartFS();
+
+		// TODO: HIGH: make sure this is robust
+		// try to abort replicas in case we went down during a tx
+		clientFunctions.replicateRestart();
 	}
 
 	/**
@@ -184,14 +200,20 @@ public class DFSNode extends RIONode {
 	public void restartAsManager() {
 		printInfo("(re)starting as manager");
 
+		managerList.add(this.addr);
+
 		nullify();
 		this.isManager = true;
 		this.managerFunctions = new ManagerNode(this);
-		this.paxosFunctions = new PaxosNode(this);
+		this.paxosFunctions = new PaxosNode(this, managerList);
 		restartFS();
 
-		broadcast(MessageType.ManagerIs,
-				Utility.stringToByteArray(this.addr + ""));
+		/*
+		 * TODO: HIGH: PaxosNode should replace this and the message type should
+		 * be renamed to Primary[Manager]Is
+		 */
+		broadcast(MessageType.ManagerIs, Utility.stringToByteArray(this.addr
+				+ ""));
 	}
 
 	private void nullify() {
@@ -247,9 +269,9 @@ public class DFSNode extends RIONode {
 		MessageType mt = MessageType.ordinalToMessageType(protocol);
 
 		printVerbose("received " + mt.name()
-				+ " from Universe, giving to RIOLayer");
+				+ " from network, giving to RIOLayer");
 
-		// Updates manager address as soon as possible
+		// Update manager address as soon as possible
 		if (mt == MessageType.ManagerIs) {
 			String msgStr = Utility.byteArrayToString(msg);
 			receiveManagerIs(from, msgStr);
@@ -336,47 +358,6 @@ public class DFSNode extends RIONode {
 	public void receiveManagerIs(int from, String msg) {
 		this.clientFunctions.managerAddr = Integer.parseInt(msg);
 		printInfo("setting manager address to " + from);
-	}
-
-	/**
-	 * @param msgString
-	 *            <filename> <contents> for ex) test hello world
-	 */
-	public void receiveWD(int from, String msgString) {
-
-		// parse packet
-		StringTokenizer tokens = new StringTokenizer(msgString);
-		String filename = tokens.nextToken();
-		String contents = "";
-		if (tokens.hasMoreTokens()) {
-			contents = msgString.substring(filename.length() + 1);
-		}
-
-		if (!isManager) {
-			clientFunctions.receiveWD(from, filename, contents);
-		} else {
-			managerFunctions.receiveWD(from, filename, contents);
-		}
-	}
-
-	/**
-	 * @param msgString
-	 *            <filename> <contents> for ex) test hello world
-	 */
-	public void receiveRD(int from, String msgString) {
-		// parse packet
-		StringTokenizer tokens = new StringTokenizer(msgString);
-		String filename = tokens.nextToken();
-		String contents = "";
-		if (tokens.hasMoreTokens()) {
-			contents = msgString.substring(filename.length() + 1);
-		}
-
-		if (!isManager) {
-			clientFunctions.receiveRD(from, filename, contents);
-		} else {
-			this.managerFunctions.receiveRD(from, filename, contents);
-		}
 	}
 
 	/**
