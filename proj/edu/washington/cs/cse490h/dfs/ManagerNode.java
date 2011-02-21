@@ -58,8 +58,6 @@ import edu.washington.cs.cse490h.lib.Utility;
  */
 
 class ManagerNode {
-
-	private static Set<Integer> managers;
 	
 	/**
 	 * A list of locked files (cache coherency)

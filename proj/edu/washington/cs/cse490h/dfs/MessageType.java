@@ -20,9 +20,6 @@ enum MessageType {
 	Noop(HandlingClass.DFSNode), Heartbeat(HandlingClass.DFSNode), ManagerIs(
 			HandlingClass.DFSNode),
 
-			// TODO: HIGH: Client only now
-	WD(HandlingClass.DFSNode), RD(HandlingClass.DFSNode),
-
 	Create(HandlingClass.ManagerNode), Delete(HandlingClass.ManagerNode), WQ(
 			HandlingClass.ManagerNode), RQ(HandlingClass.ManagerNode), WC(
 			HandlingClass.ManagerNode), RC(HandlingClass.ManagerNode), IC(
@@ -30,23 +27,37 @@ enum MessageType {
 			HandlingClass.ManagerNode), TXCommit(HandlingClass.ManagerNode), TXStart(
 			HandlingClass.ManagerNode),
 
-	WF(HandlingClass.ClientNode), RF(HandlingClass.ClientNode), IV(
+	// TODO: HIGH: Success -> OperationSuccessful or something more descriptive
+
+	WD(HandlingClass.ClientNode), RD(HandlingClass.ClientNode), WF(
+			HandlingClass.ClientNode), RF(HandlingClass.ClientNode), IV(
 			HandlingClass.ClientNode), Success(HandlingClass.ClientNode), Error(
 			HandlingClass.ClientNode), TXSuccess(HandlingClass.ClientNode), TXFailure(
 			HandlingClass.ClientNode),
+
+	ReplicaAppend(HandlingClass.ReplicaNode), ReplicaCreate(
+			HandlingClass.ReplicaNode), ReplicaDelete(HandlingClass.ReplicaNode), ReplicaPut(
+			HandlingClass.ReplicaNode), ReplicaTXAbort(
+			HandlingClass.ReplicaNode), ReplicaTXCommit(
+			HandlingClass.ReplicaNode), ReplicaTXStart(
+			HandlingClass.ReplicaNode),
+
+	ReplicaOutOfDate(HandlingClass.ClientNode), // TODO: HIGH: use
+
+	ReplicaStartReplicating(HandlingClass.ReplicaNode),
 
 	@Deprecated
 	Data(HandlingClass.None), @Deprecated
 	Get(HandlingClass.None), @Deprecated
 	Put(HandlingClass.None), @Deprecated
 	Append(HandlingClass.None),
-	
-	Prepare(HandlingClass.PaxosNode), PromiseDenial(HandlingClass.PaxosNode),
-	Promise(HandlingClass.PaxosNode), Accept(HandlingClass.PaxosNode),
-	Accepted(HandlingClass.PaxosNode), Leader(HandlingClass.PaxosNode);
+
+	Prepare(HandlingClass.PaxosNode), PromiseDenial(HandlingClass.PaxosNode), Promise(
+			HandlingClass.PaxosNode), Accept(HandlingClass.PaxosNode), Accepted(
+			HandlingClass.PaxosNode), Leader(HandlingClass.PaxosNode);
 
 	public enum HandlingClass {
-		RIOLayer, DFSNode, ClientNode, ManagerNode, PaxosNode, None
+		RIOLayer, DFSNode, ClientNode, ManagerNode, PaxosNode, ReplicaNode, None
 	};
 
 	/**

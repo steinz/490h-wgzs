@@ -63,6 +63,7 @@ class PacketPackException extends Exception {
 	}
 }
 
+// TODO: HIGH: RuntimeException??
 class TransactionException extends DFSException {
 	private static final long serialVersionUID = -7296103807819087346L;
 
