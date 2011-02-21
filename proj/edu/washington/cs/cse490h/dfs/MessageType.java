@@ -25,7 +25,7 @@ enum MessageType {
 			HandlingClass.ManagerNode), RC(HandlingClass.ManagerNode), IC(
 			HandlingClass.ManagerNode), WDDelete(HandlingClass.ManagerNode), TXAbort(
 			HandlingClass.ManagerNode), TXCommit(HandlingClass.ManagerNode), TXStart(
-			HandlingClass.ManagerNode),
+			HandlingClass.ManagerNode), 
 
 	// TODO: HIGH: Success -> OperationSuccessful or something more descriptive
 
@@ -54,7 +54,8 @@ enum MessageType {
 
 	Prepare(HandlingClass.PaxosNode), PromiseDenial(HandlingClass.PaxosNode), Promise(
 			HandlingClass.PaxosNode), Accept(HandlingClass.PaxosNode), Accepted(
-			HandlingClass.PaxosNode), Leader(HandlingClass.PaxosNode);
+			HandlingClass.PaxosNode), Leader(HandlingClass.PaxosNode), Finished(
+			HandlingClass.PaxosNode);
 
 	public enum HandlingClass {
 		RIOLayer, DFSNode, ClientNode, ManagerNode, PaxosNode, ReplicaNode, None

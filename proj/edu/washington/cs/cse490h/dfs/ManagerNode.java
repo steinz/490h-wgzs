@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -50,15 +51,12 @@ import edu.washington.cs.cse490h.lib.Utility;
  * TODO: High: Replicas should respond to clients with a "manager is" packet, and not do anything.
  */
 
-// TODO: High: Manager needs a separate data structure (ownership) of who last had RW on the file
-
-
 /**
  * Replica scheme: 1 -> 2 2 -> 3 3 -> 4 4 -> 5 5 -> 1
  */
 
 class ManagerNode {
-	
+
 	/**
 	 * A list of locked files (cache coherency)
 	 */
@@ -189,10 +187,11 @@ class ManagerNode {
 	 * occur before requests are handled
 	 */
 	private Map<Integer, QueuedFileRequest> pendingCommitRequests;
-	
+
 	/**
-	 * A map of filename -> the last known owner of this file. Useful if all nodes have RO and the manager needs
-	 * to tell the requester where to pull the file from.
+	 * A map of filename -> the last known owner of this file. Useful if all
+	 * nodes have RO and the manager needs to tell the requester where to pull
+	 * the file from.
 	 */
 	private Map<String, Integer> fileOwners;
 
@@ -213,6 +212,11 @@ class ManagerNode {
 	 * in order
 	 */
 	private Map<Integer, List<String>> transactionTouchedFiles;
+
+	/**
+	 * An integer address for who the current primary is
+	 */
+	private int primaryAddress;
 
 	private Cache filePermissionCache;
 
@@ -301,6 +305,11 @@ class ManagerNode {
 	}
 
 	public void receiveWDDelete(int client, String filename) {
+
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
 
 		// make sure this client actually had RW to begin with
 		if (filePermissionCache.hasRW(filename) != client) {
@@ -404,6 +413,11 @@ class ManagerNode {
 
 	public void receiveTXStart(int client, String empty) {
 
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
+
 		if (transactionsInProgress.contains(client)) {
 			sendError(client, "", new TransactionException(client + ""));
 			return;
@@ -433,6 +447,12 @@ class ManagerNode {
 	}
 
 	public void receiveTXCommit(int client, String empty) {
+
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
+
 		if (!transactionsInProgress.contains(client)) {
 			sendError(client, "", new TransactionException(client + ""));
 			return;
@@ -453,19 +473,10 @@ class ManagerNode {
 			return;
 		}
 
-		// TODO: This is totally unnecessary now, use transactionTouchedFiles
-
-		// unlock files
-		ArrayList<String> filesToUnlock = new ArrayList<String>();
-
-		for (Entry<String, Integer> entry : lockedFiles.entrySet()) {
-			if (entry.getValue() == client) {
-				filesToUnlock.add(entry.getKey());
-			}
-		}
-
-		for (int i = 0; i < filesToUnlock.size(); i++) {
-			unlockFile(filesToUnlock.get(i));
+		List<String> fileList = transactionTouchedFiles.get(client);
+		Iterator<String> iter = fileList.iterator();
+		while (iter.hasNext()) {
+			unlockFile(iter.next());
 		}
 
 		node.RIOSend(client, MessageType.TXSuccess, DFSNode.emptyPayload);
@@ -479,6 +490,12 @@ class ManagerNode {
 	}
 
 	public void receiveTXAbort(int client, String empty) {
+
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
+
 		if (!transactionsInProgress.contains(client)) {
 			sendError(client, "", new TransactionException(
 					"Transaction not in progress on client"));
@@ -509,6 +526,11 @@ class ManagerNode {
 	 * Create RPC
 	 */
 	public void receiveCreate(int client, String filename) {
+
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
 
 		if (queueRequestIfLocked(client, MessageType.Create, filename)) {
 			return;
@@ -552,6 +574,12 @@ class ManagerNode {
 	}
 
 	public void receiveDelete(int client, String filename) {
+
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
+
 		if (queueRequestIfLocked(client, MessageType.Delete, filename)) {
 			return;
 		}
@@ -644,6 +672,11 @@ class ManagerNode {
 			MessageType receivedProtocol, MessageType responseProtocol,
 			MessageType forwardingProtocol, boolean preserveROs) {
 
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
+
 		// check if locked
 		if (queueRequestIfLocked(client, receivedProtocol, filename)) {
 			return;
@@ -685,6 +718,10 @@ class ManagerNode {
 			return;
 		}
 
+		// check who the owner of this file is, if no one has RW
+		int owner = fileOwners.get(filename);
+		sendRequest(owner, filename, forwardingProtocol);
+
 		// Check RO status
 		if (!preserveROs && ro.size() > 0) { // someone(s) have RO
 			for (int i : ro) {
@@ -709,14 +746,12 @@ class ManagerNode {
 			return;
 		}
 
-		// send file to requester, no one has RW or RO
-		try {
-			sendFile(client, filename, responseProtocol);
-		} catch (IOException e) {
-			sendError(client, filename, e.getMessage());
-		}
-
-		// unlock and priveleges updated by C message handlers
+		/*
+		 * else some big error occurred - we know this file exists, but we don't
+		 * know who owns it and no one seems to have RW or RO on it.
+		 */
+		this.node.printError("Could not find owner for file: " + filename
+				+ " but file presumed to exist");
 	}
 
 	/**
@@ -728,6 +763,11 @@ class ManagerNode {
 	 *            waiting for an IC client this node for this file
 	 */
 	public void receiveIC(int client, String filename) {
+
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
 
 		int destAddr;
 		if (!pendingICs.containsKey(filename)) {
@@ -793,6 +833,12 @@ class ManagerNode {
 	}
 
 	public void receiveRC(int client, String filename) {
+
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
+
 		node.printVerbose("Changing client: " + client + " to RO");
 
 		filePermissionCache.giveRO(client, filename);
@@ -807,9 +853,15 @@ class ManagerNode {
 
 	public void receiveWC(int client, String filename) {
 
+		if (this.node.addr != primaryAddress && client != primaryAddress) {
+			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			return;
+		}
+
 		node.printVerbose("Changing status of client: " + client
 				+ " to RW for file: " + filename);
 		filePermissionCache.giveRW(client, filename);
+		fileOwners.put(filename, client); // this client is now the owner
 
 		// check if someone's in the middle of a transaction with this file. if
 		// so, don't do anything.
@@ -843,8 +895,8 @@ class ManagerNode {
 	}
 
 	/**
->>>>>>> .r304
-	 * Unlocks filename and checks if there is another request to service
+	 * >>>>>>> .r304 Unlocks filename and checks if there is another request to
+	 * service
 	 */
 	private void unlockFile(String filename) {
 
@@ -1002,11 +1054,7 @@ class ManagerNode {
 			String[] params = { "java.lang.Integer" };
 			cbMethod = Callback.getMethod("heartbeatTimeout", this, params);
 			cbMethod.setAccessible(true); // HACK
-		} catch (SecurityException e) {
-			node.printError(e);
-		} catch (ClassNotFoundException e) {
-			node.printError(e);
-		} catch (NoSuchMethodException e) {
+		} catch (Exception e) {
 			node.printError(e);
 			e.printStackTrace();
 		}
@@ -1018,7 +1066,8 @@ class ManagerNode {
 	/**
 	 * This node didn't respond to a packet even after the maximum number of
 	 * tries. If this client was in the middle of the transaction, they're now
-	 * aborted and all locks on files they own are released
+	 * aborted and all locks on files they own are released. Also, their
+	 * permissions are revoked and ownership is transferred to their replica.
 	 * 
 	 * @param destAddr
 	 */
@@ -1027,17 +1076,20 @@ class ManagerNode {
 		node.RIOSend(destAddr, MessageType.TXFailure,
 				Utility.stringToByteArray(""));
 		transactionsInProgress.remove(destAddr);
-		
-		// transfer ownership of files
-		for (Entry<String, Integer> entry : filePermissionCache.RW.entrySet()) {
+
+		for (Entry<String, Integer> entry : fileOwners.entrySet()) {
 			Integer newOwner;
 			if (entry.getValue().equals(destAddr)) {
 				String filename = entry.getKey();
+
+				// revoke permissions
+				filePermissionCache.revoke(filename);
+
+				// transfer owners
 				newOwner = replicaNode.get(destAddr);
 				node.printVerbose("Node: " + destAddr
 						+ " failed. Transferring ownership" + " of file: "
 						+ filename + " to replica node: " + newOwner);
-				filePermissionCache.giveRW(newOwner, filename);
 				fileOwners.put(filename, newOwner);
 				// if someone was waiting for this file, send a WF/RF to the
 				// replica
