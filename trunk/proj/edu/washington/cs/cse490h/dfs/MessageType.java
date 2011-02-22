@@ -25,7 +25,9 @@ enum MessageType {
 			HandlingClass.ManagerNode), RC(HandlingClass.ManagerNode), IC(
 			HandlingClass.ManagerNode), WDDelete(HandlingClass.ManagerNode), TXAbort(
 			HandlingClass.ManagerNode), TXCommit(HandlingClass.ManagerNode), TXStart(
-			HandlingClass.ManagerNode), 
+			HandlingClass.ManagerNode), giveClientRW(HandlingClass.ManagerNode), giveClientRO(
+			HandlingClass.ManagerNode), giveClientOwnership(HandlingClass.ManagerNode), revokeClient(
+			HandlingClass.ManagerNode),
 
 	// TODO: HIGH: Success -> OperationSuccessful or something more descriptive
 

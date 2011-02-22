@@ -59,9 +59,11 @@ public class PaxosNode {
 	private int lastValueAccepted;
 
 	private DFSNode node;
+	private ManagerNode managerNode;
 
-	public PaxosNode(DFSNode n, Set<Integer> managers) {
+	public PaxosNode(Node n, ManagerNode m, Set<Integer> managers) {
 		this.node = n;
+		this.managerNode = m;
 		this.nodeType = NodeTypes.Acceptor; // By default, a node is assumed to
 											// be an acceptor
 		this.knownManagers = managers;
@@ -256,7 +258,7 @@ public class PaxosNode {
 					Utility.stringToByteArray(lastProposalNumberSent + " "
 							+ chosenValue));
 		} else {
-
+			receiveFinished(this.node.addr);
 		}
 	}
 
@@ -271,6 +273,7 @@ public class PaxosNode {
 	 */
 	public void receivedFinished(int from) {
 
+		managerNode.primaryAddress = from;
 		Method cbMethod = null;
 		try {
 			cbMethod = Callback.getMethod("leaderVote", this, null);
@@ -281,6 +284,7 @@ public class PaxosNode {
 		}
 		Callback cb = new Callback(cbMethod, this, null);
 		node.addTimeout(cb, leaseTimeout);
+		resetNode();
 	}
 
 }
