@@ -216,8 +216,13 @@ class ManagerNode {
 	/**
 	 * An integer address for who the current primary is
 	 */
-	private int primaryAddress;
-
+	public int primaryAddress;
+	
+	/**
+	 * A list of known managers
+	 */
+	private Set<Integer> knownManagers;
+	
 	private Cache filePermissionCache;
 
 	public ManagerNode(DFSNode n) {
@@ -235,6 +240,7 @@ class ManagerNode {
 		this.filePermissionCache = new Cache(node);
 		this.transactionTouchedFiles = new HashMap<Integer, List<String>>();
 		this.fileOwners = new HashMap<String, Integer>();
+		this.knownManagers = new HashMap<Integer>();
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -319,7 +325,7 @@ class ManagerNode {
 			return;
 		}
 
-		// delete locally
+		// delete transactionally
 		try {
 			if (transactionsInProgress.contains(client))
 				try {
@@ -710,6 +716,7 @@ class ManagerNode {
 		if (rw != null) {
 			// Get updates
 			sendRequest(rw, filename, forwardingProtocol);
+			filePermissionCache.revoke(filename);
 			if (receivedProtocol == MessageType.RQ) {
 				pendingReadPermissionRequests.put(filename, client);
 			} else {
@@ -895,7 +902,7 @@ class ManagerNode {
 	}
 
 	/**
-	 * >>>>>>> .r304 Unlocks filename and checks if there is another request to
+	 * Unlocks filename and checks if there is another request to
 	 * service
 	 */
 	private void unlockFile(String filename) {
@@ -1114,4 +1121,24 @@ class ManagerNode {
 			unlockFile(filesToUnlock.get(i));
 	}
 
+	/**
+	 * Sends an update to all replicas about an update permission for this client
+	 * @param client The client whose permissions are being updated
+	 * @param protocol The updated permission
+	 * @param filename The filename
+	 */
+	private void sendUpdateToReplica(int client, MessageType protocol, String filename){
+		if (primaryAddress != node.addr){
+			node.printError("Error: Not primary!");
+		}
+		else{
+			Iterator<Integer> iter = knownManagers.iterator();
+			while (iter.hasNext()){
+				int next = iter.next();
+				if (next != node.addr)
+					node.RIOSend(next, protocol, filename)
+			}
+		}
+			
+	}
 }
