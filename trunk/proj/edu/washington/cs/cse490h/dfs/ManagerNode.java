@@ -217,12 +217,12 @@ class ManagerNode {
 	 * An integer address for who the current primary is
 	 */
 	public int primaryAddress;
-	
+
 	/**
 	 * A list of known managers
 	 */
 	private Set<Integer> knownManagers;
-	
+
 	private Cache filePermissionCache;
 
 	public ManagerNode(DFSNode n) {
@@ -328,16 +328,10 @@ class ManagerNode {
 		// delete transactionally
 		try {
 			if (transactionsInProgress.contains(client))
-				try {
-					node.fs.deleteFileTX(client, filename);
-				} catch (TransactionException e) {
-					sendError(client, filename, e);
-				} catch (IOException e) {
-					sendError(client, filename, e);
-				}
+				node.fs.deleteFileTX(client, filename);
 			else
 				node.fs.deleteFile(filename);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			sendError(client, filename, e);
 		}
 		// remove permissions
@@ -354,19 +348,13 @@ class ManagerNode {
 			createNewFile(filename, requester);
 		}
 
-		requester = pendingRPCDeleteRequests.remove(filename);
-		if (requester != null) {
-			sendError(requester, filename, new FileNotFoundException());
-		}
-
-		requester = pendingReadPermissionRequests.remove(filename);
-		if (requester != null) {
-			sendError(requester, filename, new FileNotFoundException());
-		}
-
-		requester = pendingWritePermissionRequests.remove(filename);
-		if (requester != null) {
-			sendError(requester, filename, new FileNotFoundException());
+		List<Integer> errorsToSend = new ArrayList<Integer>();
+		errorsToSend.add(pendingRPCDeleteRequests.remove(filename));
+		errorsToSend.add(pendingReadPermissionRequests.remove(filename));
+		errorsToSend.add(pendingWritePermissionRequests.remove(filename));
+		for (int i = 0; i < errorsToSend.size(); i++) {
+			sendError(errorsToSend.get(i), filename,
+					new FileNotFoundException());
 		}
 
 		unlockFile(filename);
@@ -902,8 +890,7 @@ class ManagerNode {
 	}
 
 	/**
-	 * Unlocks filename and checks if there is another request to
-	 * service
+	 * Unlocks filename and checks if there is another request to service
 	 */
 	private void unlockFile(String filename) {
 
@@ -1122,10 +1109,15 @@ class ManagerNode {
 	}
 
 	/**
-	 * Sends an update to all replicas about an update permission for this client
-	 * @param client The client whose permissions are being updated
-	 * @param protocol The updated permission
-	 * @param filename The filename
+	 * Sends an update to all replicas about an update permission for this
+	 * client
+	 * 
+	 * @param client
+	 *            The client whose permissions are being updated
+	 * @param protocol
+	 *            The updated permission
+	 * @param filename
+	 *            The filename
 	 */
 	private void sendUpdateToReplica(int client, MessageType protocol, String filename){
 		if (primaryAddress != node.addr){
