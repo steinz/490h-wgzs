@@ -1,155 +1,175 @@
 package edu.washington.cs.cse490h.tdfs;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
-import edu.washington.cs.cse490h.dfs.DFSNode;
-import edu.washington.cs.cse490h.lib.Node;
-
 public class LogFileSystem {
+	
+	private class TXBoolean {
+		private Boolean exists = null;
+		private Boolean txExists = null;
+		private boolean inTx = false;
 
-	// TODO: Contended op
+		public void txAbort() {
+			txExists = null;
+			inTx = false;
+		}
 
-	private class Operation {
-	}
+		public void txCommit() {
+			exists = txExists;
+			inTx = false;
+		}
 
-	private class FileOperation extends Operation {
-		String filename;
+		public void txStart() {
+			txExists = exists;
+			inTx = true;
+		}
 
-		public FileOperation(String filename) {
-			this.filename = filename;
+		public Boolean getExists() {
+			return exists;
+		}
+
+		public void setExists(Boolean b) {
+			if (inTx) {
+				txExists = b;
+			} else {
+				exists = b;
+			}
 		}
 	}
 
-	private class MemberOperation extends Operation {
-		int address;
+	private class TXString {
+		private String content = null;
+		private String txContent = null;
+		private boolean inTx = false;
 
-		public MemberOperation(int address) {
-			this.address = address;
+		public void txAbort() {
+			txContent = null;
+			inTx = false;
 		}
-	}
 
-	private class Create extends FileOperation {
-		public Create(String filename) {
-			super(filename);
+		public void txCommit() {
+			content = txContent;
+			inTx = false;
 		}
-	}
 
-	private class Delete extends FileOperation {
-		public Delete(String filename) {
-			super(filename);
+		public void txStart() {
+			txContent = content;
+			inTx = true;
 		}
-	}
 
-	/**
-	 * no need to actually log these
-	 */
-	private class Get extends FileOperation {
-		public Get(String filename) {
-			super(filename);
+		public String getContent() {
+			return content;
 		}
-	}
 
-	private class Join extends MemberOperation {
-		public Join(int address) {
-			super(address);
+		public void setContent(String s) {
+			if (inTx) {
+				txContent = s;
+			} else {
+				content = s;
+			}
 		}
-	}
 
-	private class Leave extends MemberOperation {
-		public Leave(int address) {
-			super(address);
-		}
-	}
-
-	private class Lock extends MemberOperation {
-		public Lock(int address) {
-			super(address);
-		}
-	}
-
-	private class TXAbort extends Operation {
-	}
-
-	private class TXCommit extends Operation {
-	}
-
-	private class TXStart extends Operation {
-	}
-
-	private class Write extends FileOperation {
-		String content;
-		boolean append;
-
-		public Write(String filename, String content, boolean append) {
-			super(filename);
-			this.content = content;
-			this.append = append;
+		public void appendContent(String s) {
+			if (inTx) {
+				txContent += s;
+			} else {
+				content += s;
+			}
 		}
 	}
 
 	private class FileLog {
 		// TODO: cache stuff
 
-		/**
-		 * newest first
-		 */
-		private LinkedList<Operation> operations;
+		private List<Operation> operations;
 
-		public FileLog(String log) {
-
+		public FileLog(List<Operation> operations) {
+			this.operations = operations;
 		}
 
 		public void addOperation(Operation op) {
-			operations.addFirst(op);
+			operations.add(op);
 		}
 
 		public boolean checkExists() {
+			TXBoolean exists = new TXBoolean();
 			for (Operation op : operations) {
-				if (op instanceof Delete) {
-					return false;
+				if (op instanceof TXStart) {
+					exists.txStart(); 
+				} else if (op instanceof TXAbort) {
+					exists.txAbort();
+				} else if (op instanceof TXCommit) {
+					exists.txCommit();
+				} else if (op instanceof Delete) {
+					exists.setExists(false);
 				} else if (op instanceof FileOperation) {
-					return true;
+					exists.setExists(true);
 				}
 			}
-			throw new RuntimeException("no FileOperation found in log");
+			Boolean result = exists.getExists();
+			if (result == null) {
+				throw new RuntimeException(
+						"no committed FileOperation found in log");
+			} else {
+				return result;
+			}
 		}
 
 		public String getContent() throws FileDoesNotExistException {
-			LinkedList<String> content = new LinkedList<String>();
+			TXString content = new TXString();
 			for (Operation op : operations) {
-				if (op instanceof Delete) {
-					throw new FileDoesNotExistException();
+				if (op instanceof TXStart) {
+					content.txStart();
+				} else if (op instanceof TXAbort) {
+					content.txAbort();
+				} else if (op instanceof TXCommit) {
+					content.txCommit();
+				} else if (op instanceof Delete) {
+					content.setContent(null);
 				} else if (op instanceof Create) {
-					break;
+					content.setContent("");
 				} else if (op instanceof Write) {
 					Write w = (Write) op;
-					content.addFirst(w.content);
-					if (!w.append) {
-						break;
+					if (w.append) {
+						content.appendContent(w.content);
+					} else {
+						content.setContent(w.content);
 					}
 				}
 			}
-			StringBuilder str = new StringBuilder();
-			for (String s : content) {
-				str.append(s);
+			String result = content.getContent();
+			if (result == null) {
+				throw new FileDoesNotExistException();
+			} else {
+				return result;
 			}
-			return str.toString();
+		}
+		
+		public List<Integer> getParticipants() {
+			List<Integer> participants = new ArrayList<Integer>();
+			for (Operation op : operations) {
+				if (op instanceof Join) {
+					Join j = (Join) op;
+					participants.add(j.address);
+				} else if (op instanceof Leave) {
+					Leave l = (Leave) op;
+					participants.remove(new Integer(l.address));
+				}
+			}
+			return participants;
 		}
 	}
-
-	private Node parent;
 
 	private Map<String, FileLog> logs;
 
 	private Logger logger;
 
-	public LogFileSystem(DFSNode n) throws IOException {
-		this.parent = n;
+	public LogFileSystem() throws IOException {
 		this.logs = new HashMap<String, FileLog>();
 		this.logger = Logger
 				.getLogger("edu.washington.cs.cse490h.dfs.LogFileSystem");
@@ -157,10 +177,22 @@ public class LogFileSystem {
 
 	public void createFile(String filename) throws FileAlreadyExistsException {
 		logAccess(filename, Create.class);
+		FileLog l = getOrCreateLog(filename);
+		if (l.checkExists()) {
+			throw new FileAlreadyExistsException();
+		} else {
+			l.addOperation(new Create());
+		}
 	}
 
 	public void deleteFile(String filename) throws FileDoesNotExistException {
 		logAccess(filename, Delete.class);
+		FileLog l = getLog(filename);
+		if (!l.checkExists()) {
+			throw new FileDoesNotExistException();
+		} else {
+			l.addOperation(new Delete());
+		}
 	}
 
 	public boolean fileExists(String filename) {
@@ -181,36 +213,84 @@ public class LogFileSystem {
 	private FileLog getLog(String filename) throws FileDoesNotExistException {
 		FileLog l = logs.get(filename);
 		if (l == null) {
+			/*
+			 * TODO: This might be a bit confusing - doesn't exist locally, but
+			 * might globally
+			 */
 			throw new FileDoesNotExistException();
 		}
 		return l;
 	}
 
+	public List<Operation> getLogOpList(String filename)
+			throws FileDoesNotExistException {
+		FileLog l = getLog(filename);
+		return l.operations;
+	}
+
 	private FileLog getOrCreateLog(String filename) {
 		FileLog l = logs.get(filename);
 		if (l == null) {
-			return new FileLog();
+			return new FileLog(new ArrayList<Operation>());
 		} else {
 			return l;
 		}
 	}
+	
+	public List<Integer> getParticipants(String filename) {
+		FileLog l = logs.get(filename);
+		return l.getParticipants();
+	}
 
-	public void logAccess(String filename, Class operation) {
+	public void join(String filename, int address)
+			throws FileDoesNotExistException {
+		memberOperation(filename, Join.class, new Join(address));
+	}
+
+	public void leave(String filename, int address)
+			throws FileDoesNotExistException {
+		memberOperation(filename, Leave.class, new Leave(address));
+	}
+
+	public void lockFile(String filename, int address)
+			throws FileDoesNotExistException {
+		memberOperation(filename, Lock.class, new Lock(address));
+	}
+
+	private void memberOperation(String filename, Class<?> opType,
+			MemberOperation op) throws FileDoesNotExistException {
+		logAccess(filename, opType);
+		FileLog l = getLog(filename);
+		l.addOperation(op);
+	}
+
+	public void logAccess(String filename, Class<?> operation) {
 		logAccess(filename, operation, null);
 	}
 
-	public void logAccess(String filename, Class operation, String content) {
+	public void logAccess(String filename, Class<?> operation, String content) {
 		String msg = operation.getName().toLowerCase() + " file: " + filename
 				+ (content == null ? "" : " content: " + content);
 		logger.finer(msg);
 	}
 
-	public void participate(String filename, String log) {
-
+	public void participate(String filename, List<Operation> log)
+			throws AlreadyParticipatingException {
+		if (logs.containsKey(filename)) {
+			throw new AlreadyParticipatingException();
+		}
+		FileLog l = new FileLog(log);
+		logs.put(filename, l);
 	}
 
-	public void writeFile(String filename, String content, boolean append) {
+	public void writeFile(String filename, String content, boolean append)
+			throws FileDoesNotExistException {
 		logAccess(filename, Write.class, content);
-
+		FileLog l = getLog(filename);
+		if (l.checkExists()) {
+			l.addOperation(new Write(content, append));
+		} else {
+			throw new FileDoesNotExistException();
+		}
 	}
 }
