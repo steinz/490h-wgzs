@@ -14,7 +14,6 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.StringTokenizer;
 
-import edu.washington.cs.cse490h.dfs.MessageType;
 import edu.washington.cs.cse490h.lib.Utility;
 
 public class TDFSNode extends RIONode {
@@ -202,14 +201,14 @@ public class TDFSNode extends RIONode {
 		if (proposalNumber < largestProposalNumberAccepted) {
 			RIOSend(from,
 					MessageType.PromiseDenial,
-					Utility.stringToByteArray(largestProposalNumberAccepted
+					Utility.stringToByteArray(chosenValues.get(proposalNumber)
 							+ ""));
 		}
 
 		else { // accept it and update
 			largestProposalNumberAccepted = proposalNumber;
 			RIOSend(from, MessageType.Promise,
-					Utility.stringToByteArray(lastValueAccepted + ""));
+					Utility.stringToByteArray(proposalNumber + ""));
 		}
 	}
 
@@ -227,13 +226,13 @@ public class TDFSNode extends RIONode {
 	 * @lastValueChosen The last value chosen by this acceptor. -1 if the
 	 *                  acceptor has never chosen a value.
 	 */
-	public void receiveAccept(int from, int lastValueChosen, String filename,
-			Operation op) {
+	public void receivePromise(int from, Operation oldOperation, String filename) {
 
 		int chosenValue;
 
-		if (lastValueChosen != -1) {
-			possibleValues.add(lastValueChosen);
+		if (oldOperation != null) {
+			possibleValues.add(0);
+			// TODO: High - obviously should not be adding 0 here, should be adding operation to existing ops
 		}
 
 		proposersResponded++;
