@@ -27,13 +27,6 @@ public class TDFSNode extends RIONode {
 
 	List<String> filesBeingOperatedOn;
 
-	enum NodeTypes {
-		Acceptor, Proposer
-	}
-
-	// What type of node this PaxosNode is
-	protected NodeTypes nodeType;
-
 	// The last proposal number this paxos node has sent. Assumed to start at 0
 	// and increment from there.
 	private int lastProposalNumberSent;
@@ -66,8 +59,6 @@ public class TDFSNode extends RIONode {
 	public void start() {
 		queuedOperations = new LinkedList<Operation>();
 		filesBeingOperatedOn = new ArrayList<String>();
-		this.nodeType = NodeTypes.Acceptor; // By default, a node is assumed to
-											// be an acceptor
 		this.lastProposalNumberSent = -1;
 		this.largestProposalNumberAccepted = -1;
 		this.lastValueAccepted = -1;
@@ -103,23 +94,16 @@ public class TDFSNode extends RIONode {
 	 * @proposalNumber The proposal number, used for validation
 	 * @value The chosen value
 	 */
-	public void receiveAccepted(int from, int proposalNumber, int value) {
+	public void receiveAccepted(int from, int proposalNumber, int value,
+			Operation op) {
 
-		if (nodeType.equals(NodeTypes.Acceptor)) {
+		lastValueAccepted = value;
 
-			if (proposalNumber < largestProposalNumberAccepted) {
-				// TODO: High - Throw an error!
-			}
+		RIOSend(from,
+				MessageType.Accepted,
+				Utility.stringToByteArray(lastProposalNumberSent + " "
+						+ chosenValues.get(lastProposalNumberSent)));
 
-			lastValueAccepted = value;
-
-			RIOSend(from,
-					MessageType.Accepted,
-					Utility.stringToByteArray(lastProposalNumberSent + " "
-							+ chosenValues.get(lastProposalNumberSent)));
-		} else {
-			receiveFinished(addr);
-		}
 	}
 
 	/**
@@ -139,21 +123,20 @@ public class TDFSNode extends RIONode {
 	 * worry about a quorum yet - if not enough acceptors are on, won't proceed
 	 * past the accept stage and will stall, which is allowable.
 	 */
-	public void prepare(String filename) {
+	public void prepare(String filename, Operation op, Integer proposalNumber) {
 
-		if (!nodeType.equals(NodeTypes.Proposer)) {
-			// TODO: High - throw an error!
-			return;
-		}
-
-		lastProposalNumberSent++;
+		int prepareProposalNumber = -1;
+		if (proposalNumber == null) {
+			prepareProposalNumber = ++lastProposalNumberSent;
+		} else
+			prepareProposalNumber = proposalNumber;
 
 		Iterator<Integer> iter = knownGroupMembers.get(filename).iterator();
 		while (iter.hasNext()) {
 			int next = iter.next();
 			if (next != addr)
 				RIOSend(iter.next(), MessageType.Prepare,
-						Utility.stringToByteArray(lastProposalNumberSent + ""));
+						Utility.stringToByteArray(prepareProposalNumber + ""));
 		}
 
 	}
@@ -167,10 +150,7 @@ public class TDFSNode extends RIONode {
 	 * @from Assumed to be the proposer's address
 	 * @proposalNumber The proposal number this node is proposing
 	 */
-	public void receivePromise(int from, int proposalNumber) {
-		if (!nodeType.equals(NodeTypes.Acceptor)) {
-			return;
-		}
+	public void receivePrepare(int from, int proposalNumber) {
 
 		if (proposalNumber < largestProposalNumberAccepted) {
 			RIOSend(from,
@@ -200,7 +180,8 @@ public class TDFSNode extends RIONode {
 	 * @lastValueChosen The last value chosen by this acceptor. -1 if the
 	 *                  acceptor has never chosen a value.
 	 */
-	public void receiveAccept(int from, int lastValueChosen, String filename) {
+	public void receiveAccept(int from, int lastValueChosen, String filename,
+			Operation op) {
 
 		int chosenValue;
 
