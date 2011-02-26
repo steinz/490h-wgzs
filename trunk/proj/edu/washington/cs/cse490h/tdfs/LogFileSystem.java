@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 public class LogFileSystem {
-	
+
 	private class TXBoolean {
 		private Boolean exists = null;
 		private Boolean txExists = null;
@@ -100,7 +100,7 @@ public class LogFileSystem {
 			TXBoolean exists = new TXBoolean();
 			for (Operation op : operations) {
 				if (op instanceof TXStart) {
-					exists.txStart(); 
+					exists.txStart();
 				} else if (op instanceof TXAbort) {
 					exists.txAbort();
 				} else if (op instanceof TXCommit) {
@@ -149,7 +149,7 @@ public class LogFileSystem {
 				return result;
 			}
 		}
-		
+
 		public List<Integer> getParticipants() {
 			List<Integer> participants = new ArrayList<Integer>();
 			for (Operation op : operations) {
@@ -176,7 +176,7 @@ public class LogFileSystem {
 	}
 
 	public void createFile(String filename) throws FileAlreadyExistsException {
-		logAccess(filename, Create.class);
+		logAccess(filename, "Create");
 		FileLog l = getOrCreateLog(filename);
 		if (l.checkExists()) {
 			throw new FileAlreadyExistsException();
@@ -186,7 +186,7 @@ public class LogFileSystem {
 	}
 
 	public void deleteFile(String filename) throws FileDoesNotExistException {
-		logAccess(filename, Delete.class);
+		logAccess(filename, "Delete");
 		FileLog l = getLog(filename);
 		if (!l.checkExists()) {
 			throw new FileDoesNotExistException();
@@ -205,7 +205,7 @@ public class LogFileSystem {
 	}
 
 	public String getFile(String filename) throws FileDoesNotExistException {
-		logAccess(filename, Get.class);
+		logAccess(filename, "Get");
 		FileLog l = getLog(filename);
 		return l.getContent();
 	}
@@ -236,7 +236,7 @@ public class LogFileSystem {
 			return l;
 		}
 	}
-	
+
 	public List<Integer> getParticipants(String filename) {
 		FileLog l = logs.get(filename);
 		return l.getParticipants();
@@ -244,32 +244,32 @@ public class LogFileSystem {
 
 	public void join(String filename, int address)
 			throws FileDoesNotExistException {
-		memberOperation(filename, Join.class, new Join(address));
+		memberOperation(filename, "Join", new Join(address));
 	}
 
 	public void leave(String filename, int address)
 			throws FileDoesNotExistException {
-		memberOperation(filename, Leave.class, new Leave(address));
+		memberOperation(filename, "Leave", new Leave(address));
 	}
 
 	public void lockFile(String filename, int address)
 			throws FileDoesNotExistException {
-		memberOperation(filename, Lock.class, new Lock(address));
+		memberOperation(filename, "Lock", new Lock(address));
 	}
 
-	private void memberOperation(String filename, Class<?> opType,
+	private void memberOperation(String filename, String opType,
 			MemberOperation op) throws FileDoesNotExistException {
 		logAccess(filename, opType);
 		FileLog l = getLog(filename);
 		l.addOperation(op);
 	}
 
-	public void logAccess(String filename, Class<?> operation) {
+	public void logAccess(String filename, String operation) {
 		logAccess(filename, operation, null);
 	}
 
-	public void logAccess(String filename, Class<?> operation, String content) {
-		String msg = operation.getName().toLowerCase() + " file: " + filename
+	public void logAccess(String filename, String operation, String content) {
+		String msg = operation.toString().toLowerCase() + " file: " + filename
 				+ (content == null ? "" : " content: " + content);
 		logger.finer(msg);
 	}
@@ -285,7 +285,7 @@ public class LogFileSystem {
 
 	public void writeFile(String filename, String content, boolean append)
 			throws FileDoesNotExistException {
-		logAccess(filename, Write.class, content);
+		logAccess(filename, "Write", content);
 		FileLog l = getLog(filename);
 		if (l.checkExists()) {
 			l.addOperation(new Write(content, append));
