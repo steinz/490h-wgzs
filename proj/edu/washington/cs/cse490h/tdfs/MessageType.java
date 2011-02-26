@@ -20,8 +20,10 @@ public enum MessageType {
 	RequestMembership(HandlingClass.TDFSNode),
 
 	CoordinatorRebooted(HandlingClass.TDFSNode),
-	
+
 	CreateGroup(HandlingClass.TDFSNode),
+
+	ObseleteOperationEntryId(HandlingClass.TDFSNode),
 
 	Prepare(HandlingClass.TDFSNode), PromiseDenial(HandlingClass.TDFSNode), Promise(
 			HandlingClass.TDFSNode), Accept(HandlingClass.TDFSNode), Accepted(
