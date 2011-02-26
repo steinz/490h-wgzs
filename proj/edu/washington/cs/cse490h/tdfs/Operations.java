@@ -39,6 +39,11 @@ abstract class Operation {
 			return new TXCommit();
 		} else if (cmd.equals("TXStart")) {
 			return new TXStart();
+		} else if (cmd.equals("Unlock")) {
+			start = stop + packetDelimiter.length();
+			stop = msg.indexOf(packetDelimiter, start);
+			int address = Integer.parseInt(msg.substring(start, stop));
+			return new Unlock(address);
 		} else if (cmd.equals("Write")) {
 			start = stop + packetDelimiter.length();
 			stop = msg.indexOf(packetDelimiter, start);
@@ -137,6 +142,17 @@ class TXStart extends Operation {
 	@Override
 	byte[] pack() {
 		return Utility.stringToByteArray("TXStart");
+	}
+}
+
+class Unlock extends MemberOperation {
+	public Unlock(int address) {
+		super(address);
+	}
+
+	@Override
+	byte[] pack() {
+		return Utility.stringToByteArray("Unlock" + packetDelimiter + address);
 	}
 }
 

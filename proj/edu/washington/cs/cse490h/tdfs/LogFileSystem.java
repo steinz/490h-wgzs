@@ -86,6 +86,7 @@ public class LogFileSystem {
 	private class FileLog {
 		// TODO: cache stuff
 
+		// TODO: Number these
 		private List<Operation> operations;
 
 		public FileLog(List<Operation> operations) {

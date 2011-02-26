@@ -1,5 +1,7 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -7,9 +9,12 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.Set;
+import java.util.StringTokenizer;
 
+import edu.washington.cs.cse490h.dfs.MessageType;
 import edu.washington.cs.cse490h.lib.Utility;
 
 public class TDFSNode extends RIONode {
@@ -68,15 +73,57 @@ public class TDFSNode extends RIONode {
 	}
 
 	@Override
-	public void onCommand(String command) {
-		// TODO Auto-generated method stub
+	public void onCommand(String line) {
+		// TODO: fix or something
+
+		// Create a tokenizer and get the first token (the actual cmd)
+		StringTokenizer tokens = new StringTokenizer(line, " ");
+		String cmd = "";
+		try {
+			cmd = tokens.nextToken().toLowerCase();
+		} catch (NoSuchElementException e) {
+			// TODO: parent.printError("no command found in: " + line);
+			return;
+		}
+
+		/*
+		 * Dynamically call <cmd>Command, passing off the tokenizer and the full
+		 * command string
+		 */
+		try {
+			Class<?>[] paramTypes = { StringTokenizer.class, String.class };
+			Method handler = this.getClass().getMethod(cmd + "Handler",
+					paramTypes);
+			Object[] args = { tokens, line };
+			handler.invoke(this, args);
+		} catch (NoSuchMethodException e) {
+			// TODO: parent.printError("invalid command:" + line);
+		} catch (IllegalAccessException e) {
+			// TODO: parent.printError("invalid command:" + line);
+		} catch (InvocationTargetException e) {
+			// TODO: parent.printError(e.getCause());
+		}
 
 	}
 
 	@Override
-	public void onRIOReceive(Integer from, MessageType protocol, byte[] msg) {
-		// TODO Auto-generated method stub
+	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
+		String msgString = Utility.byteArrayToString(msg);
 
+		// TDFS handles all non-RIO messages right now
+		Object instance = this;
+
+		// route message
+		try {
+			Class<?> handlingClass = instance.getClass();
+			Class<?>[] paramTypes = { int.class, String.class };
+			Method handler = handlingClass.getMethod("receive" + type.name(),
+					paramTypes);
+			Object[] args = { from, msgString };
+			handler.invoke(instance, args);
+		} catch (Exception e) {
+			printError(e);
+		}
 	}
 
 	/**
