@@ -57,6 +57,7 @@ abstract class Operation {
 			throw new RuntimeException("attempt to unpack invalid operation: "
 					+ msg);
 		}
+		
 	}
 }
 
