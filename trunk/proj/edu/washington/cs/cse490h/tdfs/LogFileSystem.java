@@ -173,8 +173,20 @@ public class LogFileSystem {
 		}
 
 		public byte[] pack() {
-			operations.entrySet().iterator().next().
-			
+			// operations.map {|k,v| v.pack()}
+
+			/*
+			 * Header is:
+			 * 
+			 * nextOperationNumber:int|operationCount:int|
+			 * 
+			 * operationCount times,
+			 * 
+			 * 
+			 * 
+			 * where | is the packedDelimiter
+			 */
+
 			// TODO: HIGH: Implement
 			return null;
 		}
