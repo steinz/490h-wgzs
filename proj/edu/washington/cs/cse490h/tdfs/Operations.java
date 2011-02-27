@@ -18,6 +18,8 @@ abstract class Operation {
 			return new Create();
 		} else if (cmd.equals("Delete")) {
 			return new Delete();
+		} else if (cmd.equals("Forgotten")) {
+			return new Forgotten();
 		} else if (cmd.equals("Join")) {
 			start = stop + packetDelimiter.length();
 			stop = msg.indexOf(packetDelimiter, start);
@@ -70,7 +72,6 @@ abstract class MemberOperation extends Operation {
 }
 
 class Create extends FileOperation {
-
 	@Override
 	byte[] pack() {
 		return Utility.stringToByteArray("Create");
@@ -79,10 +80,16 @@ class Create extends FileOperation {
 }
 
 class Delete extends FileOperation {
-
 	@Override
 	byte[] pack() {
 		return Utility.stringToByteArray("Delete");
+	}
+}
+
+class Forgotten extends Operation {
+	@Override
+	byte[] pack() {
+		return Utility.stringToByteArray("Forgotten");
 	}
 }
 
