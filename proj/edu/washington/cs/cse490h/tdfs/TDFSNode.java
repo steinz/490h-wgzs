@@ -283,7 +283,7 @@ public class TDFSNode extends RIONode {
 		} catch (NotParticipatingException e) {
 			// TODO High: Auto-generated catch block
 			e.printStackTrace();
-		} catch (NoSuchOperationNumber e) {
+		} catch (NoSuchOperationNumberException e) {
 			// TODO High: Auto-generated catch block
 			e.printStackTrace();
 		}
