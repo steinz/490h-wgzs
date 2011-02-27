@@ -257,6 +257,7 @@ public class LogFileSystem implements LogFS {
 		this.logs = new HashMap<String, FileLog>();
 		this.logger = Logger
 				.getLogger("edu.washington.cs.cse490h.dfs.LogFileSystem");
+		// TODO: HIGH: Logger config file, etc
 	}
 
 	/**
