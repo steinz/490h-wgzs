@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.Map.Entry;
 import java.util.logging.Logger;
 
 public class LogFileSystem {
@@ -84,22 +86,26 @@ public class LogFileSystem {
 	}
 
 	private class FileLog {
-		// TODO: cache stuff
+		// TODO: cache
 
-		// TODO: Number these
-		private List<Operation> operations;
+		private SortedMap<Integer, Operation> operations;
 
-		public FileLog(List<Operation> operations) {
+		private int nextOperationNumber;
+
+		public FileLog(SortedMap<Integer, Operation> operations,
+				int nextOperationNumber) {
 			this.operations = operations;
+			this.nextOperationNumber = nextOperationNumber;
 		}
-
+		
 		public void addOperation(Operation op) {
-			operations.add(op);
+			operations.put(nextOperationNumber, op);
 		}
 
 		public boolean checkExists() {
 			TXBoolean exists = new TXBoolean();
-			for (Operation op : operations) {
+			for (Entry<Integer, Operation> entry : operations.entrySet()) {
+				Operation op = entry.getValue();
 				if (op instanceof TXStart) {
 					exists.txStart();
 				} else if (op instanceof TXAbort) {
@@ -123,7 +129,8 @@ public class LogFileSystem {
 
 		public String getContent() throws FileDoesNotExistException {
 			TXString content = new TXString();
-			for (Operation op : operations) {
+			for (Entry<Integer, Operation> entry : operations.entrySet()) {
+				Operation op = entry.getValue();
 				if (op instanceof TXStart) {
 					content.txStart();
 				} else if (op instanceof TXAbort) {
@@ -153,7 +160,8 @@ public class LogFileSystem {
 
 		public List<Integer> getParticipants() {
 			List<Integer> participants = new ArrayList<Integer>();
-			for (Operation op : operations) {
+			for (Entry<Integer, Operation> entry : operations.entrySet()) {
+				Operation op = entry.getValue();
 				if (op instanceof Join) {
 					Join j = (Join) op;
 					participants.add(j.address);
@@ -165,20 +173,21 @@ public class LogFileSystem {
 			return participants;
 		}
 	}
-
+	
 	private Map<String, FileLog> logs;
 
 	private Logger logger;
 
-	public LogFileSystem() throws IOException {
+	public LogFileSystem() throws IOException {		
 		this.logs = new HashMap<String, FileLog>();
 		this.logger = Logger
 				.getLogger("edu.washington.cs.cse490h.dfs.LogFileSystem");
 	}
 
-	public void createFile(String filename) throws FileAlreadyExistsException {
+	public void createFile(String filename) throws FileAlreadyExistsException,
+			NotParticipatingException {
 		logAccess(filename, "Create");
-		FileLog l = getOrCreateLog(filename);
+		FileLog l = getLog(filename);
 		if (l.checkExists()) {
 			throw new FileAlreadyExistsException();
 		} else {
@@ -186,7 +195,8 @@ public class LogFileSystem {
 		}
 	}
 
-	public void deleteFile(String filename) throws FileDoesNotExistException {
+	public void deleteFile(String filename) throws FileDoesNotExistException,
+			NotParticipatingException {
 		logAccess(filename, "Delete");
 		FileLog l = getLog(filename);
 		if (!l.checkExists()) {
@@ -196,70 +206,61 @@ public class LogFileSystem {
 		}
 	}
 
-	public boolean fileExists(String filename) {
-		try {
-			FileLog l = getLog(filename);
-			return l.checkExists();
-		} catch (FileDoesNotExistException e) {
-			return false;
-		}
+	public boolean fileExists(String filename) throws NotParticipatingException {
+		FileLog l = getLog(filename);
+		return l.checkExists();
 	}
 
-	public String getFile(String filename) throws FileDoesNotExistException {
+	public String getFile(String filename) throws FileDoesNotExistException,
+			NotParticipatingException {
 		logAccess(filename, "Get");
 		FileLog l = getLog(filename);
 		return l.getContent();
 	}
 
-	private FileLog getLog(String filename) throws FileDoesNotExistException {
+	private FileLog getLog(String filename) throws NotParticipatingException {
 		FileLog l = logs.get(filename);
 		if (l == null) {
-			/*
-			 * TODO: This might be a bit confusing - doesn't exist locally, but
-			 * might globally
-			 */
-			throw new FileDoesNotExistException();
+			throw new NotParticipatingException();
 		}
 		return l;
 	}
 
-	public List<Operation> getLogOpList(String filename)
-			throws FileDoesNotExistException {
+	public SortedMap<Integer, Operation> getLogOpList(String filename)
+			throws NotParticipatingException {
 		FileLog l = getLog(filename);
 		return l.operations;
 	}
 
-	private FileLog getOrCreateLog(String filename) {
-		FileLog l = logs.get(filename);
-		if (l == null) {
-			return new FileLog(new ArrayList<Operation>());
-		} else {
-			return l;
-		}
+	public int getNextOperationNumber(String filename)
+			throws NotParticipatingException {
+		FileLog l = getLog(filename);
+		return l.nextOperationNumber;
 	}
 
-	public List<Integer> getParticipants(String filename) {
-		FileLog l = logs.get(filename);
+	public List<Integer> getParticipants(String filename)
+			throws NotParticipatingException {
+		FileLog l = getLog(filename);
 		return l.getParticipants();
 	}
 
 	public void join(String filename, int address)
-			throws FileDoesNotExistException {
+			throws NotParticipatingException {
 		memberOperation(filename, "Join", new Join(address));
 	}
 
 	public void leave(String filename, int address)
-			throws FileDoesNotExistException {
+			throws NotParticipatingException {
 		memberOperation(filename, "Leave", new Leave(address));
 	}
 
 	public void lockFile(String filename, int address)
-			throws FileDoesNotExistException {
+			throws NotParticipatingException {
 		memberOperation(filename, "Lock", new Lock(address));
 	}
 
 	private void memberOperation(String filename, String opType,
-			MemberOperation op) throws FileDoesNotExistException {
+			MemberOperation op) throws NotParticipatingException {
 		logAccess(filename, opType);
 		FileLog l = getLog(filename);
 		l.addOperation(op);
@@ -275,17 +276,17 @@ public class LogFileSystem {
 		logger.finer(msg);
 	}
 
-	public void participate(String filename, List<Operation> log)
-			throws AlreadyParticipatingException {
+	public void participate(String filename, SortedMap<Integer, Operation> log,
+			int nextOperationNumber) throws AlreadyParticipatingException {
 		if (logs.containsKey(filename)) {
 			throw new AlreadyParticipatingException();
 		}
-		FileLog l = new FileLog(log);
+		FileLog l = new FileLog(log, nextOperationNumber);
 		logs.put(filename, l);
 	}
 
 	public void writeFile(String filename, String content, boolean append)
-			throws FileDoesNotExistException {
+			throws FileDoesNotExistException, NotParticipatingException {
 		logAccess(filename, "Write", content);
 		FileLog l = getLog(filename);
 		if (l.checkExists()) {
