@@ -49,9 +49,6 @@ abstract class Operation {
 			stop = msg.indexOf(packetDelimiter, start);
 			boolean append = Boolean.parseBoolean(msg.substring(start, stop));
 			start = stop + packetDelimiter.length();
-			stop = msg.indexOf(packetDelimiter, start);
-			// skip content length
-			start = stop + packetDelimiter.length();
 			String content = msg.substring(start);
 			return new Write(content, append);
 		} else {
@@ -168,7 +165,6 @@ class Write extends FileOperation {
 	@Override
 	byte[] pack() {
 		return Utility.stringToByteArray("Write" + packetDelimiter + append
-				+ packetDelimiter + content.length() + packetDelimiter
-				+ content);
+				+ packetDelimiter + content);
 	}
 }
