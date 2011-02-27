@@ -13,7 +13,6 @@ import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.Set;
 import java.util.StringTokenizer;
-
 import edu.washington.cs.cse490h.lib.Utility;
 
 public class TDFSNode extends RIONode {
@@ -31,44 +30,52 @@ public class TDFSNode extends RIONode {
 
 	List<String> filesBeingOperatedOn;
 
-	// The last proposal number this paxos node has sent. Assumed to start at 0
-	// and increment from there.
-	private int lastProposalNumberSent;
+	
+	/**
+	 *  PAXOS Structures
+	 */
+	
+	/**
+	 * Learner only: Number of acceptors that have contacted the learner about accepting a particular N,V pair
+	 */
+	private int acceptorsResponded;
+	
+	/**
+	 * Proposer only: Number of acceptors that have responded with a promise
+	 */
+	private int promisesReceived;
 
-	// The list of possible values for a proposer to choose. If it's empty, the
-	// proposer assumes it can choose anything (but chooses 1 for simplicity).
-	private Set<Integer> possibleValues;
-
-	private int proposersResponded;
-
-	// The value the proposer has decided on for a given operation number
-	private Map<Integer, Integer> chosenValues;
+	/**
+	 * Operation number, Operation pairs for Paxos
+	 */
+	private Map<Integer, Operation> chosenValues;
 
 	/**
 	 * A list of known paxos group members for a given filename
 	 */
 	private Map<String, List<Integer>> knownGroupMembers;
-
-	// The largest proposal number this paxos node has accepted. Assumed to
-	// start at -1.
-	private int largestProposalNumberAccepted;
+	
+	/**
+	 * A list of known learners for a given filename
+	 */
+	private Map<String, List<Integer>> knownLearners;
 
 	/**
-	 * The last value this node accepted. Assumed to be -1 if it has not
-	 * accepted any values for this instance.
+	 * The largest proposal number this node has accepted
 	 */
-	private int lastValueAccepted;
+	private int largestProposalNumberAccepted;
+
+	
 
 	@Override
 	public void start() {
 		queuedOperations = new LinkedList<Operation>();
 		filesBeingOperatedOn = new ArrayList<String>();
-		this.lastProposalNumberSent = -1;
+		
+		// Paxos
 		this.largestProposalNumberAccepted = -1;
-		this.lastValueAccepted = -1;
-		this.possibleValues = new HashSet<Integer>();
-		this.proposersResponded = 0;
-		this.chosenValues = new HashMap<Integer, Integer>();
+		this.acceptorsResponded = 0;
+		this.chosenValues = new HashMap<Integer, Operation>();
 	}
 
 	@Override
@@ -128,40 +135,55 @@ public class TDFSNode extends RIONode {
 	/**
 	 * Functionality varies depending on recipient type.
 	 * 
-	 * ACCEPTOR The acceptor validates this value, if an error hasn't occurred.
-	 * Sends a message to the learner, which is also the proposer.
+	 * The acceptor validates this value, if an error hasn't occurred.
+	 * Sends a message to the learners
 	 * 
-	 * PROPOSER/LEARNER The proposer informs all acceptors that a new value has
-	 * been chosen, and that this paxos session is finished. After the timeout
-	 * elapses, the proposer should initiate a new leader selection, though if
-	 * not one of the acceptors will.
-	 * 
-	 * @from The proposer
-	 * @proposalNumber The proposal number, used for validation
-	 * @value The chosen value
+	 * @op The operation
 	 */
-	public void receiveAccepted(int from, int proposalNumber, int value,
-			Operation op) {
-
-		lastValueAccepted = value;
-
-		RIOSend(from,
-				MessageType.Accepted,
-				Utility.stringToByteArray(lastProposalNumberSent + " "
-						+ chosenValues.get(lastProposalNumberSent)));
-
+	public void receiveValue(Operation op) {
+			
+		// STUB
+		String filename = "";
+		// END STUB
+		
+		Iterator<Integer> iter = knownLearners.get(filename).iterator();
+		while (iter.hasNext()){
+			int next = iter.next();
+			if (next != addr)
+				RIOSend(next, MessageType.Accepted, op.pack()); 
+			// TODO: High: It needs to send the filename, proposal number, and operation all together. 
+			// It would be nice if the operation encapsulated all of those things.
+		}
 	}
 
 	/**
-	 * An indication from the learner (who is also the proposer) that this
-	 * session of paxos is finalized, and that the proposed action has been
-	 * accepted.
+	 * The learner waits to hear from a majority of acceptors. If it has, it sends out a message to all paxos
+	 * nodes that this value has been chosen and writes it to its own local log.
 	 * 
-	 * @param from
-	 *            The proposer/learner
+	 * @param op The operation
 	 */
-	public void receiveFinished(int from) {
-
+	public void receiveAccepted(Operation op) {
+		// STUB
+		int proposalNumber = 0; // TODO: High - these should be part of the operation, or passed somehow, but I'm not sure how.
+		String filename = "";
+		
+		// END STUB
+		
+		acceptorsResponded++;
+		if (acceptorsResponded < knownGroupMembers.get(filename).size() / 2)
+			return;
+		
+		Iterator<Integer> iter = knownGroupMembers.get(filename).iterator();
+		while (iter.hasNext()){
+			int next = iter.next();
+			if (next != addr)
+				RIOSend(next, MessageType.Finished, op.pack());
+		}
+		
+		// Put this operation into the chosen values map
+		chosenValues.put(proposalNumber, op);
+		// TODO: High - write to local log
+		
 	}
 
 	/**
@@ -169,11 +191,17 @@ public class TDFSNode extends RIONode {
 	 * worry about a quorum yet - if not enough acceptors are on, won't proceed
 	 * past the accept stage and will stall, which is allowable.
 	 */
-	public void prepare(String filename, Operation op, Integer proposalNumber) {
-
+	public void prepare(Operation op) {
+		
+		// STUB
+		Integer proposalNumber = null;
+		String filename = "";
+		// END STUB
+		
+		// TODO: High - the proposal number and filename should probably be part of the operation
 		int prepareProposalNumber = -1;
 		if (proposalNumber == null) {
-			prepareProposalNumber = ++lastProposalNumberSent;
+			prepareProposalNumber = ++largestProposalNumberAccepted;
 		} else
 			prepareProposalNumber = proposalNumber;
 
@@ -198,11 +226,10 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receivePrepare(int from, int proposalNumber) {
 
-		if (proposalNumber < largestProposalNumberAccepted) {
+		if (proposalNumber <= largestProposalNumberAccepted) {
 			RIOSend(from,
 					MessageType.PromiseDenial,
-					Utility.stringToByteArray(chosenValues.get(proposalNumber)
-							+ ""));
+					chosenValues.get(proposalNumber).pack());
 		}
 
 		else { // accept it and update
@@ -218,34 +245,22 @@ public class TDFSNode extends RIONode {
 	 * from a quorum. It will do nothing until it receives a quorum - this is
 	 * acceptable behavior.
 	 * 
-	 * The proposer then chooses a value - if the acceptors haven't chosen a
-	 * value previously, it just makes one up (1, no need for non-deterministic
-	 * behavior).
 	 * 
 	 * @from The acceptor who sent this message
 	 * @lastValueChosen The last value chosen by this acceptor. -1 if the
 	 *                  acceptor has never chosen a value.
 	 */
-	public void receivePromise(int from, Operation oldOperation, String filename) {
+	public void receivePromise(Operation op) {
 
-		int chosenValue;
+		// STUB
+		String filename = "";
+		// END STUB
 
-		if (oldOperation != null) {
-			possibleValues.add(0);
-			// TODO: High - obviously should not be adding 0 here, should be adding operation to existing ops
-		}
+		promisesReceived++;
 
-		proposersResponded++;
-
-		if (proposersResponded < (knownGroupMembers.get(filename).size() / 2))
+		if (promisesReceived < (knownGroupMembers.get(filename).size() / 2))
 			return;
 
-		// A majority has responded, so continue on
-		if (possibleValues.size() != 0) { // Just choose the first one in the
-											// set, no need to decide
-			chosenValue = (Integer) possibleValues.toArray()[0];
-		} else
-			chosenValue = 1;
 
 		Iterator<Integer> iter = knownGroupMembers.get(filename).iterator();
 		while (iter.hasNext()) {
@@ -253,8 +268,7 @@ public class TDFSNode extends RIONode {
 			if (next != addr) {
 				RIOSend(iter.next(),
 						MessageType.Accept,
-						Utility.stringToByteArray(lastProposalNumberSent + " "
-								+ chosenValue));
+						op.pack());
 			}
 		}
 

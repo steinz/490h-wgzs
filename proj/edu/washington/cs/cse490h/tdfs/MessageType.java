@@ -27,7 +27,7 @@ public enum MessageType {
 
 	Prepare(HandlingClass.TDFSNode), PromiseDenial(HandlingClass.TDFSNode), Promise(
 			HandlingClass.TDFSNode), Accept(HandlingClass.TDFSNode), Accepted(
-			HandlingClass.TDFSNode);
+			HandlingClass.TDFSNode), Finished(HandlingClass.TDFSNode);
 
 	public enum HandlingClass {
 		RIOLayer, TDFSNode;
