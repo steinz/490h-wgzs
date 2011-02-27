@@ -1,5 +1,10 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,8 +16,8 @@ import java.util.logging.Logger;
 
 public class LogFileSystem {
 
-	private class TXBoolean {
-		private Boolean exists = null;
+	private static class TXBoolean {
+		private boolean exists = false;
 		private Boolean txExists = null;
 		private boolean inTx = false;
 
@@ -22,7 +27,9 @@ public class LogFileSystem {
 		}
 
 		public void txCommit() {
-			exists = txExists;
+			if (txExists != null) {
+				exists = txExists;
+			}
 			inTx = false;
 		}
 
@@ -44,7 +51,7 @@ public class LogFileSystem {
 		}
 	}
 
-	private class TXString {
+	private static class TXString {
 		private String content = null;
 		private String txContent = null;
 		private boolean inTx = false;
@@ -85,20 +92,30 @@ public class LogFileSystem {
 		}
 	}
 
-	private class FileLog {
+	private static class FileLog {
 		// TODO: cache
 
 		private SortedMap<Integer, Operation> operations;
 
 		private int nextOperationNumber;
 
+		/**
+		 * New file is implicitly: unlocked, deleted
+		 */
 		public FileLog() {
 			this.operations = new TreeMap<Integer, Operation>();
 			this.nextOperationNumber = 0;
 		}
 
+		public FileLog(SortedMap<Integer, Operation> operations,
+				int nextOperationNumber) {
+			this.operations = operations;
+			this.nextOperationNumber = nextOperationNumber;
+		}
+
 		public void addOperation(Operation op) {
 			operations.put(nextOperationNumber, op);
+			nextOperationNumber++;
 		}
 
 		public boolean checkExists() {
@@ -113,17 +130,25 @@ public class LogFileSystem {
 					exists.txCommit();
 				} else if (op instanceof Delete) {
 					exists.setExists(false);
-				} else if (op instanceof FileOperation) {
+				} else if (op instanceof Create) {
 					exists.setExists(true);
 				}
 			}
-			Boolean result = exists.getExists();
-			if (result == null) {
-				throw new RuntimeException(
-						"no committed FileOperation found in log");
-			} else {
-				return result;
+			return exists.getExists();
+		}
+
+		public Integer checkLocked() {
+			Integer locked = null;
+			for (Entry<Integer, Operation> entry : operations.entrySet()) {
+				Operation op = entry.getValue();
+				if (op instanceof Lock) {
+					Lock l = (Lock) op;
+					locked = l.address;
+				} else if (op instanceof Unlock) {
+					locked = null;
+				}
 			}
+			return locked;
 		}
 
 		public String getContent() throws FileDoesNotExistException {
@@ -173,22 +198,54 @@ public class LogFileSystem {
 		}
 
 		public byte[] pack() {
-			// operations.map {|k,v| v.pack()}
+			ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+			DataOutputStream dataStream = new DataOutputStream(byteStream);
 
-			/*
-			 * Header is:
-			 * 
-			 * nextOperationNumber:int|operationCount:int|
-			 * 
-			 * operationCount times,
-			 * 
-			 * 
-			 * 
-			 * where | is the packedDelimiter
-			 */
+			try {
+				dataStream.writeInt(nextOperationNumber);
 
-			// TODO: HIGH: Implement
-			return null;
+				for (Entry<Integer, Operation> entry : operations.entrySet()) {
+					int opNumber = entry.getKey();
+					Operation op = entry.getValue();
+					byte[] packedOp = op.pack();
+
+					dataStream.writeInt(opNumber);
+					dataStream.writeInt(packedOp.length);
+					dataStream.write(packedOp);
+				}
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+
+			return byteStream.toByteArray();
+		}
+
+		public static FileLog unpack(byte[] packedLog) {
+			DataInputStream stream = new DataInputStream(
+					new ByteArrayInputStream(packedLog));
+			int offset = 0;
+
+			SortedMap<Integer, Operation> operations = new TreeMap<Integer, Operation>();
+			int nextOpNumber;
+
+			try {
+				nextOpNumber = stream.readInt();
+				offset += 4;
+
+				while (stream.available() > 0) {
+					int opNumber = stream.readInt();
+					int opLength = stream.readInt();
+					offset += 8;
+					byte[] packedOp = new byte[opLength];
+					stream.read(packedOp, 0, opLength);
+					offset += opLength;
+					operations.put(opNumber, Operation.unpack(packedOp));
+				}
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+
+			return new FileLog(operations, nextOpNumber);
 		}
 	}
 
@@ -202,10 +259,24 @@ public class LogFileSystem {
 				.getLogger("edu.washington.cs.cse490h.dfs.LogFileSystem");
 	}
 
-	public void createFile(String filename) throws FileAlreadyExistsException,
-			NotParticipatingException {
+	/**
+	 * null if unlocked, otherwise address of owner
+	 */
+	public Integer checkLocked(String filename)
+			throws NotParticipatingException {
+		FileLog l = getLog(filename);
+		return l.checkLocked();
+	}
+
+	public void createFile(String filename, int address)
+			throws FileAlreadyExistsException, NotParticipatingException,
+			FileLockedByAnotherAddressException {
 		logAccess(filename, "Create");
 		FileLog l = getLog(filename);
+		Integer locked = l.checkLocked();
+		if (locked != null && locked != address) {
+			throw new FileLockedByAnotherAddressException();
+		}
 		if (l.checkExists()) {
 			throw new FileAlreadyExistsException();
 		} else {
@@ -218,10 +289,15 @@ public class LogFileSystem {
 		participate(filename, new FileLog());
 	}
 
-	public void deleteFile(String filename) throws FileDoesNotExistException,
-			NotParticipatingException {
+	public void deleteFile(String filename, int address)
+			throws FileDoesNotExistException, NotParticipatingException,
+			FileLockedByAnotherAddressException {
 		logAccess(filename, "Delete");
 		FileLog l = getLog(filename);
+		Integer locked = l.checkLocked();
+		if (locked != null && locked != address) {
+			throw new FileLockedByAnotherAddressException();
+		}
 		if (!l.checkExists()) {
 			throw new FileDoesNotExistException();
 		} else {
@@ -238,6 +314,7 @@ public class LogFileSystem {
 			NotParticipatingException {
 		logAccess(filename, "Get");
 		FileLog l = getLog(filename);
+		// TODO: HIGH: I think it's okay to let someone Get a locked file...
 		return l.getContent();
 	}
 
@@ -256,10 +333,10 @@ public class LogFileSystem {
 	}
 
 	public Operation getOperation(String filename, int operationNumber)
-			throws NotParticipatingException, NoSuchOperationNumber {
+			throws NotParticipatingException, NoSuchOperationNumberException {
 		FileLog l = getLog(filename);
 		if (operationNumber >= l.nextOperationNumber) {
-			throw new NoSuchOperationNumber();
+			throw new NoSuchOperationNumberException();
 		}
 		Operation op = l.operations.get(operationNumber);
 		if (op == null) {
@@ -281,7 +358,7 @@ public class LogFileSystem {
 
 	public void joinGroup(String filename, byte[] packedLog)
 			throws AlreadyParticipatingException {
-		participate(filename, unpack(packedLog));
+		participate(filename, FileLog.unpack(packedLog));
 	}
 
 	public void leave(String filename, int address)
@@ -290,15 +367,13 @@ public class LogFileSystem {
 	}
 
 	public void lockFile(String filename, int address)
-			throws NotParticipatingException {
-		memberOperation(filename, "Lock", new Lock(address));
-	}
-
-	private void memberOperation(String filename, String opType,
-			MemberOperation op) throws NotParticipatingException {
-		logAccess(filename, opType);
+			throws NotParticipatingException, AlreadyLockedException {
+		logAccess(filename, "Lock");
 		FileLog l = getLog(filename);
-		l.addOperation(op);
+		if (l.checkLocked() != null) {
+			throw new AlreadyLockedException();
+		}
+		l.addOperation(new Lock(address));
 	}
 
 	public void logAccess(String filename, String operation) {
@@ -311,12 +386,19 @@ public class LogFileSystem {
 		logger.finer(msg);
 	}
 
+	private void memberOperation(String filename, String opType,
+			MemberOperation op) throws NotParticipatingException {
+		logAccess(filename, opType);
+		FileLog l = getLog(filename);
+		l.addOperation(op);
+	}
+
 	public byte[] packLog(String filename) throws NotParticipatingException {
 		FileLog l = getLog(filename);
 		return l.pack();
 	}
 
-	public void participate(String filename, FileLog log)
+	private void participate(String filename, FileLog log)
 			throws AlreadyParticipatingException {
 		if (logs.containsKey(filename)) {
 			throw new AlreadyParticipatingException();
@@ -324,18 +406,29 @@ public class LogFileSystem {
 		logs.put(filename, log);
 	}
 
-	/**
-	 * Should be static in FileLog, but Java won't allow
-	 */
-	public FileLog unpack(byte[] packedLog) {
-		// TODO: HIGH: Implement
-		return null;
+	public void unlockFile(String filename, int address)
+			throws NotParticipatingException, NotLockedException,
+			FileLockedByAnotherAddressException {
+		logAccess(filename, "Unlock");
+		FileLog l = getLog(filename);
+		Integer lockedBy = l.checkLocked();
+		if (lockedBy == null) {
+			throw new NotLockedException();
+		} else if (lockedBy != address) {
+			throw new FileLockedByAnotherAddressException();
+		}
+		l.addOperation(new Unlock(address));
 	}
 
-	public void writeFile(String filename, String content, boolean append)
-			throws FileDoesNotExistException, NotParticipatingException {
+	public void writeFile(String filename, String content, boolean append,
+			int address) throws FileDoesNotExistException,
+			NotParticipatingException, FileLockedByAnotherAddressException {
 		logAccess(filename, "Write", content);
 		FileLog l = getLog(filename);
+		Integer locked = l.checkLocked();
+		if (locked != null && locked != address) {
+			throw new FileLockedByAnotherAddressException();
+		}
 		if (l.checkExists()) {
 			l.addOperation(new Write(content, append));
 		} else {

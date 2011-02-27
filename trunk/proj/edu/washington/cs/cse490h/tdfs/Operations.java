@@ -2,18 +2,27 @@ package edu.washington.cs.cse490h.tdfs;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
+// TODO: HIGH: Define toString, pack in terms of toString
+
 // TODO: Contention friendly ops
 
 abstract class Operation {
 	static String packetDelimiter = " ";
 
-	abstract byte[] pack();
+	byte[] pack() {
+		return Utility.stringToByteArray(toString());
+	}
 
 	static Operation unpack(byte[] bytes) {
 		String msg = Utility.byteArrayToString(bytes);
 		int start = 0;
 		int stop = msg.indexOf(packetDelimiter);
-		String cmd = msg.substring(start, stop);
+		String cmd;
+		if (stop == -1) {
+			cmd = msg;
+		} else {
+			cmd = msg.substring(start, stop);
+		}
 		if (cmd.equals("Create")) {
 			return new Create();
 		} else if (cmd.equals("Delete")) {
@@ -22,18 +31,15 @@ abstract class Operation {
 			return new Forgotten();
 		} else if (cmd.equals("Join")) {
 			start = stop + packetDelimiter.length();
-			stop = msg.indexOf(packetDelimiter, start);
-			int address = Integer.parseInt(msg.substring(start, stop));
+			int address = Integer.parseInt(msg.substring(start));
 			return new Join(address);
 		} else if (cmd.equals("Leave")) {
 			start = stop + packetDelimiter.length();
-			stop = msg.indexOf(packetDelimiter, start);
-			int address = Integer.parseInt(msg.substring(start, stop));
+			int address = Integer.parseInt(msg.substring(start));
 			return new Leave(address);
 		} else if (cmd.equals("Lock")) {
 			start = stop + packetDelimiter.length();
-			stop = msg.indexOf(packetDelimiter, start);
-			int address = Integer.parseInt(msg.substring(start, stop));
+			int address = Integer.parseInt(msg.substring(start));
 			return new Lock(address);
 		} else if (cmd.equals("TXAbort")) {
 			return new TXAbort();
@@ -43,8 +49,7 @@ abstract class Operation {
 			return new TXStart();
 		} else if (cmd.equals("Unlock")) {
 			start = stop + packetDelimiter.length();
-			stop = msg.indexOf(packetDelimiter, start);
-			int address = Integer.parseInt(msg.substring(start, stop));
+			int address = Integer.parseInt(msg.substring(start));
 			return new Unlock(address);
 		} else if (cmd.equals("Write")) {
 			start = stop + packetDelimiter.length();
@@ -57,7 +62,7 @@ abstract class Operation {
 			throw new RuntimeException("attempt to unpack invalid operation: "
 					+ msg);
 		}
-		
+
 	}
 }
 
@@ -74,23 +79,23 @@ abstract class MemberOperation extends Operation {
 
 class Create extends FileOperation {
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("Create");
+	public String toString() {
+		return "Create";
 	}
 
 }
 
 class Delete extends FileOperation {
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("Delete");
+	public String toString() {
+		return "Delete";
 	}
 }
 
 class Forgotten extends Operation {
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("Forgotten");
+	public String toString() {
+		return "Forgotten";
 	}
 }
 
@@ -102,8 +107,8 @@ class Join extends MemberOperation {
 	}
 
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("Join" + packetDelimiter + address);
+	public String toString() {
+		return "Join" + packetDelimiter + address;
 	}
 }
 
@@ -113,8 +118,8 @@ class Leave extends MemberOperation {
 	}
 
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("Leave" + packetDelimiter + address);
+	public String toString() {
+		return "Leave" + packetDelimiter + address;
 	}
 }
 
@@ -124,29 +129,29 @@ class Lock extends MemberOperation {
 	}
 
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("Lock" + packetDelimiter + address);
+	public String toString() {
+		return "Lock" + packetDelimiter + address;
 	}
 }
 
 class TXAbort extends Operation {
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("TXAbort");
+	public String toString() {
+		return "TXAbort";
 	}
 }
 
 class TXCommit extends Operation {
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("TXCommit");
+	public String toString() {
+		return "TXCommit";
 	}
 }
 
 class TXStart extends Operation {
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("TXStart");
+	public String toString() {
+		return "TXStart";
 	}
 }
 
@@ -156,8 +161,8 @@ class Unlock extends MemberOperation {
 	}
 
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("Unlock" + packetDelimiter + address);
+	public String toString() {
+		return "Unlock" + packetDelimiter + address;
 	}
 }
 
@@ -171,8 +176,7 @@ class Write extends FileOperation {
 	}
 
 	@Override
-	byte[] pack() {
-		return Utility.stringToByteArray("Write" + packetDelimiter + append
-				+ packetDelimiter + content);
+	public String toString() {
+		return "Write" + packetDelimiter + append + packetDelimiter + content;
 	}
 }
