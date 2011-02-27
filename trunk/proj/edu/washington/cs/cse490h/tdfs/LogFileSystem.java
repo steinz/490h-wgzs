@@ -1,6 +1,5 @@
 package edu.washington.cs.cse490h.tdfs;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -174,6 +173,8 @@ public class LogFileSystem {
 		}
 
 		public byte[] pack() {
+			operations.entrySet().iterator().next().
+			
 			// TODO: HIGH: Implement
 			return null;
 		}
@@ -198,6 +199,11 @@ public class LogFileSystem {
 		} else {
 			l.addOperation(new Create());
 		}
+	}
+
+	public void createGroup(String filename)
+			throws AlreadyParticipatingException {
+		participate(filename, new FileLog());
 	}
 
 	public void deleteFile(String filename) throws FileDoesNotExistException,
@@ -237,6 +243,19 @@ public class LogFileSystem {
 		return l.nextOperationNumber;
 	}
 
+	public Operation getOperation(String filename, int operationNumber)
+			throws NotParticipatingException, NoSuchOperationNumber {
+		FileLog l = getLog(filename);
+		if (operationNumber >= l.nextOperationNumber) {
+			throw new NoSuchOperationNumber();
+		}
+		Operation op = l.operations.get(operationNumber);
+		if (op == null) {
+			op = new Forgotten();
+		}
+		return op;
+	}
+
 	public List<Integer> getParticipants(String filename)
 			throws NotParticipatingException {
 		FileLog l = getLog(filename);
@@ -246,6 +265,11 @@ public class LogFileSystem {
 	public void join(String filename, int address)
 			throws NotParticipatingException {
 		memberOperation(filename, "Join", new Join(address));
+	}
+
+	public void joinGroup(String filename, byte[] packedLog)
+			throws AlreadyParticipatingException {
+		participate(filename, unpack(packedLog));
 	}
 
 	public void leave(String filename, int address)
@@ -280,16 +304,6 @@ public class LogFileSystem {
 		return l.pack();
 	}
 
-	public void createGroup(String filename)
-			throws AlreadyParticipatingException {
-		participate(filename, new FileLog());
-	}
-
-	public void joinGroup(String filename, byte[] packedLog)
-			throws AlreadyParticipatingException {
-		participate(filename, unpack(packedLog));
-	}
-
 	public void participate(String filename, FileLog log)
 			throws AlreadyParticipatingException {
 		if (logs.containsKey(filename)) {
@@ -298,17 +312,12 @@ public class LogFileSystem {
 		logs.put(filename, log);
 	}
 
+	/**
+	 * Should be static in FileLog, but Java won't allow
+	 */
 	public FileLog unpack(byte[] packedLog) {
 		// TODO: HIGH: Implement
 		return null;
-	}
-
-	public void startLog(String filename) throws AlreadyParticipatingException {
-		if (logs.containsKey(filename)) {
-			throw new AlreadyParticipatingException();
-		}
-		FileLog l = new FileLog();
-		logs.put(filename, l);
 	}
 
 	public void writeFile(String filename, String content, boolean append)
