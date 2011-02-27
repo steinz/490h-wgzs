@@ -14,7 +14,7 @@ import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.logging.Logger;
 
-public class LogFileSystem {
+public class LogFileSystem implements LogFS {
 
 	private static class TXBoolean {
 		private boolean exists = false;
@@ -376,11 +376,11 @@ public class LogFileSystem {
 		l.addOperation(new Lock(address));
 	}
 
-	public void logAccess(String filename, String operation) {
+	private void logAccess(String filename, String operation) {
 		logAccess(filename, operation, null);
 	}
 
-	public void logAccess(String filename, String operation, String content) {
+	private void logAccess(String filename, String operation, String content) {
 		String msg = operation.toString().toLowerCase() + " file: " + filename
 				+ (content == null ? "" : " content: " + content);
 		logger.finer(msg);

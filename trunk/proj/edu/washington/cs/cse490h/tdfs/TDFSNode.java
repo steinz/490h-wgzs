@@ -55,7 +55,7 @@ public class TDFSNode extends RIONode {
 	 */
 	private int largestProposalNumberAccepted;
 
-	private LogFileSystem logFS;
+	private LogFS logFS;
 
 	@Override
 	public void start() {
