@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 
 public class LogFileSystem {
@@ -92,12 +93,11 @@ public class LogFileSystem {
 
 		private int nextOperationNumber;
 
-		public FileLog(SortedMap<Integer, Operation> operations,
-				int nextOperationNumber) {
-			this.operations = operations;
-			this.nextOperationNumber = nextOperationNumber;
+		public FileLog() {
+			this.operations = new TreeMap<Integer, Operation>();
+			this.nextOperationNumber = 0;
 		}
-		
+
 		public void addOperation(Operation op) {
 			operations.put(nextOperationNumber, op);
 		}
@@ -172,13 +172,18 @@ public class LogFileSystem {
 			}
 			return participants;
 		}
+
+		public byte[] pack() {
+			// TODO: HIGH: Implement
+			return null;
+		}
 	}
-	
+
 	private Map<String, FileLog> logs;
 
 	private Logger logger;
 
-	public LogFileSystem() throws IOException {		
+	public LogFileSystem() {
 		this.logs = new HashMap<String, FileLog>();
 		this.logger = Logger
 				.getLogger("edu.washington.cs.cse490h.dfs.LogFileSystem");
@@ -226,12 +231,6 @@ public class LogFileSystem {
 		return l;
 	}
 
-	public SortedMap<Integer, Operation> getLogOpList(String filename)
-			throws NotParticipatingException {
-		FileLog l = getLog(filename);
-		return l.operations;
-	}
-
 	public int getNextOperationNumber(String filename)
 			throws NotParticipatingException {
 		FileLog l = getLog(filename);
@@ -276,12 +275,39 @@ public class LogFileSystem {
 		logger.finer(msg);
 	}
 
-	public void participate(String filename, SortedMap<Integer, Operation> log,
-			int nextOperationNumber) throws AlreadyParticipatingException {
+	public byte[] packLog(String filename) throws NotParticipatingException {
+		FileLog l = getLog(filename);
+		return l.pack();
+	}
+
+	public void createGroup(String filename)
+			throws AlreadyParticipatingException {
+		participate(filename, new FileLog());
+	}
+
+	public void joinGroup(String filename, byte[] packedLog)
+			throws AlreadyParticipatingException {
+		participate(filename, unpack(packedLog));
+	}
+
+	public void participate(String filename, FileLog log)
+			throws AlreadyParticipatingException {
 		if (logs.containsKey(filename)) {
 			throw new AlreadyParticipatingException();
 		}
-		FileLog l = new FileLog(log, nextOperationNumber);
+		logs.put(filename, log);
+	}
+
+	public FileLog unpack(byte[] packedLog) {
+		// TODO: HIGH: Implement
+		return null;
+	}
+
+	public void startLog(String filename) throws AlreadyParticipatingException {
+		if (logs.containsKey(filename)) {
+			throw new AlreadyParticipatingException();
+		}
+		FileLog l = new FileLog();
 		logs.put(filename, l);
 	}
 
