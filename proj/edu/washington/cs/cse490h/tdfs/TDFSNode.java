@@ -20,7 +20,11 @@ public class TDFSNode extends RIONode {
 	/*
 	 * TODO: HIGH:
 	 * 
-	 * OnCommand Handlers
+	 * OnCommand Handlers:
+	 * 
+	 * TXStart(f1); x = Get(f1); Put(f1, "..."); TXCommit(); ->
+	 * 
+	 * Lock(f1); TXStart(f1); Get(f1); Put(f1, "..."); TXCommit(f1); Unlock(f1);
 	 * 
 	 * Paxos Flow / Correctness
 	 * 
