@@ -380,7 +380,7 @@ public class LogFileSystem implements LogFS {
 	private void logAccess(String filename, String operation, String content) {
 		String msg = operation.toString().toLowerCase() + " file: " + filename
 				+ (content == null ? "" : " content: " + content);
-		logger.finer(msg);
+		logger.finer(msg); 
 	}
 
 	private void memberOperation(String filename, String opType,

@@ -42,7 +42,7 @@ public class Proposal {
 			out.write(delim);
 			out.write(op);
 		} catch (IOException e) {
-			// TODO: Do something - can't print error because no node
+			throw new RuntimeException(e);
 		}
 
 		return out.toByteArray();
@@ -68,7 +68,7 @@ public class Proposal {
 			this.operation = Operation.unpack(operationBuf);
 
 		} catch (IOException e) {
-			// TODO: Do something
+			throw new RuntimeException(e);
 		}
 
 	}
