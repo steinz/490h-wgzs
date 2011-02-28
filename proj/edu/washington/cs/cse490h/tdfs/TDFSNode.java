@@ -24,7 +24,13 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * Paxos Flow / Correctness
 	 * 
+	 * (Req -1>) Prepare -> OldOp -1> (done) | PromiseDenial -1> (done) |
+	 * Promise -1> Accept -> AcceptDenial -1> (done) | Accepted -1> Learned ->
+	 * (done)
+	 * 
 	 * Stable Storage
+	 * 
+	 * Ensure majority checks using > not >= half count
 	 */
 
 	/*
@@ -95,14 +101,13 @@ public class TDFSNode extends RIONode {
 
 		// Create a tokenizer and get the first token (the actual cmd)
 		StringTokenizer tokens = new StringTokenizer(line, " ");
-		String cmd= "";
+		String cmd = "";
 		try {
 			cmd = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
 			// TODO: parent.printError("no command found in: " + line);
 			return;
 		}
-		
 
 		/*
 		 * Dynamically call <cmd>Command, passing off the tokenizer and the full
@@ -123,9 +128,9 @@ public class TDFSNode extends RIONode {
 		}
 
 	}
-	
-	public void txstartHandler(StringTokenizer tokens, String line){
-		
+
+	public void txstartHandler(StringTokenizer tokens, String line) {
+
 		String filename = "";
 		try {
 			filename = tokens.nextToken().toLowerCase();
@@ -133,7 +138,7 @@ public class TDFSNode extends RIONode {
 			// TODO: parent.printError("no filename found in: " + line);
 			return;
 		}
-		if (joinedAlready(filename)){
+		if (joinedAlready(filename)) {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
@@ -142,18 +147,18 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new TXStart(), filename, nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new TXStart(), filename, nextOperation,
+						nextProposalNumber(filename));
 			} catch (NotParticipatingException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
 		}
-		
-		
+
 	}
-	
-	public void txcommitHandler(StringTokenizer tokens, String line){
-		
+
+	public void txcommitHandler(StringTokenizer tokens, String line) {
+
 		String filename = "";
 		try {
 			filename = tokens.nextToken().toLowerCase();
@@ -161,8 +166,8 @@ public class TDFSNode extends RIONode {
 			// TODO: parent.printError("no filename found in: " + line);
 			return;
 		}
-		
-		if (joinedAlready(filename)){
+
+		if (joinedAlready(filename)) {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
@@ -171,7 +176,8 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new TXCommit(), filename, nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new TXCommit(), filename,
+						nextOperation, nextProposalNumber(filename));
 			} catch (NotParticipatingException e) {
 				// TODO Log error/throw exception
 				e.printStackTrace();
@@ -180,18 +186,19 @@ public class TDFSNode extends RIONode {
 		}
 
 	}
-	
-	public void putHandler(StringTokenizer tokens, String line){
+
+	public void putHandler(StringTokenizer tokens, String line) {
 		String filename, contents = "";
 		try {
 			filename = tokens.nextToken().toLowerCase();
 			contents = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
-			// TODO: parent.printError("no filename or contents found in: " + line);
+			// TODO: parent.printError("no filename or contents found in: " +
+			// line);
 			return;
 		}
-		
-		if (joinedAlready(filename)){
+
+		if (joinedAlready(filename)) {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
@@ -200,7 +207,8 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new Write(contents, false), filename, nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new Write(contents, false), filename,
+						nextOperation, nextProposalNumber(filename));
 			} catch (NotParticipatingException e) {
 				// TODO Log error/throw exception
 			}
@@ -208,17 +216,18 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	public void appendHandler(StringTokenizer tokens, String line){
+	public void appendHandler(StringTokenizer tokens, String line) {
 		String filename, contents = "";
 		try {
 			filename = tokens.nextToken().toLowerCase();
 			contents = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
-			// TODO: parent.printError("no filename or contents found in: " + line);
+			// TODO: parent.printError("no filename or contents found in: " +
+			// line);
 			return;
 		}
-		
-		if (joinedAlready(filename)){
+
+		if (joinedAlready(filename)) {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
@@ -227,28 +236,30 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new Write(contents, true), filename, nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new Write(contents, true), filename,
+						nextOperation, nextProposalNumber(filename));
 			} catch (NotParticipatingException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
 		}
 	}
-	
-	public void getHandler(){
-		
+
+	public void getHandler() {
+
 	}
-	
-	public void createHandler(StringTokenizer tokens, String line){
+
+	public void createHandler(StringTokenizer tokens, String line) {
 		String filename, contents = "";
 		try {
 			filename = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
-			// TODO: parent.printError("no filename or contents found in: " + line);
+			// TODO: parent.printError("no filename or contents found in: " +
+			// line);
 			return;
 		}
-		
-		if (joinedAlready(filename)){
+
+		if (joinedAlready(filename)) {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
@@ -257,24 +268,26 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new Create(), filename, nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new Create(), filename, nextOperation,
+						nextProposalNumber(filename));
 			} catch (NotParticipatingException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
 		}
 	}
-	
-	public void deleteHandler(StringTokenizer tokens, String line){
+
+	public void deleteHandler(StringTokenizer tokens, String line) {
 		String filename, contents = "";
 		try {
 			filename = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
-			// TODO: parent.printError("no filename or contents found in: " + line);
+			// TODO: parent.printError("no filename or contents found in: " +
+			// line);
 			return;
 		}
-		
-		if (joinedAlready(filename)){
+
+		if (joinedAlready(filename)) {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
@@ -283,40 +296,43 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new Write(contents, true), filename, nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new Write(contents, true), filename,
+						nextOperation, nextProposalNumber(filename));
 			} catch (NotParticipatingException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
 		}
 	}
-	
-	
-	
+
 	/**
-	 * Checks whether a node has joined the paxos group for a file already. If it hasn't, it automatically sends the join request.
-	 * @param filename The filename for the paxos group
+	 * Checks whether a node has joined the paxos group for a file already. If
+	 * it hasn't, it automatically sends the join request.
+	 * 
+	 * @param filename
+	 *            The filename for the paxos group
 	 * @return True if the node has joined already, false otherwise
 	 */
-	public boolean joinedAlready(String filename){
-		if (!logFS.isParticipating(filename)){
+	public boolean joinedAlready(String filename) {
+		if (!logFS.isParticipating(filename)) {
 			// TODO: High: Queue request or something
 			Join(filename);
 			return false;
 		}
 		return true;
-		
+
 	}
-	
-	public void Join(String filename){
+
+	public void Join(String filename) {
 		Proposal proposal = null;
 		try {
-			proposal = new Proposal(new Join(addr), filename, -1, nextProposalNumber(filename));
+			proposal = new Proposal(new Join(addr), filename, -1,
+					nextProposalNumber(filename));
 		} catch (NotParticipatingException e1) {
 			// TODO Log error/throw exception
 		}
-		int coordinator = 0; //hashFilename(filename);
-		if (coordinator == addr){
+		int coordinator = 0; // hashFilename(filename);
+		if (coordinator == addr) {
 			try {
 				logFS.createGroup(filename);
 			} catch (AlreadyParticipatingException e) {
@@ -325,7 +341,7 @@ public class TDFSNode extends RIONode {
 		}
 		RIOSend(coordinator, MessageType.Request, proposal.pack());
 	}
-	
+
 	@Override
 	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
 		String msgString = Utility.byteArrayToString(msg);
@@ -370,41 +386,52 @@ public class TDFSNode extends RIONode {
 	private int hashFilename(String filename) {
 		return filename.hashCode() % coordinatorCount;
 	}
-	
+
 	/**
-	 * The proposer checks
-	 * if this node is part of the paxos group, and if it's not it checks
-	 * whether this proposal is a join. If it is not a join and the node is not
-	 * part of the paxos group, then the proposal is rejected.
+	 * The proposer checks if this node is part of the paxos group, and if it's
+	 * not it checks whether this proposal is a join. If it is not a join and
+	 * the node is not part of the paxos group, then the proposal is rejected.
 	 * 
 	 * @param prop
 	 *            The proposal encapsulated
 	 */
 	public void receiveRequest(int from, byte[] msg) {
 
-		Proposal proposal = new Proposal(msg);
-		prepare(from, proposal);
+		Proposal p = new Proposal(msg);
+
+		if (p.operation instanceof Join) {
+			try {
+				p.operationNumber = logFS.getNextOperationNumber(p.filename);
+			} catch (NotParticipatingException e) {
+				// TODO: HIGH: create group
+				return;
+			}
+			prepare(from, p);
+		} else {
+			// ignore for now...
+			// this will be used for lead proposer later on
+		}
 	}
-	
+
 	/**
 	 * Sends a prepare request to all acceptors in this Paxos group.
-	 * @param proposal The proposal to send
+	 * 
+	 * @param proposal
+	 *            The proposal to send
 	 */
-	public void prepare(int from, Proposal proposal)
-	{
+	public void prepare(int from, Proposal proposal) {
 		List<Integer> participants = null;
 		try {
 			participants = logFS.getParticipants(proposal.filename);
 		} catch (NotParticipatingException e) {
 			// TODO: Deal with exception
 		}
-		
 		if (!participants.contains(from)
 				&& !(proposal.operation instanceof Join)) {
 			// TODO: High: Log error
 			return;
 		}
-		
+
 		Iterator<Integer> iter = participants.iterator();
 		while (iter.hasNext()) {
 			int next = iter.next();
@@ -460,10 +487,10 @@ public class TDFSNode extends RIONode {
 
 		// TODO: High - write to local log
 
-
 		if (op instanceof Join)
 			try {
-				RIOSend(from, MessageType.Joined, Utility.stringToByteArray(filename));
+				RIOSend(from, MessageType.Joined,
+						Utility.stringToByteArray(filename));
 				logFS.join(filename, from);
 			} catch (NotParticipatingException e) {
 				// TODO: High: Send error back
@@ -472,11 +499,14 @@ public class TDFSNode extends RIONode {
 	}
 
 	/**
+	 * 
 	 * Select a proposal number and send it to each acceptor. Don't need to
 	 * worry about a quorum yet - if not enough acceptors are on, won't proceed
 	 * past the accept stage and will stall, which is allowable.
 	 */
 	public void prepare(int from, byte[] msg) {
+
+		// TODO: HIGH: merge two prepare methods???
 
 		Proposal proposal = new Proposal(msg);
 		int proposalNumber = proposal.proposalNumber;
@@ -522,12 +552,14 @@ public class TDFSNode extends RIONode {
 		int proposalNumber = proposal.proposalNumber;
 		int operationNumber = proposal.operationNumber;
 		String filename = proposal.filename;
-		int largestProposalNumberAccepted = lastProposalNumberPromised.get(filename);
-		
-		
+		int largestProposalNumberAccepted = lastProposalNumberPromised
+				.get(filename);
+
 		if (proposalNumber <= largestProposalNumberAccepted) {
-			String lastProposalNumber = lastProposalNumberPromised.get(filename) + "";
-			RIOSend(from, MessageType.PromiseDenial, Utility.stringToByteArray(lastProposalNumber));
+			String lastProposalNumber = lastProposalNumberPromised
+					.get(filename) + "";
+			RIOSend(from, MessageType.PromiseDenial,
+					Utility.stringToByteArray(lastProposalNumber));
 			return;
 		}
 
@@ -554,9 +586,9 @@ public class TDFSNode extends RIONode {
 				Utility.stringToByteArray(proposalNumber + ""));
 
 	}
-	
-	public void sendFile(String filename){
-	
+
+	public void sendFile(String filename) {
+
 	}
 
 	/**
