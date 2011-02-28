@@ -240,7 +240,7 @@ class ManagerNode {
 		this.filePermissionCache = new Cache(node);
 		this.transactionTouchedFiles = new HashMap<Integer, List<String>>();
 		this.fileOwners = new HashMap<String, Integer>();
-		this.knownManagers = new HashMap<Integer>();
+		this.knownManagers = new HashSet<Integer>();
 
 		for (int i = 1; i < 6; i++) {
 			replicaNode.put(i, (i % 5 + 1));
@@ -313,7 +313,7 @@ class ManagerNode {
 	public void receiveWDDelete(int client, String filename) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -408,7 +408,7 @@ class ManagerNode {
 	public void receiveTXStart(int client, String empty) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -443,7 +443,7 @@ class ManagerNode {
 	public void receiveTXCommit(int client, String empty) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -486,7 +486,7 @@ class ManagerNode {
 	public void receiveTXAbort(int client, String empty) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -522,7 +522,7 @@ class ManagerNode {
 	public void receiveCreate(int client, String filename) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -570,7 +570,7 @@ class ManagerNode {
 	public void receiveDelete(int client, String filename) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -667,7 +667,7 @@ class ManagerNode {
 			MessageType forwardingProtocol, boolean preserveROs) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -760,7 +760,7 @@ class ManagerNode {
 	public void receiveIC(int client, String filename) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -830,7 +830,7 @@ class ManagerNode {
 	public void receiveRC(int client, String filename) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -849,7 +849,7 @@ class ManagerNode {
 	public void receiveWC(int client, String filename) {
 
 		if (this.node.addr != primaryAddress && client != primaryAddress) {
-			this.node.RIOSend(client, MessageType.ManagerIs, primaryAddress);
+			this.node.RIOSend(client, MessageType.ManagerIs, Utility.stringToByteArray(primaryAddress + ""));
 			return;
 		}
 
@@ -1128,7 +1128,7 @@ class ManagerNode {
 			while (iter.hasNext()){
 				int next = iter.next();
 				if (next != node.addr)
-					node.RIOSend(next, protocol, filename)
+					node.RIOSend(next, protocol, Utility.stringToByteArray(filename));
 			}
 		}
 			
