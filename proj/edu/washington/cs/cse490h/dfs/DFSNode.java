@@ -205,7 +205,7 @@ public class DFSNode extends RIONode {
 		nullify();
 		this.isManager = true;
 		this.managerFunctions = new ManagerNode(this);
-		this.paxosFunctions = new PaxosNode(this, managerList);
+		this.paxosFunctions = new PaxosNode(this, managerFunctions, managerList);
 		restartFS();
 
 		/*

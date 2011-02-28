@@ -6,6 +6,7 @@ import java.util.Iterator;
 import java.util.Set;
 
 import edu.washington.cs.cse490h.lib.Callback;
+import edu.washington.cs.cse490h.lib.Node;
 import edu.washington.cs.cse490h.lib.Utility;
 
 /**
@@ -61,7 +62,7 @@ public class PaxosNode {
 	private DFSNode node;
 	private ManagerNode managerNode;
 
-	public PaxosNode(Node n, ManagerNode m, Set<Integer> managers) {
+	public PaxosNode(DFSNode n, ManagerNode m, Set<Integer> managers) {
 		this.node = n;
 		this.managerNode = m;
 		this.nodeType = NodeTypes.Acceptor; // By default, a node is assumed to
@@ -203,7 +204,7 @@ public class PaxosNode {
 
 		proposersResponded++;
 
-		if (proposersResponded < (knownAcceptors.size() / 2))
+		if (proposersResponded < (knownManagers.size() / 2))
 			return;
 
 		// A majority has responded, so continue on
@@ -215,7 +216,7 @@ public class PaxosNode {
 
 		Iterator<Integer> iter = knownManagers.iterator();
 		while (iter.hasNext()) {
-			int next = iter.next()
+			int next = iter.next();
 			if (next != this.node.addr){
 				this.node.RIOSend(
 					iter.next(),
@@ -257,9 +258,7 @@ public class PaxosNode {
 					MessageType.Accepted,
 					Utility.stringToByteArray(lastProposalNumberSent + " "
 							+ chosenValue));
-		} else {
-			receiveFinished(this.node.addr);
-		}
+		} 
 	}
 
 	/**
