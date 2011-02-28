@@ -182,7 +182,7 @@ public class LogFileSystem implements LogFS {
 			}
 		}
 
-		public List<Integer> getParticipants() {
+		public List<Integer> getParticipants() { 
 			List<Integer> participants = new ArrayList<Integer>();
 			for (Entry<Integer, Operation> entry : operations.entrySet()) {
 				Operation op = entry.getValue();

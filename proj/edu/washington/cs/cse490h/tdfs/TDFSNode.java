@@ -3,6 +3,7 @@ package edu.washington.cs.cse490h.tdfs;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -17,6 +18,26 @@ import edu.washington.cs.cse490h.lib.Utility;
 public class TDFSNode extends RIONode {
 
 	/*
+	 * TODO: HIGH:
+	 * 
+	 * OnCommand Handlers
+	 * 
+	 * Paxos Flow / Correctness
+	 * 
+	 * Stable Storage
+	 */
+
+	/*
+	 * TODO: Support dynamic coordinator groups:
+	 * 
+	 * Include the coordinator count as part of the filename (not necessarily
+	 * literally), and then use a biased hash function so that the expected
+	 * distribution of hash codes stays ~uniform even when the number of
+	 * coordinators changes: as long as nodes usually know the actual total
+	 * number of coordinators, the distribution of hash codes should be good
+	 */
+
+	/*
 	 * TODO: HIGH: Coordinator is lead proposer/learner - if can't reach
 	 * coordinator, go to second or third coordinator ((hash + {1,2}) %
 	 * nodeCount)
@@ -29,9 +50,10 @@ public class TDFSNode extends RIONode {
 
 	List<String> filesBeingOperatedOn;
 
-	
 	private int coordinatorCount;
-	
+
+	private Map<String, Integer> lastProposalNumbersSent;
+
 	/**
 	 * PAXOS Structures
 	 */
@@ -65,8 +87,8 @@ public class TDFSNode extends RIONode {
 		filesBeingOperatedOn = new ArrayList<String>();
 		this.logFS = new LogFileSystem();
 		this.coordinatorCount = 3; // TODO: HIGH: configHandler
-		
-		
+		this.lastProposalNumbersSent = new HashMap<String, Integer>();
+
 		// Paxos
 		this.largestProposalNumberAccepted = -1;
 		this.acceptorsResponded = 0;
@@ -86,7 +108,6 @@ public class TDFSNode extends RIONode {
 			// TODO: parent.printError("no command found in: " + line);
 			return;
 		}
-		
 
 		/*
 		 * Dynamically call <cmd>Command, passing off the tokenizer and the full
@@ -107,26 +128,27 @@ public class TDFSNode extends RIONode {
 		}
 
 	}
-	
-	public void txstartHandler(StringTokenizer tokens){
-	}
-	
-	public void txcommitHandler(){
-		
-	}
-	
-	public void putHandler(){
-		
+
+	public void txstartHandler(StringTokenizer tokens) {
 	}
 
-	public void appendHandler(){
-		
+	public void txcommitHandler() {
+
 	}
-	
-	public void Join(String filename){
-		Proposal proposal = new Proposal(new Join(addr), filename, -1, nextProposalNumber());
+
+	public void putHandler() {
+
 	}
-	
+
+	public void appendHandler() {
+
+	}
+
+	public void Join(String filename) {
+		Proposal proposal = new Proposal(new Join(addr), filename, -1,
+				nextProposalNumber(filename));
+	}
+
 	@Override
 	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
 		String msgString = Utility.byteArrayToString(msg);
@@ -147,22 +169,40 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	
-	private int nextProposalNumber(){
-		return 0; // TODO: High: Change
-	}
-	
 	/**
-	 * The proposer checks
-	 * if this node is part of the paxos group, and if it's not it checks
-	 * whether this proposal is a join. If it is not a join and the node is not
-	 * part of the paxos group, then the proposal is rejected.
+	 * Relies on participants being static for any given operation number
+	 */
+	private int nextProposalNumber(String filename)
+			throws NotParticipatingException {
+		List<Integer> participants = logFS.getParticipants(filename);
+		Integer lastNumSent = lastProposalNumbersSent.get(filename);
+		if (lastNumSent == null) {
+			// use offset
+			Collections.sort(participants); // TODO: document that this is ok
+			int number = participants.indexOf(this.addr);
+			lastProposalNumbersSent.put(filename, number);
+			return number;
+		} else {
+			// increment last sent by participation count
+			int number = lastNumSent + participants.size();
+			lastProposalNumbersSent.put(filename, number);
+			return number;
+		}
+	}
+
+	private int hashFilename(String filename) {
+		return filename.hashCode() % coordinatorCount;
+	}
+
+	/**
+	 * The proposer checks if this node is part of the paxos group, and if it's
+	 * not it checks whether this proposal is a join. If it is not a join and
+	 * the node is not part of the paxos group, then the proposal is rejected.
 	 * 
 	 * @param prop
 	 *            The proposal encapsulated
 	 */
 	public void prepare(int from, Proposal proposal) {
-
 
 		List<Integer> participants = null;
 		try {
@@ -201,8 +241,10 @@ public class TDFSNode extends RIONode {
 	 * sends out a message to all paxos nodes that this value has been chosen
 	 * and writes it to its own local log.
 	 * 
-	 * @param from The sender
-	 * @param msg The msg, packed as a byte array
+	 * @param from
+	 *            The sender
+	 * @param msg
+	 *            The msg, packed as a byte array
 	 */
 	public void receiveAccepted(int from, byte[] msg) {
 		Proposal proposal = new Proposal(msg);
@@ -320,9 +362,9 @@ public class TDFSNode extends RIONode {
 				Utility.stringToByteArray(proposalNumber + ""));
 
 	}
-	
-	public void sendFile(String filename){
-	
+
+	public void sendFile(String filename) {
+
 	}
 
 	/**
