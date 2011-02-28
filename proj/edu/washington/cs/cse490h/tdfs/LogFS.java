@@ -32,6 +32,8 @@ public interface LogFS {
 	public List<Integer> getParticipants(String filename)
 			throws NotParticipatingException;
 
+	public boolean isParticipating(String filename);
+
 	public void join(String filename, int address)
 			throws NotParticipatingException;
 

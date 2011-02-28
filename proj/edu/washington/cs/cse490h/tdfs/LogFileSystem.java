@@ -223,22 +223,18 @@ public class LogFileSystem implements LogFS {
 		public static FileLog unpack(byte[] packedLog) {
 			DataInputStream stream = new DataInputStream(
 					new ByteArrayInputStream(packedLog));
-			int offset = 0;
 
 			SortedMap<Integer, Operation> operations = new TreeMap<Integer, Operation>();
 			int nextOpNumber;
 
 			try {
 				nextOpNumber = stream.readInt();
-				offset += 4;
 
 				while (stream.available() > 0) {
 					int opNumber = stream.readInt();
 					int opLength = stream.readInt();
-					offset += 8;
 					byte[] packedOp = new byte[opLength];
 					stream.read(packedOp, 0, opLength);
-					offset += opLength;
 					operations.put(opNumber, Operation.unpack(packedOp));
 				}
 			} catch (IOException e) {
@@ -435,5 +431,10 @@ public class LogFileSystem implements LogFS {
 		} else {
 			throw new FileDoesNotExistException();
 		}
+	}
+
+	@Override
+	public boolean isParticipating(String filename) {
+		return logs.containsKey(filename);
 	}
 }
