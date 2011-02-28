@@ -196,6 +196,7 @@ public class TDFSNode extends RIONode {
 		try {
 			filename = tokens.nextToken().toLowerCase();
 			contents = tokens.nextToken().toLowerCase();
+			// TODO: High - you can't do this for contents
 		} catch (NoSuchElementException e) {
 			// TODO: parent.printError("no filename or contents found in: " +
 			// line);
@@ -329,12 +330,9 @@ public class TDFSNode extends RIONode {
 
 	public void Join(String filename) {
 		Proposal proposal = null;
-		try {
-			proposal = new Proposal(new Join(addr), filename, -1,
-					nextProposalNumber(filename));
-		} catch (NotParticipatingException e1) {
-			// TODO Log error/throw exception
-		}
+		
+		proposal = new Proposal(new Join(addr), filename, -1, -1);
+
 		int coordinator = 0; // hashFilename(filename);
 		if (coordinator == addr) {
 			try {
@@ -363,6 +361,7 @@ public class TDFSNode extends RIONode {
 			handler.invoke(instance, args);
 		} catch (Exception e) {
 			printError(e);
+
 		}
 	}
 
@@ -391,31 +390,7 @@ public class TDFSNode extends RIONode {
 		return filename.hashCode() % coordinatorCount;
 	}
 
-	/**
-	 * The proposer checks if this node is part of the paxos group, and if it's
-	 * not it checks whether this proposal is a join. If it is not a join and
-	 * the node is not part of the paxos group, then the proposal is rejected.
-	 * 
-	 * @param prop
-	 *            The proposal encapsulated
-	 */
-	public void receiveRequest(int from, byte[] msg) {
 
-		Proposal p = new Proposal(msg);
-
-		if (p.operation instanceof Join) {
-			try {
-				p.operationNumber = logFS.getNextOperationNumber(p.filename);
-			} catch (NotParticipatingException e) {
-				// TODO: HIGH: create group
-				return;
-			}
-			prepare(from, p);
-		} else {
-			// ignore for now...
-			// this will be used for lead proposer later on
-		}
-	}
 
 	/**
 	 * Sends a prepare request to all acceptors in this Paxos group.
@@ -452,8 +427,8 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * @op The operation
 	 */
-	public void receiveAccept(int from, byte[] msg) {
-		RIOSend(from, MessageType.Accepted, msg);
+	public void receiveAccept(int from, String msg) {
+		RIOSend(from, MessageType.Accepted, Utility.stringToByteArray(msg));
 	}
 
 	/**
@@ -466,8 +441,8 @@ public class TDFSNode extends RIONode {
 	 * @param msg
 	 *            The msg, packed as a byte array
 	 */
-	public void receiveAccepted(int from, byte[] msg) {
-		Proposal proposal = new Proposal(msg);
+	public void receiveAccepted(int from, String msg) {
+		Proposal proposal = new Proposal(Utility.stringToByteArray(msg));
 		String filename = proposal.filename;
 		Operation op = proposal.operation;
 
@@ -486,7 +461,7 @@ public class TDFSNode extends RIONode {
 		while (iter.hasNext()) {
 			int next = iter.next();
 			if (next != addr)
-				RIOSend(next, MessageType.Learned, msg);
+				RIOSend(next, MessageType.Learned, Utility.stringToByteArray(msg));
 		}
 
 		// TODO: High - write to local log
@@ -542,6 +517,33 @@ public class TDFSNode extends RIONode {
 	}
 
 	/**
+	 * The proposer checks if this node is part of the paxos group, and if it's
+	 * not it checks whether this proposal is a join. If it is not a join and
+	 * the node is not part of the paxos group, then the proposal is rejected.
+	 * 
+	 * @param prop
+	 *            The proposal encapsulated
+	 */
+	public void receiveRequest(int from, String msg) {
+
+		Proposal p = new Proposal(Utility.stringToByteArray(msg));
+
+		if (p.operation instanceof Join) {
+			try {
+				p.operationNumber = logFS.getNextOperationNumber(p.filename);
+				p.proposalNumber = nextProposalNumber(p.filename);
+			} catch (NotParticipatingException e) {
+				// TODO: HIGH: create group
+				return;
+			}
+			prepare(from, p);
+		} else {
+			// ignore for now...
+			// this will be used for lead proposer later on
+		}
+	}
+	
+	/**
 	 * Checks to see if the given proposal number is larger than any previous
 	 * proposal. Promises to not accept proposals less than the given proposal
 	 * number if so, and sends the last value it accepted to the proposer
@@ -550,9 +552,9 @@ public class TDFSNode extends RIONode {
 	 * @from Assumed to be the proposer's address
 	 * @proposalNumber The proposal number this node is proposing
 	 */
-	public void receivePrepare(int from, byte[] msg) {
+	public void receivePrepare(int from, String msg) {
 
-		Proposal proposal = new Proposal(msg);
+		Proposal proposal = new Proposal(Utility.stringToByteArray(msg));
 		int proposalNumber = proposal.proposalNumber;
 		int operationNumber = proposal.operationNumber;
 		String filename = proposal.filename;
@@ -602,9 +604,9 @@ public class TDFSNode extends RIONode {
 	 * acceptable behavior.
 	 * 
 	 */
-	public void receivePromise(byte[] msg) {
+	public void receivePromise(int from, String msg) {
 
-		Proposal proposal = new Proposal(msg);
+		Proposal proposal = new Proposal(Utility.stringToByteArray(msg));
 		String filename = proposal.filename;
 		List<Integer> participants = null;
 
@@ -623,7 +625,7 @@ public class TDFSNode extends RIONode {
 		while (iter.hasNext()) {
 			int next = iter.next();
 			if (next != addr) {
-				RIOSend(iter.next(), MessageType.Accept, msg);
+				RIOSend(iter.next(), MessageType.Accept, Utility.stringToByteArray(msg));
 			}
 		}
 
@@ -635,7 +637,10 @@ public class TDFSNode extends RIONode {
 	 * @param msg
 	 *            The proposal, as a byte array
 	 */
-	public void receiveLearned(byte[] msg) {
+	public void receiveLearned(int from, String msg) {
+		
 		// TODO: High: Add to log
 	}
+	
+	
 }
