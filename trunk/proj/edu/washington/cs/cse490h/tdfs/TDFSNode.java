@@ -29,6 +29,9 @@ public class TDFSNode extends RIONode {
 
 	List<String> filesBeingOperatedOn;
 
+	
+	private int coordinatorCount;
+	
 	/**
 	 * PAXOS Structures
 	 */
@@ -61,7 +64,9 @@ public class TDFSNode extends RIONode {
 		queuedOperations = new LinkedList<Operation>();
 		filesBeingOperatedOn = new ArrayList<String>();
 		this.logFS = new LogFileSystem();
-
+		this.coordinatorCount = 3; // TODO: HIGH: configHandler
+		
+		
 		// Paxos
 		this.largestProposalNumberAccepted = -1;
 		this.acceptorsResponded = 0;
@@ -74,13 +79,14 @@ public class TDFSNode extends RIONode {
 
 		// Create a tokenizer and get the first token (the actual cmd)
 		StringTokenizer tokens = new StringTokenizer(line, " ");
-		String cmd = "";
+		String cmd, filename = "";
 		try {
 			cmd = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
 			// TODO: parent.printError("no command found in: " + line);
 			return;
 		}
+		
 
 		/*
 		 * Dynamically call <cmd>Command, passing off the tokenizer and the full
@@ -101,7 +107,26 @@ public class TDFSNode extends RIONode {
 		}
 
 	}
+	
+	public void txstartHandler(StringTokenizer tokens){
+	}
+	
+	public void txcommitHandler(){
+		
+	}
+	
+	public void putHandler(){
+		
+	}
 
+	public void appendHandler(){
+		
+	}
+	
+	public void Join(String filename){
+		Proposal proposal = new Proposal(new Join(addr), filename, -1, nextProposalNumber());
+	}
+	
 	@Override
 	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
 		String msgString = Utility.byteArrayToString(msg);
@@ -122,8 +147,13 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
+	
+	private int nextProposalNumber(){
+		return 0; // TODO: High: Change
+	}
+	
 	/**
-	 * A lead proposer receives a proposal from a node. The lead proposer checks
+	 * The proposer checks
 	 * if this node is part of the paxos group, and if it's not it checks
 	 * whether this proposal is a join. If it is not a join and the node is not
 	 * part of the paxos group, then the proposal is rejected.
@@ -131,9 +161,8 @@ public class TDFSNode extends RIONode {
 	 * @param prop
 	 *            The proposal encapsulated
 	 */
-	public void receiveRequest(int from, byte[] msg) {
+	public void prepare(int from, Proposal proposal) {
 
-		Proposal proposal = new Proposal(msg);
 
 		List<Integer> participants = null;
 		try {
@@ -143,7 +172,7 @@ public class TDFSNode extends RIONode {
 		}
 		if (!participants.contains(from)
 				&& !(proposal.operation instanceof Join)) {
-			// TODO: High: Send an error back
+			// TODO: High: Log error
 			return;
 		}
 
@@ -151,7 +180,7 @@ public class TDFSNode extends RIONode {
 		while (iter.hasNext()) {
 			int next = iter.next();
 			if (next != addr)
-				RIOSend(next, MessageType.Prepare, msg);
+				RIOSend(next, MessageType.Prepare, proposal.pack());
 		}
 	}
 
@@ -159,13 +188,12 @@ public class TDFSNode extends RIONode {
 	 * Functionality varies depending on recipient type.
 	 * 
 	 * The acceptor validates this value, if an error hasn't occurred. Sends a
-	 * message to the learners
+	 * message to the learner, who is also the proposer
 	 * 
 	 * @op The operation
 	 */
-	public void receiveValue(int from, byte[] msg) {
+	public void receiveAccept(int from, byte[] msg) {
 		RIOSend(from, MessageType.Accepted, msg);
-
 	}
 
 	/**
@@ -173,8 +201,8 @@ public class TDFSNode extends RIONode {
 	 * sends out a message to all paxos nodes that this value has been chosen
 	 * and writes it to its own local log.
 	 * 
-	 * @param op
-	 *            The operation
+	 * @param from The sender
+	 * @param msg The msg, packed as a byte array
 	 */
 	public void receiveAccepted(int from, byte[] msg) {
 		Proposal proposal = new Proposal(msg);
@@ -220,7 +248,7 @@ public class TDFSNode extends RIONode {
 	 * worry about a quorum yet - if not enough acceptors are on, won't proceed
 	 * past the accept stage and will stall, which is allowable.
 	 */
-	public void prepare(byte[] msg) {
+	public void prepare(int from, byte[] msg) {
 
 		Proposal proposal = new Proposal(msg);
 		int proposalNumber = proposal.proposalNumber;
@@ -242,7 +270,7 @@ public class TDFSNode extends RIONode {
 			}
 
 		} catch (NotParticipatingException e) {
-			// TODO: High: Send this error back
+			// TODO: High: Log
 		}
 
 	}
@@ -291,6 +319,10 @@ public class TDFSNode extends RIONode {
 		RIOSend(from, MessageType.Promise,
 				Utility.stringToByteArray(proposalNumber + ""));
 
+	}
+	
+	public void sendFile(String filename){
+	
 	}
 
 	/**
