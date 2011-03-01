@@ -331,7 +331,7 @@ public class TDFSNode extends RIONode {
 	public void Join(String filename) {
 		Proposal proposal = null;
 		
-		proposal = new Proposal(new Join(addr), filename, -1, -1);
+		proposal = new Proposal(new Join(addr), filename, 0, 0);
 
 		int coordinator = 0; // hashFilename(filename);
 		if (coordinator == addr) {
@@ -341,7 +341,8 @@ public class TDFSNode extends RIONode {
 				// TODO Error: Node already participating in group
 			}
 		}
-		RIOSend(coordinator, MessageType.Request, proposal.pack());
+		byte[] payload = proposal.pack();
+		RIOSend(coordinator, MessageType.Request, payload);
 	}
 
 	@Override

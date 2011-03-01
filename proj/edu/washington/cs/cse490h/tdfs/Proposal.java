@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -31,12 +32,22 @@ public class Proposal {
 	public byte[] pack() {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 
+		ByteBuffer operationBuf = ByteBuffer.allocate(4);
+		ByteBuffer proposalBuf = ByteBuffer.allocate(4);
+		proposalBuf.putInt(proposalNumber);
+		operationBuf.putInt(operationNumber);
+		try{
+			out.write(operationBuf.array());
+			out.write(proposalBuf.array());
+		} catch (IOException e){
+			throw new RuntimeException();
+		}
+		
 		byte[] filename = Utility.stringToByteArray(this.filename);
 		byte[] delim = Utility.stringToByteArray(packetDelimiter);
 		byte[] op = this.operation.pack();
 
-		out.write(operationNumber);
-		out.write(proposalNumber);
+
 		try {
 			out.write(filename);
 			out.write(delim);
@@ -58,13 +69,21 @@ public class Proposal {
 			this.proposalNumber = in.readInt();
 
 			byte[] buf = new byte[packet.length - HEADER_SIZE];
-			in.read(buf, HEADER_SIZE, packet.length);
+			//in.read(buf, HEADER_SIZE, buf.length);
+			in.read(buf);
 
 			String rest = Utility.byteArrayToString(buf);
 			String[] splitArray = rest.split(packetDelimiter);
+			
 			this.filename = splitArray[0];
 
-			byte[] operationBuf = Utility.stringToByteArray(splitArray[1]);
+			StringBuilder sb = new StringBuilder();
+			for (int i = 1; i < splitArray.length; i++){
+				sb.append(splitArray[i]);
+				sb.append(packetDelimiter);
+			}
+			
+			byte[] operationBuf = Utility.stringToByteArray(sb.toString().trim());
 			this.operation = Operation.unpack(operationBuf);
 
 		} catch (IOException e) {
