@@ -255,7 +255,7 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void createHandler(StringTokenizer tokens, String line) {
-		String filename, contents = "";
+		String filename;
 		try {
 			filename = tokens.nextToken().toLowerCase();
 		} catch (NoSuchElementException e) {
@@ -291,7 +291,7 @@ public class TDFSNode extends RIONode {
 			// line);
 			return;
 		}
-
+		// TODO: High: factor this out to a helper method
 		if (joinedAlready(filename)) {
 			int nextOperation = -1;
 			try {
@@ -333,7 +333,7 @@ public class TDFSNode extends RIONode {
 		
 		proposal = new Proposal(new Join(addr), filename, 0, 0);
 
-		int coordinator = 0; // hashFilename(filename);
+		int coordinator = hashFilename(filename);
 		if (coordinator == addr) {
 			try {
 				logFS.createGroup(filename);
@@ -534,13 +534,39 @@ public class TDFSNode extends RIONode {
 				p.operationNumber = logFS.getNextOperationNumber(p.filename);
 				p.proposalNumber = nextProposalNumber(p.filename);
 			} catch (NotParticipatingException e) {
-				// TODO: HIGH: create group
-				return;
+				// Pass the request along 
+				try {
+					logFS.createGroup(p.filename);
+				} catch (AlreadyParticipatingException e1) {
+					// TODO Do something?
+					Logger.error(this, e1);
+				}
+				int address = hashFilename(p.filename);
+				for (int i = 0; i < 3; i++){
+					 address = address + i;
+					 if (address != addr)
+						 RIOSend(address, MessageType.CreateGroup, Utility.stringToByteArray(p.filename));
+				}
+				// fall through and start the proposal
 			}
 			prepare(from, p);
 		} else {
 			// ignore for now...
 			// this will be used for lead proposer later on
+		}
+	}
+	
+	/**
+	 * A message from another coordinator to this coordinator to create a group
+	 * @param from The sender
+	 * @param msg The filename
+	 */
+	public void receiveCreateGroup(int from, String msg) {
+		try {
+			logFS.createGroup(msg);
+		} catch (AlreadyParticipatingException e) {
+			// TODO: Send an error back?
+			Logger.error(this, e);
 		}
 	}
 	
