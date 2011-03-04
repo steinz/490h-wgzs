@@ -13,11 +13,11 @@ public class Proposal {
 	static int HEADER_SIZE = 8;
 	static String packetDelimiter = " ";
 	public String filename;
-	public Operation operation;
+	public LogEntry operation;
 	public Integer operationNumber;
 	public Integer proposalNumber;
 
-	public Proposal(Operation op, String filename, int operationNumber,
+	public Proposal(LogEntry op, String filename, int operationNumber,
 			int proposalNumber) {
 		this.filename = filename;
 		this.operationNumber = operationNumber;
@@ -84,7 +84,7 @@ public class Proposal {
 			}
 			
 			byte[] operationBuf = Utility.stringToByteArray(sb.toString().trim());
-			this.operation = Operation.unpack(operationBuf);
+			this.operation = LogEntry.unpack(operationBuf);
 
 		} catch (IOException e) {
 			throw new RuntimeException(e);

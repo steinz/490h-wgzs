@@ -9,6 +9,9 @@ public interface LogFS {
 
 	public boolean fileExists(String filename) throws NotListeningException;
 
+	/**
+	 * Returns null if the file doesn't exist
+	 */
 	public String getFile(String filename) throws NotListeningException;
 
 	public LogEntry getLogEntry(String filename, int operationNumber)
@@ -23,6 +26,6 @@ public interface LogFS {
 
 	public byte[] packLog(String filename) throws NotListeningException;
 
-	public void writeLogEntry(LogEntry op) throws NotListeningException;
+	public void writeLogEntry(String filename, int logEntryNumber, LogEntry op) throws NotListeningException;
 
 }
