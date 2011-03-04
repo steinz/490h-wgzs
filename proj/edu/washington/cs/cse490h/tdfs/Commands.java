@@ -1,6 +1,8 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 abstract class Command {
 	Command next;
@@ -109,7 +111,7 @@ class StartCommand extends Command {
 	public void execute(TDFSNode node, LogFS fs) {		
 		for (String s : filenames){
 			node.checkIfListening(s, new TXStartLogEntry());
-		}
+		}	
 	}
 }
 

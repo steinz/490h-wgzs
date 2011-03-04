@@ -107,8 +107,30 @@ public class TDFSNode extends RIONode {
 	private static class TransactionQueue {
 		private boolean inTx = false;
 		private Queue<Command> txQueue = new LinkedList<Command>();
+		private CommandQueue cmdQueue;
+
+		public TransactionQueue(CommandQueue cmdQueue) {
+			this.cmdQueue = cmdQueue;
+		}
 
 		public void execute(Command command) {
+			if (command instanceof StartCommand) {
+
+			} else if (command instanceof AbortCommand) {
+
+			} else if (command instanceof CommitCommand) {
+
+			} else { // FileCommand
+				FileCommand fc = (FileCommand) command;
+				cmdQueue.execute(fc);
+			}
+		}
+
+		public void nextTx() {
+
+		}
+
+		public void next(String filename) {
 
 		}
 	}
@@ -123,7 +145,11 @@ public class TDFSNode extends RIONode {
 		private CommandQueue commandQueue;
 
 		public void execute() {
-			commandQueue.handle(command);
+			if (command instanceof FileCommand) {
+				commandQueue.execute((FileCommand) command);
+			} else {
+				// TODO: HIGH: Do something transactional
+			}
 		}
 
 		public void next() {
@@ -140,12 +166,9 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	Queue<LogEntry> queuedOperations;
-
-	List<String> filesBeingOperatedOn;
+	TransactionQueue txQueue;
 
 	private int coordinatorCount;
-
 
 	private Map<String, List<Integer>> fileListeners;
 
@@ -168,7 +191,6 @@ public class TDFSNode extends RIONode {
 	 * Last proposal number promised for a given file
 	 */
 	private Map<String, Integer> lastProposalNumberPromised;
-	
 
 	private Map<String, Integer> lastProposalNumbersSent;
 
@@ -176,11 +198,10 @@ public class TDFSNode extends RIONode {
 
 	@Override
 	public void start() {
-		queuedOperations = new LinkedList<LogEntry>();
-		filesBeingOperatedOn = new ArrayList<String>();
 		this.logFS = new LogFileSystem();
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
-
+		this.txQueue = new TransactionQueue(new CommandQueue());
+		
 		// TODO: HIGH: Coordinator count config
 		this.coordinatorCount = 4;
 
@@ -189,43 +210,55 @@ public class TDFSNode extends RIONode {
 		this.lastProposalNumberPromised = new HashMap<String, Integer>();
 	}
 
+	private static String commandDelim = " ";
+
 	@Override
 	public void onCommand(String line) {
-		int delim = line.indexOf(" ");
+		int delim = line.indexOf(commandDelim);
 		String command = line.substring(0, delim);
 		command = command.substring(0, 1).toUpperCase()
 				+ command.substring(1).toLowerCase();
-		Class<?> cmdClass = Class.forName(command);
-
-		if (StartCommand.class.isAssignableFrom(cmdClass)) {
-			String[] filenames;
-		} else if (WriteCommand.class.isAssignableFrom(cmdClass)) {
-			String filename;
-			String contents;
-		} else if (FileCommand.class.isAssignableFrom(cmdClass)) {
-			String filename;
+		Class<?> cmdClass;
+		try {
+			cmdClass = Class.forName(command);
+		} catch (ClassNotFoundException e) {
+			printError(e);
+			return;
 		}
 
-		Class<?>[] consArgs = { Queue.class };
-		Constructor<?> constructor = cmdClass.getConstructor(consArgs);
-		Command c = constructor.newInstance(consArgs);
+		line = line.substring(delim + commandDelim.length());
 
-		/*
-		 * Dynamically call <cmd>Command, passing off the tokenizer and the full
-		 * command string
-		 */
 		try {
-			Class<?>[] paramTypes = { StringTokenizer.class, String.class };
-			Method handler = this.getClass().getMethod(command + "Handler",
-					paramTypes);
-			Object[] args = { tokens, line };
-			handler.invoke(this, args);
-		} catch (NoSuchMethodException e) {
-			printError("invalid command:" + line);
-		} catch (IllegalAccessException e) {
-			printError("invalid command:" + line);
-		} catch (InvocationTargetException e) {
-			printError(e.getCause());
+			Command c;
+			if (StartCommand.class.isAssignableFrom(cmdClass)) {
+				String[] filenames = line.split(commandDelim);
+
+				Class<?>[] consArgs = { List.class };
+				Constructor<?> constructor = cmdClass.getConstructor(consArgs);
+				Object[] args = { filenames };
+				c = (Command) constructor.newInstance(args);
+			} else if (WriteCommand.class.isAssignableFrom(cmdClass)) {
+				delim = line.indexOf(commandDelim);
+				String filename = line.substring(0, delim);
+				String contents = line.substring(delim + commandDelim.length());
+
+				Class<?>[] consArgs = { String.class };
+				Constructor<?> constructor = cmdClass.getConstructor(consArgs);
+				Object[] args = { filename, contents };
+				c = (Command) constructor.newInstance(args);
+			} else if (FileCommand.class.isAssignableFrom(cmdClass)) {
+				String filename = line;
+
+				Class<?>[] consArgs = { String.class, String.class };
+				Constructor<?> constructor = cmdClass.getConstructor(consArgs);
+				Object[] args = { filename };
+				c = (Command) constructor.newInstance(args);
+			} else {
+				throw new RuntimeException("failed to create command");
+			}
+			txQueue.execute(c);
+		} catch (Exception e) {
+			printError(e);
 		}
 
 	}
@@ -582,7 +615,6 @@ public class TDFSNode extends RIONode {
 		if (list == null)
 			list = new ArrayList<Integer>();
 		list.add(from);
-
 	}
 
 	/**
