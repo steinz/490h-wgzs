@@ -1,8 +1,6 @@
 package edu.washington.cs.cse490h.tdfs;
 
-import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 
 abstract class Command {
 	Command next;
@@ -34,7 +32,7 @@ class AppendCommand extends WriteCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening(filename, new Write(contents, true));
+		node.checkIfListening(filename, new WriteLogEntry(contents, true));
 	}
 }
 
@@ -45,7 +43,7 @@ class CreateCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening(filename, new Create());
+		node.checkIfListening(filename, new CreateLogEntry());
 	}
 }
 
@@ -56,7 +54,7 @@ class DeleteCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening(filename, new Delete());
+		node.checkIfListening(filename, new DeleteLogEntry());
 	}
 }
 
@@ -79,7 +77,7 @@ class PutCommand extends WriteCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening(filename, new Write(contents, false));
+		node.checkIfListening(filename, new WriteLogEntry(contents, false));
 	}
 }
 
@@ -96,7 +94,7 @@ class CommitCommand extends Command {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening("", new TXCommit());
+		node.checkIfListening("", new TXCommitLogEntry());
 	}
 }
 
@@ -108,12 +106,10 @@ class StartCommand extends Command {
 	}
 
 	@Override
-	public void execute(TDFSNode node, LogFS fs) {
-		Iterator<String> iter = filenames.iterator();
-		while (iter.hasNext()){
-			node.checkIfListening(iter.next(), new TXStart());
+	public void execute(TDFSNode node, LogFS fs) {		
+		for (String s : filenames){
+			node.checkIfListening(s, new TXStartLogEntry());
 		}
-		
 	}
 }
 
