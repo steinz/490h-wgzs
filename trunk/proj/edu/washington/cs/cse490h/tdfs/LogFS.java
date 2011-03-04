@@ -3,6 +3,16 @@ package edu.washington.cs.cse490h.tdfs;
 import java.util.List;
 
 public interface LogFS {
+	
+	//TODO: HIGH: Replace??? w/:
+	
+	public void writeLogEntry(Operation op);
+	
+	public Operation getLogEntry();
+	
+	public int nextLogNumber();
+	
+	
 
 	public Integer checkLocked(String filename)
 			throws NotParticipatingException;

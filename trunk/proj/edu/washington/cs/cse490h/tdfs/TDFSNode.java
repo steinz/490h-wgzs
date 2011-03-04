@@ -1,5 +1,6 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -11,7 +12,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
+import java.util.Set;
 import java.util.StringTokenizer;
+
+import org.tmatesoft.svn.core.internal.io.fs.FSClosestCopy;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -56,6 +60,76 @@ public class TDFSNode extends RIONode {
 	 * leader to propose
 	 */
 
+	/**
+	 * Queues commands on a per filename basis
+	 */
+	private static class CommandQueue {
+		/**
+		 * Filename => Queued Commands
+		 * 
+		 * A filename is "locked" iff it has a queue in this map
+		 */
+		private Map<String, Queue<Command>> queued;
+
+		public void handle(String filename, Command command) {
+			Queue<Command> queue = queued.get(filename);
+			if (queue == null) {
+				queued.put(filename, new LinkedList<Command>());
+				command.execute(null, null);
+			} else {
+				queue.add(command);
+			}
+		}
+
+		/**
+		 * Should be called after done handling any command
+		 * 
+		 * If commands have been queued on filename: remove and return the next
+		 * command from the queue
+		 * 
+		 * If no commands are queued on filename: unlock filename by removing
+		 * its queue and return null
+		 */
+		public void next(String filename) {
+			Queue<Command> queue = queued.get(filename);
+			Command command = queue.poll();
+			if (command == null) {
+				queued.remove(filename);
+			} else {
+				command.execute(null, null);
+			}
+		}
+	}
+
+	// TODO: HIGH: TX based locking?
+
+	/**
+	 * A graph of dependent commands
+	 */
+	private static class CommandGraph {
+		private Command command;
+		private int locks = 0;
+		private List<CommandGraph> children;
+		private CommandQueue commandQueue;
+		
+		public void execute() {
+			commandQueue.handle(command);
+		}
+
+		public void next() {
+			for (CommandGraph node : children) {
+				node.parentFinished();
+			}
+		}
+
+		public void parentFinished() {
+			locks--;
+			if (locks == 0) {
+				execute();
+			}
+		}
+	}
+
 	Queue<Operation> queuedOperations;
 
 	List<String> filesBeingOperatedOn;
@@ -91,8 +165,10 @@ public class TDFSNode extends RIONode {
 		queuedOperations = new LinkedList<Operation>();
 		filesBeingOperatedOn = new ArrayList<String>();
 		this.logFS = new LogFileSystem();
-		this.coordinatorCount = 3; // TODO: HIGH: configHandler
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
+
+		// TODO: HIGH: Coordinator count config
+		this.coordinatorCount = 4;
 
 		// Paxos
 		this.acceptorsResponded = 0;
@@ -101,17 +177,24 @@ public class TDFSNode extends RIONode {
 
 	@Override
 	public void onCommand(String line) {
-		// TODO: fix or something
+		int delim = line.indexOf(" ");
+		String command = line.substring(0, delim);
+		command = command.substring(0, 1).toUpperCase()
+				+ command.substring(1).toLowerCase();
+		Class<?> cmdClass = Class.forName(command);
 
-		// Create a tokenizer and get the first token (the actual cmd)
-		StringTokenizer tokens = new StringTokenizer(line, " ");
-		String cmd = "";
-		try {
-			cmd = tokens.nextToken().toLowerCase();
-		} catch (NoSuchElementException e) {
-			// TODO: parent.printError("no command found in: " + line);
-			return;
+		if (StartCommand.class.isAssignableFrom(cmdClass)) {
+			String[] filenames;
+		} else if (WriteCommand.class.isAssignableFrom(cmdClass)) {
+			String filename;
+			String contents;
+		} else if (FileCommand.class.isAssignableFrom(cmdClass)) {
+			String filename;
 		}
+
+		Class<?>[] consArgs = { Queue.class };
+		Constructor<?> constructor = cmdClass.getConstructor(consArgs);
+		Command c = constructor.newInstance(consArgs);
 
 		/*
 		 * Dynamically call <cmd>Command, passing off the tokenizer and the full
@@ -119,16 +202,16 @@ public class TDFSNode extends RIONode {
 		 */
 		try {
 			Class<?>[] paramTypes = { StringTokenizer.class, String.class };
-			Method handler = this.getClass().getMethod(cmd + "Handler",
+			Method handler = this.getClass().getMethod(command + "Handler",
 					paramTypes);
 			Object[] args = { tokens, line };
 			handler.invoke(this, args);
 		} catch (NoSuchMethodException e) {
-			// TODO: parent.printError("invalid command:" + line);
+			printError("invalid command:" + line);
 		} catch (IllegalAccessException e) {
-			// TODO: parent.printError("invalid command:" + line);
+			printError("invalid command:" + line);
 		} catch (InvocationTargetException e) {
-			// TODO: parent.printError(e.getCause());
+			printError(e.getCause());
 		}
 
 	}
@@ -222,6 +305,7 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void appendHandler(StringTokenizer tokens, String line) {
+
 		String filename, contents = "";
 		try {
 			filename = tokens.nextToken().toLowerCase();
@@ -330,7 +414,7 @@ public class TDFSNode extends RIONode {
 
 	public void Join(String filename) {
 		Proposal proposal = null;
-		
+
 		proposal = new Proposal(new Join(addr), filename, 0, 0);
 
 		int coordinator = hashFilename(filename);
@@ -390,8 +474,6 @@ public class TDFSNode extends RIONode {
 	private int hashFilename(String filename) {
 		return filename.hashCode() % coordinatorCount;
 	}
-
-
 
 	/**
 	 * Sends a prepare request to all acceptors in this Paxos group.
@@ -462,7 +544,8 @@ public class TDFSNode extends RIONode {
 		while (iter.hasNext()) {
 			int next = iter.next();
 			if (next != addr)
-				RIOSend(next, MessageType.Learned, Utility.stringToByteArray(msg));
+				RIOSend(next, MessageType.Learned,
+						Utility.stringToByteArray(msg));
 		}
 
 		// TODO: High - write to local log
@@ -534,7 +617,7 @@ public class TDFSNode extends RIONode {
 				p.operationNumber = logFS.getNextOperationNumber(p.filename);
 				p.proposalNumber = nextProposalNumber(p.filename);
 			} catch (NotParticipatingException e) {
-				// Pass the request along 
+				// Pass the request along
 				try {
 					logFS.createGroup(p.filename);
 				} catch (AlreadyParticipatingException e1) {
@@ -542,10 +625,11 @@ public class TDFSNode extends RIONode {
 					Logger.error(this, e1);
 				}
 				int address = hashFilename(p.filename);
-				for (int i = 0; i < 3; i++){
-					 address = address + i;
-					 if (address != addr)
-						 RIOSend(address, MessageType.CreateGroup, Utility.stringToByteArray(p.filename));
+				for (int i = 0; i < 3; i++) {
+					address = address + i;
+					if (address != addr)
+						RIOSend(address, MessageType.CreateGroup,
+								Utility.stringToByteArray(p.filename));
 				}
 				// fall through and start the proposal
 			}
@@ -555,11 +639,14 @@ public class TDFSNode extends RIONode {
 			// this will be used for lead proposer later on
 		}
 	}
-	
+
 	/**
 	 * A message from another coordinator to this coordinator to create a group
-	 * @param from The sender
-	 * @param msg The filename
+	 * 
+	 * @param from
+	 *            The sender
+	 * @param msg
+	 *            The filename
 	 */
 	public void receiveCreateGroup(int from, String msg) {
 		try {
@@ -569,7 +656,7 @@ public class TDFSNode extends RIONode {
 			Logger.error(this, e);
 		}
 	}
-	
+
 	/**
 	 * Checks to see if the given proposal number is larger than any previous
 	 * proposal. Promises to not accept proposals less than the given proposal
@@ -652,7 +739,8 @@ public class TDFSNode extends RIONode {
 		while (iter.hasNext()) {
 			int next = iter.next();
 			if (next != addr) {
-				RIOSend(iter.next(), MessageType.Accept, Utility.stringToByteArray(msg));
+				RIOSend(iter.next(), MessageType.Accept,
+						Utility.stringToByteArray(msg));
 			}
 		}
 
@@ -665,9 +753,7 @@ public class TDFSNode extends RIONode {
 	 *            The proposal, as a byte array
 	 */
 	public void receiveLearned(int from, String msg) {
-		
 		// TODO: High: Add to log
+		// logFS.writeLogEntry(Operation.unpack(msg));
 	}
-	
-	
 }
