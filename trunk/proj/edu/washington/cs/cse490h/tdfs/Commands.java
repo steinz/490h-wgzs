@@ -3,8 +3,6 @@ package edu.washington.cs.cse490h.tdfs;
 import java.util.List;
 
 abstract class Command {
-	Command next;
-
 	public abstract void execute(TDFSNode node, LogFS fs);
 }
 
@@ -66,6 +64,18 @@ class GetCommand extends FileCommand {
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
 		// TODO Auto-generated method stub
+		
+	}
+}
+
+class ListenCommand extends FileCommand {
+	public ListenCommand(String filename) {
+		super(filename);
+	}
+
+	@Override
+	public void execute(TDFSNode node, LogFS fs) {
+		// TODO: HIGH: request to listen
 		
 	}
 }

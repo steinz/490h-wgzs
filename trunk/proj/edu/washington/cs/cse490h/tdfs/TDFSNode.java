@@ -10,8 +10,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 
 import edu.washington.cs.cse490h.lib.Utility;
+import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
 
@@ -184,38 +186,9 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	/**
-	 * A graph of dependent commands
-	 */
-	private static class CommandGraph {
-		private Command command;
-		private int locks = 0;
-		private List<CommandGraph> children;
-		private FileCommandExecutor commandQueue;
-
-		public void execute() {
-			if (command instanceof FileCommand) {
-				commandQueue.execute((FileCommand) command);
-			} else {
-				// TODO: HIGH: Do something transactional
-			}
-		}
-
-		public void next() {
-			for (CommandGraph node : children) {
-				node.parentFinished();
-			}
-		}
-
-		public void parentFinished() {
-			locks--;
-			if (locks == 0) {
-				execute();
-			}
-		}
-	}
-
 	TransactionQueue txQueue;
+
+	CommandGraph commandGraph;
 
 	private int coordinatorCount;
 
@@ -245,13 +218,14 @@ public class TDFSNode extends RIONode {
 
 	private Map<String, Integer> lastProposalNumbersSent;
 
-	private LogFS logFS;
+	LogFS logFS;
 
 	@Override
 	public void start() {
 		this.logFS = new LogFileSystem();
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
 		this.txQueue = new TransactionQueue(this, new FileCommandExecutor(this));
+		this.commandGraph = new CommandGraph(this);
 
 		// TODO: HIGH: Coordinator count config
 		this.coordinatorCount = 4;
@@ -313,7 +287,69 @@ public class TDFSNode extends RIONode {
 		} catch (Exception e) {
 			printError(e);
 		}
+	}
 
+	/*
+	 * TODO: HIGH: Re-enstate handlers, but with better args so they are caller
+	 * from other, higher level handlers. This means we have to do parsing
+	 * somewhere else.
+	 */
+
+	abstract class Verifier {
+		/**
+		 * Handed the next node in the chain and the current state of the system
+		 */
+		abstract public boolean verify(Command c, LogFS fs);
+	};
+
+	abstract class VerifierCommand extends Command {
+	}
+
+	public void appendHandler(String filename, String contents) {
+		List<Command> chain = new ArrayList<Command>();
+		if (!logFS.isListening(filename)) {
+			chain.add(new ListenCommand(filename));
+		}
+		AppendCommand append = new AppendCommand(filename, contents);
+		chain.add(new VerifierCommand(append) {
+			String filename;
+
+			public Verifier(AppendCommand c) {
+				this.filename = c.filename;
+			}
+
+			@Override
+			public boolean verify(Command c, LogFS fs) {
+				FileCommand fc = (FileCommand) c;
+				return fs.fileExists(fc.filename);
+			}
+		});
+
+		// TODO: HIGH: Finish making this awesome
+		CommandNode l = listen(filename);
+		CommandNode v = commandGraph.addCommand(new VerifierCommand(
+				new Verifier() {
+					@Override
+					public boolean verify(Command c, LogFS fs) {
+						FileCommand fc = (FileCommand) c;
+						return fs.fileExists(fc.filename);
+					}
+				}));
+		CommandNode c = commandGraph.addCommand(new AppendCommand(filename,
+				contents));
+		if (l != null) {
+			commandGraph.addEdge(l, v);
+		}
+		commandGraph.addEdge(v, c);
+		// TODO: HIGH: commandGraph.addCommandString(Command[] cmds)
+	}
+
+	private CommandNode listen(String filename) {
+		if (!logFS.isListening(filename)) {
+			return commandGraph.addCommand(new ListenCommand(filename));
+		} else {
+			return null;
+		}
 	}
 
 	/**
@@ -363,15 +399,15 @@ public class TDFSNode extends RIONode {
 			try {
 				for (Integer next : getParticipants(filename)) {
 					if (next != addr)
-						RIOSend(next, MessageType.CreateGroup,
-								Utility.stringToByteArray(filename));
+						RIOSend(next, MessageType.CreateGroup, Utility
+								.stringToByteArray(filename));
 				}
 			} catch (AlreadyParticipatingException e) {
 				Logger.error(this, e);
 			}
 		} else {
-			RIOSend(coordinator, MessageType.RequestToListen,
-					Utility.stringToByteArray(filename));
+			RIOSend(coordinator, MessageType.RequestToListen, Utility
+					.stringToByteArray(filename));
 		}
 	}
 
@@ -461,8 +497,8 @@ public class TDFSNode extends RIONode {
 		try {
 			participants = getParticipants(p.filename);
 		} catch (NotListeningException e) { // assuming this is a coordinator, a
-											// coordinator should never not be
-											// participating
+			// coordinator should never not be
+			// participating
 			Logger.error(this, e);
 		}
 
@@ -509,8 +545,8 @@ public class TDFSNode extends RIONode {
 
 		for (Integer next : participants) {
 			if (next != addr)
-				RIOSend(next, MessageType.Learned,
-						Utility.stringToByteArray(msg));
+				RIOSend(next, MessageType.Learned, Utility
+						.stringToByteArray(msg));
 		}
 
 		responded = 0;
@@ -539,9 +575,9 @@ public class TDFSNode extends RIONode {
 			try {
 				logFS.createGroup(p.filename);
 			} catch (AlreadyParticipatingException e1) { // Throw a runtime
-															// error - something
-															// went seriously
-															// wrong
+				// error - something
+				// went seriously
+				// wrong
 				Logger.error(this, e1);
 				throw new RuntimeException();
 			}
@@ -549,8 +585,8 @@ public class TDFSNode extends RIONode {
 			for (int i = 0; i < coordinatorCount; i++) {
 				address = address + i;
 				if (address != addr)
-					RIOSend(address, MessageType.CreateGroup,
-							Utility.stringToByteArray(p.filename));
+					RIOSend(address, MessageType.CreateGroup, Utility
+							.stringToByteArray(p.filename));
 			}
 			// fall through and start the proposal
 		}
@@ -599,16 +635,17 @@ public class TDFSNode extends RIONode {
 
 		if (proposalNumber <= largestProposalNumberAccepted) {
 			String lastProposalNumber = lastProposalNumberPromised
-					.get(filename) + "";
-			RIOSend(from, MessageType.PromiseDenial,
-					Utility.stringToByteArray(lastProposalNumber));
+					.get(filename)
+					+ "";
+			RIOSend(from, MessageType.PromiseDenial, Utility
+					.stringToByteArray(lastProposalNumber));
 			return;
 		}
 
 		try {
 			if (logFS.nextLogNumber(filename) >= operationNumber) {
-				RIOSend(from, MessageType.OldOperation,
-						logFS.getLogEntry(filename, operationNumber).pack());
+				RIOSend(from, MessageType.OldOperation, logFS.getLogEntry(
+						filename, operationNumber).pack());
 
 				// TODO High: Don't force them to resend every operation number,
 				// somehow update them to latest version
@@ -622,8 +659,8 @@ public class TDFSNode extends RIONode {
 		}
 
 		largestProposalNumberAccepted = proposalNumber;
-		RIOSend(from, MessageType.Promise,
-				Utility.stringToByteArray(proposalNumber + ""));
+		RIOSend(from, MessageType.Promise, Utility
+				.stringToByteArray(proposalNumber + ""));
 
 	}
 
@@ -654,8 +691,8 @@ public class TDFSNode extends RIONode {
 
 		for (Integer next : participants) {
 			if (next != addr)
-				RIOSend(next, MessageType.Learned,
-						Utility.stringToByteArray(msg));
+				RIOSend(next, MessageType.Learned, Utility
+						.stringToByteArray(msg));
 		}
 
 		if (responded < (participants.size() / 2))
