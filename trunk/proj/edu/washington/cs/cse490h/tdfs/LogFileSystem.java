@@ -5,12 +5,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
 import java.util.Map.Entry;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.logging.Logger;
 
@@ -21,24 +19,24 @@ public class LogFileSystem implements LogFS {
 		private T persistent;
 		private T transactional;
 		private boolean transacting;
-		
+
 		public void abort() {
 			transacting = false;
 		}
-		
+
 		public void commit() {
 			persistent = transactional;
 			transacting = false;
 		}
-		
+
 		public T getPersistent() {
 			return persistent;
 		}
-		
+
 		public T getTransactional() {
 			return transacting ? transactional : persistent;
 		}
-		
+
 		public void set(T value) {
 			if (transacting) {
 				transactional = value;
@@ -46,13 +44,13 @@ public class LogFileSystem implements LogFS {
 				persistent = value;
 			}
 		}
-		
+
 		public void start() {
 			transactional = persistent;
 			transacting = true;
 		}
 	}
-	
+
 	private static class TXBoolean {
 		private boolean exists = false;
 		private Boolean txExists = null;
@@ -132,7 +130,7 @@ public class LogFileSystem implements LogFS {
 	private static class FileLog {
 		// TODO: cache
 
-		private SortedMap<Integer, Operation> operations;
+		private SortedMap<Integer, LogEntry> operations;
 
 		private int nextOperationNumber;
 
@@ -140,34 +138,36 @@ public class LogFileSystem implements LogFS {
 		 * New file is implicitly: unlocked, deleted
 		 */
 		public FileLog() {
-			this.operations = new TreeMap<Integer, Operation>();
+			this.operations = new TreeMap<Integer, LogEntry>();
 			this.nextOperationNumber = 0;
 		}
 
-		public FileLog(SortedMap<Integer, Operation> operations,
+		public FileLog(SortedMap<Integer, LogEntry> operations,
 				int nextOperationNumber) {
 			this.operations = operations;
 			this.nextOperationNumber = nextOperationNumber;
 		}
 
-		public void addOperation(Operation op) {
-			operations.put(nextOperationNumber, op);
-			nextOperationNumber++;
+		public void addOperation(int logLineNumber, LogEntry op) {
+			operations.put(logLineNumber, op);
+			if (logLineNumber + 1 > nextOperationNumber) {
+				nextOperationNumber = logLineNumber + 1;
+			}
 		}
 
 		public boolean checkExists() {
 			TXBoolean exists = new TXBoolean();
-			for (Entry<Integer, Operation> entry : operations.entrySet()) {
-				Operation op = entry.getValue();
-				if (op instanceof TXStart) {
+			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
+				LogEntry op = entry.getValue();
+				if (op instanceof TXStartLogEntry) {
 					exists.txStart();
-				} else if (op instanceof TXAbort) {
+				} else if (op instanceof TXAbortLogEntry) {
 					exists.txAbort();
-				} else if (op instanceof TXCommit) {
+				} else if (op instanceof TXCommitLogEntry) {
 					exists.txCommit();
-				} else if (op instanceof Delete) {
+				} else if (op instanceof DeleteLogEntry) {
 					exists.setExists(false);
-				} else if (op instanceof Create) {
+				} else if (op instanceof CreateLogEntry) {
 					exists.setExists(true);
 				}
 			}
@@ -176,34 +176,34 @@ public class LogFileSystem implements LogFS {
 
 		public Integer checkLocked() {
 			Integer locked = null;
-			for (Entry<Integer, Operation> entry : operations.entrySet()) {
-				Operation op = entry.getValue();
-				if (op instanceof Lock) {
-					Lock l = (Lock) op;
+			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
+				LogEntry op = entry.getValue();
+				if (op instanceof LockLogEntry) {
+					LockLogEntry l = (LockLogEntry) op;
 					locked = l.address;
-				} else if (op instanceof Unlock) {
+				} else if (op instanceof UnlockLogEntry) {
 					locked = null;
 				}
 			}
 			return locked;
 		}
 
-		public String getContent() throws FileDoesNotExistException {
+		public String getContent() {
 			TXString content = new TXString();
-			for (Entry<Integer, Operation> entry : operations.entrySet()) {
-				Operation op = entry.getValue();
-				if (op instanceof TXStart) {
+			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
+				LogEntry op = entry.getValue();
+				if (op instanceof TXStartLogEntry) {
 					content.txStart();
-				} else if (op instanceof TXAbort) {
+				} else if (op instanceof TXAbortLogEntry) {
 					content.txAbort();
-				} else if (op instanceof TXCommit) {
+				} else if (op instanceof TXCommitLogEntry) {
 					content.txCommit();
-				} else if (op instanceof Delete) {
+				} else if (op instanceof DeleteLogEntry) {
 					content.setContent(null);
-				} else if (op instanceof Create) {
+				} else if (op instanceof CreateLogEntry) {
 					content.setContent("");
-				} else if (op instanceof Write) {
-					Write w = (Write) op;
+				} else if (op instanceof WriteLogEntry) {
+					WriteLogEntry w = (WriteLogEntry) op;
 					if (w.append) {
 						content.appendContent(w.content);
 					} else {
@@ -211,27 +211,7 @@ public class LogFileSystem implements LogFS {
 					}
 				}
 			}
-			String result = content.getContent();
-			if (result == null) {
-				throw new FileDoesNotExistException();
-			} else {
-				return result;
-			}
-		}
-
-		public List<Integer> getParticipants() { 
-			List<Integer> participants = new ArrayList<Integer>();
-			for (Entry<Integer, Operation> entry : operations.entrySet()) {
-				Operation op = entry.getValue();
-				if (op instanceof Join) {
-					Join j = (Join) op;
-					participants.add(j.address);
-				} else if (op instanceof Leave) {
-					Leave l = (Leave) op;
-					participants.remove(new Integer(l.address));
-				}
-			}
-			return participants;
+			return content.getContent();
 		}
 
 		public byte[] pack() {
@@ -241,9 +221,9 @@ public class LogFileSystem implements LogFS {
 			try {
 				dataStream.writeInt(nextOperationNumber);
 
-				for (Entry<Integer, Operation> entry : operations.entrySet()) {
+				for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
 					int opNumber = entry.getKey();
-					Operation op = entry.getValue();
+					LogEntry op = entry.getValue();
 					byte[] packedOp = op.pack();
 
 					dataStream.writeInt(opNumber);
@@ -261,7 +241,7 @@ public class LogFileSystem implements LogFS {
 			DataInputStream stream = new DataInputStream(
 					new ByteArrayInputStream(packedLog));
 
-			SortedMap<Integer, Operation> operations = new TreeMap<Integer, Operation>();
+			SortedMap<Integer, LogEntry> operations = new TreeMap<Integer, LogEntry>();
 			int nextOpNumber;
 
 			try {
@@ -272,7 +252,7 @@ public class LogFileSystem implements LogFS {
 					int opLength = stream.readInt();
 					byte[] packedOp = new byte[opLength];
 					stream.read(packedOp, 0, opLength);
-					operations.put(opNumber, Operation.unpack(packedOp));
+					operations.put(opNumber, LogEntry.unpack(packedOp));
 				}
 			} catch (IOException e) {
 				throw new RuntimeException(e);
@@ -296,26 +276,9 @@ public class LogFileSystem implements LogFS {
 	/**
 	 * null if unlocked, otherwise address of owner
 	 */
-	public Integer checkLocked(String filename)
-			throws NotParticipatingException {
+	public Integer checkLocked(String filename) throws NotListeningException {
 		FileLog l = getLog(filename);
 		return l.checkLocked();
-	}
-
-	public void createFile(String filename, int address)
-			throws FileAlreadyExistsException, NotParticipatingException,
-			FileLockedByAnotherAddressException {
-		logAccess(filename, "Create");
-		FileLog l = getLog(filename);
-		Integer locked = l.checkLocked();
-		if (locked != null && locked != address) {
-			throw new FileLockedByAnotherAddressException();
-		}
-		if (l.checkExists()) {
-			throw new FileAlreadyExistsException();
-		} else {
-			l.addOperation(new Create());
-		}
 	}
 
 	public void createGroup(String filename)
@@ -323,91 +286,53 @@ public class LogFileSystem implements LogFS {
 		participate(filename, new FileLog());
 	}
 
-	public void deleteFile(String filename, int address)
-			throws FileDoesNotExistException, NotParticipatingException,
-			FileLockedByAnotherAddressException {
-		logAccess(filename, "Delete");
-		FileLog l = getLog(filename);
-		Integer locked = l.checkLocked();
-		if (locked != null && locked != address) {
-			throw new FileLockedByAnotherAddressException();
-		}
-		if (!l.checkExists()) {
-			throw new FileDoesNotExistException();
-		} else {
-			l.addOperation(new Delete());
-		}
-	}
-
-	public boolean fileExists(String filename) throws NotParticipatingException {
+	public boolean fileExists(String filename) throws NotListeningException {
 		FileLog l = getLog(filename);
 		return l.checkExists();
 	}
 
-	public String getFile(String filename) throws FileDoesNotExistException,
-			NotParticipatingException {
+	public String getFile(String filename) throws NotListeningException {
 		logAccess(filename, "Get");
 		FileLog l = getLog(filename);
 		// TODO: HIGH: I think it's okay to let someone Get a locked file...
 		return l.getContent();
 	}
 
-	private FileLog getLog(String filename) throws NotParticipatingException {
+	private FileLog getLog(String filename) throws NotListeningException {
 		FileLog l = logs.get(filename);
 		if (l == null) {
-			throw new NotParticipatingException();
+			throw new NotListeningException();
 		}
 		return l;
 	}
 
-	public int getNextOperationNumber(String filename)
-			throws NotParticipatingException {
+	public int nextLogNumber(String filename) throws NotListeningException {
 		FileLog l = getLog(filename);
 		return l.nextOperationNumber;
 	}
 
-	public Operation getOperation(String filename, int operationNumber)
-			throws NotParticipatingException, NoSuchOperationNumberException {
+	/**
+	 * null if opearationNumber has been forgotten
+	 * 
+	 * exception if operationNumber isn't known to have ever existed
+	 */
+	public LogEntry getLogEntry(String filename, int operationNumber)
+			throws NotListeningException, NoSuchOperationNumberException {
 		FileLog l = getLog(filename);
 		if (operationNumber >= l.nextOperationNumber) {
 			throw new NoSuchOperationNumberException();
 		}
-		Operation op = l.operations.get(operationNumber);
-		if (op == null) {
-			op = new Forgotten();
-		}
+		LogEntry op = l.operations.get(operationNumber);
 		return op;
 	}
 
-	public List<Integer> getParticipants(String filename)
-			throws NotParticipatingException {
-		FileLog l = getLog(filename);
-		return l.getParticipants();
+	public boolean isListening(String filename) {
+		return logs.containsKey(filename);
 	}
 
-	public void join(String filename, int address)
-			throws NotParticipatingException {
-		memberOperation(filename, "Join", new Join(address));
-	}
-
-	public void joinGroup(String filename, byte[] packedLog)
+	public void listen(String filename, byte[] packedLog)
 			throws AlreadyParticipatingException {
 		participate(filename, FileLog.unpack(packedLog));
-	}
-
-	public void leave(String filename, int address)
-			throws NotParticipatingException {
-		memberOperation(filename, "Leave", new Leave(address));
-	}
-
-	public void lockFile(String filename, int address)
-			throws NotParticipatingException, AlreadyLockedException {
-		logAccess(filename, "Lock");
-		FileLog l = getLog(filename);
-		if (l.checkLocked() != null) {
-			throw new AlreadyLockedException();
-		}
-		l.addOperation(new Lock(address));
 	}
 
 	private void logAccess(String filename, String operation) {
@@ -417,17 +342,10 @@ public class LogFileSystem implements LogFS {
 	private void logAccess(String filename, String operation, String content) {
 		String msg = operation.toString().toLowerCase() + " file: " + filename
 				+ (content == null ? "" : " content: " + content);
-		logger.finer(msg); 
+		logger.finer(msg);
 	}
 
-	private void memberOperation(String filename, String opType,
-			MemberOperation op) throws NotParticipatingException {
-		logAccess(filename, opType);
-		FileLog l = getLog(filename);
-		l.addOperation(op);
-	}
-
-	public byte[] packLog(String filename) throws NotParticipatingException {
+	public byte[] packLog(String filename) throws NotListeningException {
 		FileLog l = getLog(filename);
 		return l.pack();
 	}
@@ -440,38 +358,10 @@ public class LogFileSystem implements LogFS {
 		logs.put(filename, log);
 	}
 
-	public void unlockFile(String filename, int address)
-			throws NotParticipatingException, NotLockedException,
-			FileLockedByAnotherAddressException {
-		logAccess(filename, "Unlock");
+	public void writeLogEntry(String filename, int logEntryNumber, LogEntry op)
+			throws NotListeningException {
+		logAccess(filename, "Add");
 		FileLog l = getLog(filename);
-		Integer lockedBy = l.checkLocked();
-		if (lockedBy == null) {
-			throw new NotLockedException();
-		} else if (lockedBy != address) {
-			throw new FileLockedByAnotherAddressException();
-		}
-		l.addOperation(new Unlock(address));
-	}
-
-	public void writeFile(String filename, String content, boolean append,
-			int address) throws FileDoesNotExistException,
-			NotParticipatingException, FileLockedByAnotherAddressException {
-		logAccess(filename, "Write", content);
-		FileLog l = getLog(filename);
-		Integer locked = l.checkLocked();
-		if (locked != null && locked != address) {
-			throw new FileLockedByAnotherAddressException();
-		}
-		if (l.checkExists()) {
-			l.addOperation(new Write(content, append));
-		} else {
-			throw new FileDoesNotExistException();
-		}
-	}
-
-	@Override
-	public boolean isParticipating(String filename) {
-		return logs.containsKey(filename);
+		l.addOperation(logEntryNumber, op);
 	}
 }

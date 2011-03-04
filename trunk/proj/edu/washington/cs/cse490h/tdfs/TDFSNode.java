@@ -69,12 +69,20 @@ public class TDFSNode extends RIONode {
 		 * 
 		 * A filename is "locked" iff it has a queue in this map
 		 */
-		private Map<String, Queue<Command>> queued;
+		private Map<String, Queue<Command>> fileQueues = new HashMap<String, Queue<Command>>();
+		
+		private boolean inTx = false;
 
-		public void handle(String filename, Command command) {
-			Queue<Command> queue = queued.get(filename);
+		private Queue<Command> txQueue = new LinkedList<Command>();
+		
+		// TODO: HIGH: TX based locking
+		
+		// what commands have been executed by handle but not finished by next
+
+		public void execute(FileCommand command) {
+			Queue<Command> queue = fileQueues.get(command.filename);
 			if (queue == null) {
-				queued.put(filename, new LinkedList<Command>());
+				fileQueues.put(command.filename, new LinkedList<Command>());
 				command.execute(null, null);
 			} else {
 				queue.add(command);
@@ -91,17 +99,15 @@ public class TDFSNode extends RIONode {
 		 * its queue and return null
 		 */
 		public void next(String filename) {
-			Queue<Command> queue = queued.get(filename);
+			Queue<Command> queue = fileQueues.get(filename);
 			Command command = queue.poll();
 			if (command == null) {
-				queued.remove(filename);
+				fileQueues.remove(filename);
 			} else {
 				command.execute(null, null);
 			}
 		}
 	}
-
-	// TODO: HIGH: TX based locking?
 
 	/**
 	 * A graph of dependent commands
@@ -111,7 +117,7 @@ public class TDFSNode extends RIONode {
 		private int locks = 0;
 		private List<CommandGraph> children;
 		private CommandQueue commandQueue;
-		
+
 		public void execute() {
 			commandQueue.handle(command);
 		}
@@ -130,7 +136,7 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	Queue<Operation> queuedOperations;
+	Queue<LogEntry> queuedOperations;
 
 	List<String> filesBeingOperatedOn;
 
@@ -162,7 +168,7 @@ public class TDFSNode extends RIONode {
 
 	@Override
 	public void start() {
-		queuedOperations = new LinkedList<Operation>();
+		queuedOperations = new LinkedList<LogEntry>();
 		filesBeingOperatedOn = new ArrayList<String>();
 		this.logFS = new LogFileSystem();
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
@@ -229,14 +235,14 @@ public class TDFSNode extends RIONode {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO HIGH: Log error
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new TXStart(), filename, nextOperation,
+				proposal = new Proposal(new TXStartLogEntry(), filename, nextOperation,
 						nextProposalNumber(filename));
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
@@ -258,14 +264,14 @@ public class TDFSNode extends RIONode {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO HIGH: Log error
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new TXCommit(), filename,
+				proposal = new Proposal(new TXCommitLogEntry(), filename,
 						nextOperation, nextProposalNumber(filename));
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 				e.printStackTrace();
 			}
@@ -290,14 +296,14 @@ public class TDFSNode extends RIONode {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO HIGH: Log error
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new Write(contents, false), filename,
+				proposal = new Proposal(new WriteLogEntry(contents, false), filename,
 						nextOperation, nextProposalNumber(filename));
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
@@ -320,14 +326,14 @@ public class TDFSNode extends RIONode {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO Log error
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new Write(contents, true), filename,
+				proposal = new Proposal(new WriteLogEntry(contents, true), filename,
 						nextOperation, nextProposalNumber(filename));
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
@@ -352,14 +358,14 @@ public class TDFSNode extends RIONode {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO Log error
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new Create(), filename, nextOperation,
+				proposal = new Proposal(new CreateLogEntry(), filename, nextOperation,
 						nextProposalNumber(filename));
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
@@ -380,14 +386,14 @@ public class TDFSNode extends RIONode {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.getNextOperationNumber(filename);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO HIGH: Log error
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new Write(contents, true), filename,
+				proposal = new Proposal(new WriteLogEntry(contents, true), filename,
 						nextOperation, nextProposalNumber(filename));
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
 			prepare(addr, proposal);
@@ -415,7 +421,7 @@ public class TDFSNode extends RIONode {
 	public void Join(String filename) {
 		Proposal proposal = null;
 
-		proposal = new Proposal(new Join(addr), filename, 0, 0);
+		proposal = new Proposal(new JoinLogEntry(addr), filename, 0, 0);
 
 		int coordinator = hashFilename(filename);
 		if (coordinator == addr) {
@@ -454,7 +460,7 @@ public class TDFSNode extends RIONode {
 	 * Relies on participants being static for any given operation number
 	 */
 	private int nextProposalNumber(String filename)
-			throws NotParticipatingException {
+			throws NotListeningException {
 		List<Integer> participants = logFS.getParticipants(filename);
 		Integer lastNumSent = lastProposalNumbersSent.get(filename);
 		if (lastNumSent == null) {
@@ -485,11 +491,11 @@ public class TDFSNode extends RIONode {
 		List<Integer> participants = null;
 		try {
 			participants = logFS.getParticipants(proposal.filename);
-		} catch (NotParticipatingException e) {
+		} catch (NotListeningException e) {
 			// TODO: Deal with exception
 		}
 		if (!participants.contains(from)
-				&& !(proposal.operation instanceof Join)) {
+				&& !(proposal.operation instanceof JoinLogEntry)) {
 			// TODO: High: Log error
 			return;
 		}
@@ -527,12 +533,12 @@ public class TDFSNode extends RIONode {
 	public void receiveAccepted(int from, String msg) {
 		Proposal proposal = new Proposal(Utility.stringToByteArray(msg));
 		String filename = proposal.filename;
-		Operation op = proposal.operation;
+		LogEntry op = proposal.operation;
 
 		List<Integer> participants = null;
 		try {
 			participants = logFS.getParticipants(filename);
-		} catch (NotParticipatingException e) {
+		} catch (NotListeningException e) {
 			// TODO: High: Deal with exception
 		}
 
@@ -550,12 +556,12 @@ public class TDFSNode extends RIONode {
 
 		// TODO: High - write to local log
 
-		if (op instanceof Join)
+		if (op instanceof JoinLogEntry)
 			try {
 				RIOSend(from, MessageType.Joined,
 						Utility.stringToByteArray(filename));
 				logFS.join(filename, from);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO: High: Send error back
 			}
 
@@ -579,7 +585,7 @@ public class TDFSNode extends RIONode {
 		if (proposalNumber == -1) {
 			try {
 				prepareNumber = nextProposalNumber(filename);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// TODO: Catch error/log
 			}
 		} else
@@ -594,7 +600,7 @@ public class TDFSNode extends RIONode {
 							Utility.stringToByteArray(prepareNumber + ""));
 			}
 
-		} catch (NotParticipatingException e) {
+		} catch (NotListeningException e) {
 			// TODO: High: Log
 		}
 
@@ -612,11 +618,11 @@ public class TDFSNode extends RIONode {
 
 		Proposal p = new Proposal(Utility.stringToByteArray(msg));
 
-		if (p.operation instanceof Join) {
+		if (p.operation instanceof JoinLogEntry) {
 			try {
 				p.operationNumber = logFS.getNextOperationNumber(p.filename);
 				p.proposalNumber = nextProposalNumber(p.filename);
-			} catch (NotParticipatingException e) {
+			} catch (NotListeningException e) {
 				// Pass the request along
 				try {
 					logFS.createGroup(p.filename);
@@ -693,7 +699,7 @@ public class TDFSNode extends RIONode {
 				// Check if forgotten operation
 				return;
 			}
-		} catch (NotParticipatingException e) {
+		} catch (NotListeningException e) {
 			// TODO High: Auto-generated catch block
 			e.printStackTrace();
 		} catch (NoSuchOperationNumberException e) {
@@ -726,7 +732,7 @@ public class TDFSNode extends RIONode {
 
 		try {
 			participants = logFS.getParticipants(filename);
-		} catch (NotParticipatingException e) {
+		} catch (NotListeningException e) {
 			// TODO: High: Send exception back
 		}
 
