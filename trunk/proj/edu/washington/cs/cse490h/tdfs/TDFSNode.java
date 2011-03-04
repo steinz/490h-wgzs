@@ -276,9 +276,6 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void Join(String filename) {
-		Proposal proposal = null;
-
-		proposal = new Proposal(new JoinLogEntry(addr), filename, 0, 0);
 
 		int coordinator = hashFilename(filename);
 		if (coordinator == addr) {
@@ -288,8 +285,7 @@ public class TDFSNode extends RIONode {
 				// TODO Error: Node already participating in group
 			}
 		}
-		byte[] payload = proposal.pack();
-		RIOSend(coordinator, MessageType.Request, payload);
+		RIOSend(coordinator, MessageType.RequestToListen, Utility.stringToByteArray(filename));
 	}
 
 	@Override
@@ -369,8 +365,7 @@ public class TDFSNode extends RIONode {
 		} catch (NotListeningException e) {
 			// TODO: Deal with exception
 		}
-		if (!participants.contains(from)
-				&& !(proposal.operation instanceof JoinLogEntry)) {
+		if (!participants.contains(from)) {
 			// TODO: High: Log error
 			return;
 		}
@@ -603,8 +598,11 @@ public class TDFSNode extends RIONode {
 	 * @param from Who sent the request
 	 * @param msg The proposal, in packed form
 	 */
-	public void receciveRequestToListen(int from, byte[] msg){
-		Proposal p = new Proposal(msg);
+	public void receciveRequestToListen(int from, String filename){
+		List<Integer> list = fileListeners.get(filename);
+		if (list == null)
+			list = new ArrayList<Integer>();
+		list.add(from);
 		
 	}
 
