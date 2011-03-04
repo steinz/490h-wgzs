@@ -1,7 +1,6 @@
 package edu.washington.cs.cse490h.tdfs;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,12 +8,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Queue;
-import java.util.Set;
-import java.util.StringTokenizer;
-
-import org.tmatesoft.svn.core.internal.io.fs.FSClosestCopy;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -62,7 +56,7 @@ public class TDFSNode extends RIONode {
 	/**
 	 * Queues commands on a per filename basis
 	 */
-	private static class CommandQueue {
+	private static class FileCommandExecutor {
 		/**
 		 * Filename => Queued Commands
 		 * 
@@ -102,36 +96,85 @@ public class TDFSNode extends RIONode {
 				command.execute(null, null);
 			}
 		}
+
+		public boolean executingOn(String filename) {
+			return fileQueues.containsKey(filename);
+		}
+
+		public boolean empty() {
+			return fileQueues.size() == 0;
+		}
 	}
 
 	private static class TransactionQueue {
 		private boolean inTx = false;
+		private List<String> filenamesInTx;
+		private boolean waitingForCommitResult = false;
+		private boolean waitingToCommit = false;
 		private Queue<Command> txQueue = new LinkedList<Command>();
-		private CommandQueue cmdQueue;
+		private FileCommandExecutor cmdQueue;
+		private TDFSNode node;
 
-		public TransactionQueue(CommandQueue cmdQueue) {
+		// TODO: HIGH: Fix how these things reference eachother
+
+		public TransactionQueue(TDFSNode node, FileCommandExecutor cmdQueue) {
+			this.node = node;
 			this.cmdQueue = cmdQueue;
 		}
 
 		public void execute(Command command) {
-			if (command instanceof StartCommand) {
-
-			} else if (command instanceof AbortCommand) {
-
-			} else if (command instanceof CommitCommand) {
-
+			if (waitingForCommitResult) {
+				txQueue.add(command);
+			} else if (command instanceof StartCommand) {
+				if (inTx) {
+					// TODO: HIGH: fix logging...
+					Logger.error(node, "already in transaction");
+				} else {
+					inTx = true;
+					StartCommand startCommand = (StartCommand) command;
+					this.filenamesInTx = startCommand.filenames;
+					command.execute(node, node.logFS);
+				}
+			} else if (command instanceof AbortCommand
+					|| command instanceof CommitCommand) {
+				if (!inTx) {
+					Logger.error(node, "not in transaction");
+				} else {
+					if (cmdQueue.empty()) {
+						inTx = false;
+						waitingForCommitResult = true;
+						this.filenamesInTx = null;
+						command.execute(node, node.logFS);
+					} else {
+						waitingToCommit = true;
+						txQueue.add(command);
+					}
+				}
 			} else { // FileCommand
 				FileCommand fc = (FileCommand) command;
-				cmdQueue.execute(fc);
+				if (inTx && !filenamesInTx.contains(fc.filename)) {
+					node.printError(fc.filename + " not declared in txstart");
+				} else {
+					cmdQueue.execute(fc);
+				}
 			}
 		}
 
 		public void nextTx() {
-
+			waitingForCommitResult = false;
+			Queue<Command> oldTxQueue = this.txQueue;
+			this.txQueue = new LinkedList<Command>();
+			Command c;
+			while ((c = oldTxQueue.poll()) != null) {
+				execute(c);
+			}
 		}
 
 		public void next(String filename) {
-
+			cmdQueue.next(filename);
+			if (waitingToCommit && cmdQueue.empty()) {
+				txQueue.poll().execute(node, node.logFS);
+			}
 		}
 	}
 
@@ -142,7 +185,7 @@ public class TDFSNode extends RIONode {
 		private Command command;
 		private int locks = 0;
 		private List<CommandGraph> children;
-		private CommandQueue commandQueue;
+		private FileCommandExecutor commandQueue;
 
 		public void execute() {
 			if (command instanceof FileCommand) {
@@ -200,8 +243,8 @@ public class TDFSNode extends RIONode {
 	public void start() {
 		this.logFS = new LogFileSystem();
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
-		this.txQueue = new TransactionQueue(new CommandQueue());
-		
+		this.txQueue = new TransactionQueue(this, new FileCommandExecutor());
+
 		// TODO: HIGH: Coordinator count config
 		this.coordinatorCount = 4;
 
