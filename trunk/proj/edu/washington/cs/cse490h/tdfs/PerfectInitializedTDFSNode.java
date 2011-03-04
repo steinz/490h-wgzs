@@ -31,10 +31,6 @@ public class PerfectInitializedTDFSNode extends PerfectTDFSNode {
 					UUID.fromString("0000000-0000-0000-0000-00000000000" + i));
 		}
 
-		if (this.addr == 0) {
-			printInfo("initialized as manager with session id: " + this.ID);
-		} else {
-			printInfo("initialized as client with session id: " + this.ID);
-		}
+		printInfo("initialized " + addr + " with session id: " + this.ID);
 	}
 }
