@@ -354,9 +354,12 @@ public class TDFSNode extends RIONode {
 	}
 
 	/**
-	 * Attempts to listen in on a paxos group for the given file. If this node is supposed to be the coordinator for that file,
-	 * attempts to create the group.
-	 * @param filename The file
+	 * Attempts to listen in on a paxos group for the given file. If this node
+	 * is supposed to be the coordinator for that file, attempts to create the
+	 * group.
+	 * 
+	 * @param filename
+	 *            The file
 	 */
 	public void Join(String filename) {
 
@@ -364,9 +367,10 @@ public class TDFSNode extends RIONode {
 		if (getParticipants(filename).contains(addr)) {
 			try {
 				logFS.createGroup(filename);
-				for (Integer next : getParticipants(filename)){
+				for (Integer next : getParticipants(filename)) {
 					if (next != addr)
-						RIOSend(next, MessageType.CreateGroup, Utility.stringToByteArray(filename));
+						RIOSend(next, MessageType.CreateGroup,
+								Utility.stringToByteArray(filename));
 				}
 			} catch (AlreadyParticipatingException e) {
 				Logger.error(this, e);
@@ -502,7 +506,7 @@ public class TDFSNode extends RIONode {
 
 		Integer responded = acceptorsResponded.get(filename);
 		responded = (responded == null) ? 0 : responded + 1;
-		
+
 		if (responded < participants.size() / 2)
 			return;
 
@@ -511,7 +515,7 @@ public class TDFSNode extends RIONode {
 				RIOSend(next, MessageType.Learned,
 						Utility.stringToByteArray(msg));
 		}
-		
+
 		responded = 0;
 
 		// TODO: High - write to local log
@@ -647,7 +651,7 @@ public class TDFSNode extends RIONode {
 
 		Integer responded = promisesReceived.get(filename);
 		responded = (responded == null) ? 0 : responded + 1;
-		
+
 		if (responded < participants.size() / 2)
 			return;
 
@@ -656,7 +660,7 @@ public class TDFSNode extends RIONode {
 				RIOSend(next, MessageType.Learned,
 						Utility.stringToByteArray(msg));
 		}
-	
+
 		if (responded < (participants.size() / 2))
 			return;
 
@@ -665,7 +669,7 @@ public class TDFSNode extends RIONode {
 				RIOSend(i, MessageType.Accept, Utility.stringToByteArray(msg));
 			}
 		}
-		
+
 		responded = 0;
 
 	}
@@ -699,6 +703,16 @@ public class TDFSNode extends RIONode {
 		List<Integer> listeners = fileListeners.get(p.filename);
 		for (Integer i : listeners) {
 			RIOSend(i, MessageType.Learned, msg);
+		}
+
+		if ((p.operation instanceof TXCommitLogEntry || p.operation instanceof TXAbortLogEntry)
+				&& txQueue.inTx && txQueue.filenamesInTx.contains(p.filename)) {
+			txQueue.nextTx();
+
+		}
+		
+		if (txQueue.cmdQueue.executingOn(p.filename)){
+			txQueue.next(p.filename);
 		}
 		/*
 		 * TODO: HIGH: "Unlock" completed commands via
