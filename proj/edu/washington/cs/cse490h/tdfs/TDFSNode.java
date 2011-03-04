@@ -70,14 +70,10 @@ public class TDFSNode extends RIONode {
 		 * A filename is "locked" iff it has a queue in this map
 		 */
 		private Map<String, Queue<Command>> fileQueues = new HashMap<String, Queue<Command>>();
-		
-		private boolean inTx = false;
 
-		private Queue<Command> txQueue = new LinkedList<Command>();
-		
-		// TODO: HIGH: TX based locking
-		
-		// what commands have been executed by handle but not finished by next
+		// TODO: HIGH: add list of commands that have been executed by handle
+		// but not
+		// finished by next
 
 		public void execute(FileCommand command) {
 			Queue<Command> queue = fileQueues.get(command.filename);
@@ -106,6 +102,15 @@ public class TDFSNode extends RIONode {
 			} else {
 				command.execute(null, null);
 			}
+		}
+	}
+
+	private static class TransactionQueue {
+		private boolean inTx = false;
+		private Queue<Command> txQueue = new LinkedList<Command>();
+
+		public void execute(Command command) {
+
 		}
 	}
 
@@ -240,8 +245,8 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new TXStartLogEntry(), filename, nextOperation,
-						nextProposalNumber(filename));
+				proposal = new Proposal(new TXStartLogEntry(), filename,
+						nextOperation, nextProposalNumber(filename));
 			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
@@ -301,8 +306,8 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new WriteLogEntry(contents, false), filename,
-						nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new WriteLogEntry(contents, false),
+						filename, nextOperation, nextProposalNumber(filename));
 			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
@@ -331,8 +336,8 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new WriteLogEntry(contents, true), filename,
-						nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new WriteLogEntry(contents, true),
+						filename, nextOperation, nextProposalNumber(filename));
 			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
@@ -363,8 +368,8 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new CreateLogEntry(), filename, nextOperation,
-						nextProposalNumber(filename));
+				proposal = new Proposal(new CreateLogEntry(), filename,
+						nextOperation, nextProposalNumber(filename));
 			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
@@ -391,8 +396,8 @@ public class TDFSNode extends RIONode {
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(new WriteLogEntry(contents, true), filename,
-						nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(new WriteLogEntry(contents, true),
+						filename, nextOperation, nextProposalNumber(filename));
 			} catch (NotListeningException e) {
 				// TODO Log error/throw exception
 			}
@@ -446,13 +451,21 @@ public class TDFSNode extends RIONode {
 		try {
 			Class<?> handlingClass = instance.getClass();
 			Class<?>[] paramTypes = { int.class, String.class };
-			Method handler = handlingClass.getMethod("receive" + type.name(),
-					paramTypes);
-			Object[] args = { from, msgString };
+			Method handler;
+			Object[] args = { from, null };
+			try {
+				handler = handlingClass.getMethod("receive" + type.name(),
+						paramTypes);
+				args[1] = msgString;
+			} catch (Exception e) {
+				paramTypes[1] = byte[].class;
+				handler = handlingClass.getMethod("receive" + type.name(),
+						paramTypes);
+				args[1] = msg;
+			}
 			handler.invoke(instance, args);
 		} catch (Exception e) {
 			printError(e);
-
 		}
 	}
 
@@ -758,8 +771,16 @@ public class TDFSNode extends RIONode {
 	 * @param msg
 	 *            The proposal, as a byte array
 	 */
-	public void receiveLearned(int from, String msg) {
-		// TODO: High: Add to log
-		// logFS.writeLogEntry(Operation.unpack(msg));
+	public void receiveLearned(int from, byte[] msg) {
+		Proposal p = new Proposal(msg);
+		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
+
+		/*
+		 * TODO: HIGH: "Unlock" completed commands via
+		 * Command/TXQueue/CommandGraph
+		 */
+
+		// TODO: HIGH: Inform listeners
+
 	}
 }
