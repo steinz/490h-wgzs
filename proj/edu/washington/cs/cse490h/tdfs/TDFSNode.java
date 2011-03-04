@@ -180,12 +180,12 @@ public class TDFSNode extends RIONode {
 	 * Learner only: Number of acceptors that have contacted the learner about
 	 * accepting a particular N,V pair
 	 */
-	private int acceptorsResponded;
+	private Map<String, Integer> acceptorsResponded;
 
 	/**
 	 * Proposer only: Number of acceptors that have responded with a promise
 	 */
-	private int promisesReceived;
+	private Map<String, Integer> promisesReceived;
 
 	/**
 	 * Last proposal number promised for a given file
@@ -206,7 +206,7 @@ public class TDFSNode extends RIONode {
 		this.coordinatorCount = 4;
 
 		// Paxos
-		this.acceptorsResponded = 0;
+		this.acceptorsResponded = new HashMap<String, Integer>();
 		this.lastProposalNumberPromised = new HashMap<String, Integer>();
 	}
 
@@ -310,12 +310,21 @@ public class TDFSNode extends RIONode {
 
 	}
 
+	/**
+	 * Attempts to listen in on a paxos group for the given file. If this node is supposed to be the coordinator for that file,
+	 * attempts to create the group.
+	 * @param filename The file
+	 */
 	public void Join(String filename) {
 
 		int coordinator = hashFilename(filename);
-		if (coordinator == addr) {
+		if (getParticipants(filename).contains(addr)) {
 			try {
 				logFS.createGroup(filename);
+				for (Integer next : getParticipants(filename)){
+					if (next != addr)
+						RIOSend(next, MessageType.CreateGroup, Utility.stringToByteArray(filename));
+				}
 			} catch (AlreadyParticipatingException e) {
 				Logger.error(this, e);
 			}
@@ -448,8 +457,10 @@ public class TDFSNode extends RIONode {
 		List<Integer> participants = null;
 		participants = getParticipants(filename);
 
-		acceptorsResponded++;
-		if (acceptorsResponded < participants.size() / 2)
+		Integer responded = acceptorsResponded.get(filename);
+		responded = (responded == null) ? 0 : responded + 1;
+		
+		if (responded < participants.size() / 2)
 			return;
 
 		for (Integer next : participants) {
@@ -457,6 +468,8 @@ public class TDFSNode extends RIONode {
 				RIOSend(next, MessageType.Learned,
 						Utility.stringToByteArray(msg));
 		}
+		
+		responded = 0;
 
 		// TODO: High - write to local log
 
@@ -589,9 +602,19 @@ public class TDFSNode extends RIONode {
 
 		participants = getParticipants(filename);
 
-		promisesReceived++;
+		Integer responded = promisesReceived.get(filename);
+		responded = (responded == null) ? 0 : responded + 1;
+		
+		if (responded < participants.size() / 2)
+			return;
 
-		if (promisesReceived < (participants.size() / 2))
+		for (Integer next : participants) {
+			if (next != addr)
+				RIOSend(next, MessageType.Learned,
+						Utility.stringToByteArray(msg));
+		}
+	
+		if (responded < (participants.size() / 2))
 			return;
 
 		for (Integer i : participants) {
@@ -599,6 +622,8 @@ public class TDFSNode extends RIONode {
 				RIOSend(i, MessageType.Accept, Utility.stringToByteArray(msg));
 			}
 		}
+		
+		responded = 0;
 
 	}
 
