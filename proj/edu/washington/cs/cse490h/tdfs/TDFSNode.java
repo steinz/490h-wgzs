@@ -212,6 +212,8 @@ public class TDFSNode extends RIONode {
 	TransactionQueue txQueue;
 
 	private int coordinatorCount;
+	
+	private int coordinatorsPerFile;
 
 	private Map<String, List<Integer>> fileListeners;
 
@@ -247,6 +249,7 @@ public class TDFSNode extends RIONode {
 
 		// TODO: HIGH: Coordinator count config
 		this.coordinatorCount = 4;
+		this.coordinatorsPerFile = 3;
 
 		// Paxos
 		this.acceptorsResponded = new HashMap<String, Integer>();
@@ -437,7 +440,7 @@ public class TDFSNode extends RIONode {
 	public List<Integer> getParticipants(String filename) {
 		ArrayList<Integer> list = new ArrayList<Integer>();
 		int baseAddr = hashFilename(filename);
-		for (int i = 0; i < coordinatorCount; i++) {
+		for (int i = 0; i < coordinatorsPerFile; i++) {
 			list.add(baseAddr + i);
 		}
 		return list;
@@ -704,7 +707,7 @@ public class TDFSNode extends RIONode {
 		for (Integer i : listeners) {
 			RIOSend(i, MessageType.Learned, msg);
 		}
-
+		
 		if ((p.operation instanceof TXCommitLogEntry || p.operation instanceof TXAbortLogEntry)
 				&& txQueue.inTx && txQueue.filenamesInTx.contains(p.filename)) {
 			txQueue.nextTx();
