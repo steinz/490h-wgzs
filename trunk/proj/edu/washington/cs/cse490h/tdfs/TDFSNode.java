@@ -6,7 +6,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -147,8 +146,7 @@ public class TDFSNode extends RIONode {
 
 	private int coordinatorCount;
 
-	private Map<String, Integer> lastProposalNumbersSent;
-	
+
 	private Map<String, List<Integer>> fileListeners;
 
 	/**
@@ -170,6 +168,9 @@ public class TDFSNode extends RIONode {
 	 * Last proposal number promised for a given file
 	 */
 	private Map<String, Integer> lastProposalNumberPromised;
+	
+
+	private Map<String, Integer> lastProposalNumbersSent;
 
 	private LogFS logFS;
 
@@ -230,32 +231,33 @@ public class TDFSNode extends RIONode {
 	}
 
 	/**
-	 * Checks if the node is listening on this filename already. If it is, then it proceeds with
-	 * preparing and sending a message. If not, then it returns and requests to start listening
-	 * @param filename The filename
-	 * @param op The operation
+	 * Checks if the node is listening on this filename already. If it is, then
+	 * it proceeds with preparing and sending a message. If not, then it returns
+	 * and requests to start listening
+	 * 
+	 * @param filename
+	 *            The filename
+	 * @param op
+	 *            The operation
 	 */
-	public void checkIfListening(String filename, LogEntry op)
-	{
+	public void checkIfListening(String filename, LogEntry op) {
 		if (listeningAlready(filename)) {
 			int nextOperation = -1;
 			try {
 				nextOperation = logFS.nextLogNumber(filename);
 			} catch (NotListeningException e) {
-				// TODO HIGH: Log error
+				Logger.error(this, e);
 			}
 			Proposal proposal = null;
 			try {
-				proposal = new Proposal(op, filename,
-						nextOperation, nextProposalNumber(filename));
+				proposal = new Proposal(op, filename, nextOperation,
+						nextProposalNumber(filename));
 			} catch (NotListeningException e) {
-				// TODO Log error/throw exception
-				e.printStackTrace();
+				Logger.error(this, e);
 			}
-			prepare(addr, proposal);
-		}	
+			prepare(addr, proposal.pack());
+		}
 	}
-
 
 	/**
 	 * Checks whether a node has joined the paxos group for a file already. If
@@ -282,10 +284,11 @@ public class TDFSNode extends RIONode {
 			try {
 				logFS.createGroup(filename);
 			} catch (AlreadyParticipatingException e) {
-				// TODO Error: Node already participating in group
+				Logger.error(this, e);
 			}
 		}
-		RIOSend(coordinator, MessageType.RequestToListen, Utility.stringToByteArray(filename));
+		RIOSend(coordinator, MessageType.RequestToListen,
+				Utility.stringToByteArray(filename));
 	}
 
 	@Override
@@ -341,12 +344,11 @@ public class TDFSNode extends RIONode {
 	public int hashFilename(String filename) {
 		return filename.hashCode() % coordinatorCount;
 	}
-	
-	public List<Integer> getParticipants(String filename)
-	{
+
+	public List<Integer> getParticipants(String filename) {
 		ArrayList<Integer> list = new ArrayList<Integer>();
 		int baseAddr = hashFilename(filename);
-		for (int i = 0; i < coordinatorCount; i++){
+		for (int i = 0; i < coordinatorCount; i++) {
 			list.add(baseAddr + i);
 		}
 		return list;
@@ -358,23 +360,29 @@ public class TDFSNode extends RIONode {
 	 * @param proposal
 	 *            The proposal to send
 	 */
-	public void prepare(int from, Proposal proposal) {
-		List<Integer> participants = null;
-		try {
-			participants = getParticipants(proposal.filename);
-		} catch (NotListeningException e) {
-			// TODO: Deal with exception
-		}
-		if (!participants.contains(from)) {
-			// TODO: High: Log error
-			return;
+	public void prepare(int from, byte[] msg) {
+		Proposal p = new Proposal(msg);
+
+		if (p.proposalNumber == -1) {
+			try {
+				p.proposalNumber = nextProposalNumber(p.filename);
+			} catch (NotListeningException e) {
+				Logger.error(this, e);
+			}
 		}
 
-		Iterator<Integer> iter = participants.iterator();
-		while (iter.hasNext()) {
-			int next = iter.next();
+		List<Integer> participants = null;
+		try {
+			participants = getParticipants(p.filename);
+		} catch (NotListeningException e) { // assuming this is a coordinator, a
+											// coordinator should never not be
+											// participating
+			Logger.error(this, e);
+		}
+
+		for (Integer next : participants) {
 			if (next != addr)
-				RIOSend(next, MessageType.Prepare, proposal.pack());
+				RIOSend(next, MessageType.Prepare, p.pack());
 		}
 	}
 
@@ -411,49 +419,13 @@ public class TDFSNode extends RIONode {
 		if (acceptorsResponded < participants.size() / 2)
 			return;
 
-		Iterator<Integer> iter = participants.iterator();
-		while (iter.hasNext()) {
-			int next = iter.next();
+		for (Integer next : participants) {
 			if (next != addr)
 				RIOSend(next, MessageType.Learned,
 						Utility.stringToByteArray(msg));
 		}
 
 		// TODO: High - write to local log
-
-	}
-
-	/**
-	 * 
-	 * Select a proposal number and send it to each acceptor. Don't need to
-	 * worry about a quorum yet - if not enough acceptors are on, won't proceed
-	 * past the accept stage and will stall, which is allowable.
-	 */
-	public void prepare(int from, byte[] msg) {
-
-		// TODO: HIGH: merge two prepare methods???
-
-		Proposal proposal = new Proposal(msg);
-		int proposalNumber = proposal.proposalNumber;
-		String filename = proposal.filename;
-		Integer prepareNumber = null;
-
-		if (proposalNumber == -1) {
-			try {
-				prepareNumber = nextProposalNumber(filename);
-			} catch (NotListeningException e) {
-				// TODO: Catch error/log
-			}
-		} else
-			prepareNumber = proposalNumber;
-
-			Iterator<Integer> iter = getParticipants(filename).iterator();
-			while (iter.hasNext()) {
-				int next = iter.next();
-				if (next != addr)
-					RIOSend(iter.next(), MessageType.Prepare,
-							Utility.stringToByteArray(prepareNumber + ""));
-			}
 
 	}
 
@@ -469,27 +441,30 @@ public class TDFSNode extends RIONode {
 
 		Proposal p = new Proposal(Utility.stringToByteArray(msg));
 
+		try {
+			p.operationNumber = logFS.nextLogNumber(p.filename);
+			p.proposalNumber = nextProposalNumber(p.filename);
+		} catch (NotListeningException e) {
+			// Pass the request along
 			try {
-				p.operationNumber = logFS.nextLogNumber(p.filename);
-				p.proposalNumber = nextProposalNumber(p.filename);
-			} catch (NotListeningException e) {
-				// Pass the request along
-				try {
-					logFS.createGroup(p.filename);
-				} catch (AlreadyParticipatingException e1) {
-					// TODO Do something?
-					Logger.error(this, e1);
-				}
-				int address = hashFilename(p.filename);
-				for (int i = 0; i < coordinatorCount; i++) {
-					address = address + i;
-					if (address != addr)
-						RIOSend(address, MessageType.CreateGroup,
-								Utility.stringToByteArray(p.filename));
-				}
-				// fall through and start the proposal
+				logFS.createGroup(p.filename);
+			} catch (AlreadyParticipatingException e1) { // Throw a runtime
+															// error - something
+															// went seriously
+															// wrong
+				Logger.error(this, e1);
+				throw new RuntimeException();
 			}
-			prepare(from, p);
+			int address = hashFilename(p.filename);
+			for (int i = 0; i < coordinatorCount; i++) {
+				address = address + i;
+				if (address != addr)
+					RIOSend(address, MessageType.CreateGroup,
+							Utility.stringToByteArray(p.filename));
+			}
+			// fall through and start the proposal
+		}
+		prepare(from, p.pack());
 	}
 
 	/**
@@ -504,8 +479,13 @@ public class TDFSNode extends RIONode {
 		try {
 			logFS.createGroup(msg);
 		} catch (AlreadyParticipatingException e) {
-			// TODO: Send an error back?
 			Logger.error(this, e);
+			// TODO: High:
+			// This could happen if a coordinator goes down, and receives a join
+			// request from someone when it comes back up.
+			// It will assume the group doesn't exist and try to instantiate it,
+			// but instead the other coordinators should
+			// Try to bring it up to speed
 		}
 	}
 
@@ -546,8 +526,7 @@ public class TDFSNode extends RIONode {
 				return;
 			}
 		} catch (NotListeningException e) {
-			// TODO High: Auto-generated catch block
-			e.printStackTrace();
+			Logger.error(this, e);
 		} catch (NoSuchOperationNumberException e) {
 			Logger.error(this, e);
 		}
@@ -578,32 +557,32 @@ public class TDFSNode extends RIONode {
 		participants = getParticipants(filename);
 
 		promisesReceived++;
-		
+
 		if (promisesReceived < (participants.size() / 2))
 			return;
 
-		Iterator<Integer> iter = participants.iterator();
-		while (iter.hasNext()) {
-			int next = iter.next();
-			if (next != addr) {
-				RIOSend(iter.next(), MessageType.Accept,
-						Utility.stringToByteArray(msg));
+		for (Integer i : participants) {
+			if (i != addr) {
+				RIOSend(i, MessageType.Accept, Utility.stringToByteArray(msg));
 			}
 		}
 
 	}
-	
+
 	/**
 	 * A request from a node to listen on a given filename
-	 * @param from Who sent the request
-	 * @param msg The proposal, in packed form
+	 * 
+	 * @param from
+	 *            Who sent the request
+	 * @param msg
+	 *            The proposal, in packed form
 	 */
-	public void receciveRequestToListen(int from, String filename){
+	public void receciveRequestToListen(int from, String filename) {
 		List<Integer> list = fileListeners.get(filename);
 		if (list == null)
 			list = new ArrayList<Integer>();
 		list.add(from);
-		
+
 	}
 
 	/**
@@ -616,12 +595,15 @@ public class TDFSNode extends RIONode {
 		Proposal p = new Proposal(msg);
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
 
+		// inform listeners
+		List<Integer> listeners = fileListeners.get(p.filename);
+		for (Integer i : listeners) {
+			RIOSend(i, MessageType.Learned, msg);
+		}
 		/*
 		 * TODO: HIGH: "Unlock" completed commands via
 		 * Command/TXQueue/CommandGraph
 		 */
-
-		// TODO: HIGH: Inform listeners
 
 	}
 }
