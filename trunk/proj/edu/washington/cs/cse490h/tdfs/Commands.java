@@ -1,6 +1,8 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 abstract class Command {
 	Command next;
@@ -32,8 +34,7 @@ class AppendCommand extends WriteCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		// TODO Auto-generated method stub
-		
+		node.checkIfListening(filename, new Write(contents, true));
 	}
 }
 
@@ -44,8 +45,7 @@ class CreateCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		// TODO Auto-generated method stub
-		
+		node.checkIfListening(filename, new Create());
 	}
 }
 
@@ -56,8 +56,7 @@ class DeleteCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		// TODO Auto-generated method stub
-		
+		node.checkIfListening(filename, new Delete());
 	}
 }
 
@@ -80,8 +79,7 @@ class PutCommand extends WriteCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		// TODO Auto-generated method stub
-		
+		node.checkIfListening(filename, new Write(contents, false));
 	}
 }
 
@@ -98,8 +96,7 @@ class CommitCommand extends Command {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		// TODO Auto-generated method stub
-		
+		node.checkIfListening("", new TXCommit());
 	}
 }
 
@@ -112,7 +109,12 @@ class StartCommand extends Command {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		// TODO Auto-generated method stub
+		Iterator<String> iter = filenames.iterator();
+		while (iter.hasNext()){
+			node.checkIfListening(iter.next(), new TXStart());
+		}
 		
 	}
 }
+
+

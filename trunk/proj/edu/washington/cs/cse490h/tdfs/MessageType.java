@@ -35,7 +35,7 @@ public enum MessageType {
 	Joined(HandlingClass.TDFSNode),
 
 	// TODO: HIGH: Ask the lead proposer to do something
-	Request(HandlingClass.TDFSNode),
+	Request(HandlingClass.TDFSNode), RequestToListen(HandlingClass.TDFSNode),
 
 	// Paxos Messages
 	Prepare(HandlingClass.TDFSNode), PromiseDenial(HandlingClass.TDFSNode), Promise(
