@@ -1,6 +1,7 @@
 package edu.washington.cs.cse490h.tdfs;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -63,6 +64,11 @@ public class TDFSNode extends RIONode {
 		 * A filename is "locked" iff it has a queue in this map
 		 */
 		private Map<String, Queue<Command>> fileQueues = new HashMap<String, Queue<Command>>();
+		private TDFSNode node;
+
+		public FileCommandExecutor(TDFSNode node) {
+			this.node = node;
+		}
 
 		// TODO: HIGH: add list of commands that have been executed by handle
 		// but not
@@ -72,7 +78,7 @@ public class TDFSNode extends RIONode {
 			Queue<Command> queue = fileQueues.get(command.filename);
 			if (queue == null) {
 				fileQueues.put(command.filename, new LinkedList<Command>());
-				command.execute(null, null);
+				command.execute(node, node.logFS);
 			} else {
 				queue.add(command);
 			}
@@ -212,7 +218,7 @@ public class TDFSNode extends RIONode {
 	TransactionQueue txQueue;
 
 	private int coordinatorCount;
-	
+
 	private int coordinatorsPerFile;
 
 	private Map<String, List<Integer>> fileListeners;
@@ -245,7 +251,7 @@ public class TDFSNode extends RIONode {
 	public void start() {
 		this.logFS = new LogFileSystem();
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
-		this.txQueue = new TransactionQueue(this, new FileCommandExecutor());
+		this.txQueue = new TransactionQueue(this, new FileCommandExecutor(this));
 
 		// TODO: HIGH: Coordinator count config
 		this.coordinatorCount = 4;
@@ -266,7 +272,8 @@ public class TDFSNode extends RIONode {
 				+ command.substring(1).toLowerCase();
 		Class<?> cmdClass;
 		try {
-			cmdClass = Class.forName(command);
+			cmdClass = Class.forName("edu.washington.cs.cse490h.tdfs."
+					+ command + "Command");
 		} catch (ClassNotFoundException e) {
 			printError(e);
 			return;
@@ -288,14 +295,14 @@ public class TDFSNode extends RIONode {
 				String filename = line.substring(0, delim);
 				String contents = line.substring(delim + commandDelim.length());
 
-				Class<?>[] consArgs = { String.class };
+				Class<?>[] consArgs = { String.class, String.class };
 				Constructor<?> constructor = cmdClass.getConstructor(consArgs);
 				Object[] args = { filename, contents };
 				c = (Command) constructor.newInstance(args);
 			} else if (FileCommand.class.isAssignableFrom(cmdClass)) {
 				String filename = line;
 
-				Class<?>[] consArgs = { String.class, String.class };
+				Class<?>[] consArgs = { String.class };
 				Constructor<?> constructor = cmdClass.getConstructor(consArgs);
 				Object[] args = { filename };
 				c = (Command) constructor.newInstance(args);
@@ -320,40 +327,24 @@ public class TDFSNode extends RIONode {
 	 *            The operation
 	 */
 	public void checkIfListening(String filename, LogEntry op) {
-		if (listeningAlready(filename)) {
-			int nextOperation = -1;
-			try {
-				nextOperation = logFS.nextLogNumber(filename);
-			} catch (NotListeningException e) {
-				Logger.error(this, e);
-			}
-			Proposal proposal = null;
-			try {
-				proposal = new Proposal(op, filename, nextOperation,
-						nextProposalNumber(filename));
-			} catch (NotListeningException e) {
-				Logger.error(this, e);
-			}
-			prepare(addr, proposal.pack());
-		}
-	}
-
-	/**
-	 * Checks whether a node has joined the paxos group for a file already. If
-	 * it hasn't, it automatically sends the join request.
-	 * 
-	 * @param filename
-	 *            The filename for the paxos group
-	 * @return True if the node has joined already, false otherwise
-	 */
-	public boolean listeningAlready(String filename) {
 		if (!logFS.isListening(filename)) {
-			// TODO: High: Queue request or something
 			Join(filename);
-			return false;
 		}
-		return true;
 
+		int nextOperation = -1;
+		try {
+			nextOperation = logFS.nextLogNumber(filename);
+		} catch (NotListeningException e) {
+			Logger.error(this, e);
+		}
+		Proposal proposal = null;
+		try {
+			proposal = new Proposal(op, filename, nextOperation,
+					nextProposalNumber(filename));
+		} catch (NotListeningException e) {
+			Logger.error(this, e);
+		}
+		prepare(addr, proposal.pack());
 	}
 
 	/**
@@ -367,9 +358,9 @@ public class TDFSNode extends RIONode {
 	public void Join(String filename) {
 
 		int coordinator = hashFilename(filename);
+		logFS.createGroup(filename);
 		if (getParticipants(filename).contains(addr)) {
 			try {
-				logFS.createGroup(filename);
 				for (Integer next : getParticipants(filename)) {
 					if (next != addr)
 						RIOSend(next, MessageType.CreateGroup,
@@ -378,9 +369,10 @@ public class TDFSNode extends RIONode {
 			} catch (AlreadyParticipatingException e) {
 				Logger.error(this, e);
 			}
+		} else {
+			RIOSend(coordinator, MessageType.RequestToListen,
+					Utility.stringToByteArray(filename));
 		}
-		RIOSend(coordinator, MessageType.RequestToListen,
-				Utility.stringToByteArray(filename));
 	}
 
 	@Override
@@ -407,6 +399,8 @@ public class TDFSNode extends RIONode {
 				args[1] = msg;
 			}
 			handler.invoke(instance, args);
+		} catch (InvocationTargetException e) {
+			printError(e.getCause());
 		} catch (Exception e) {
 			printError(e);
 		}
@@ -685,7 +679,7 @@ public class TDFSNode extends RIONode {
 	 * @param msg
 	 *            The proposal, in packed form
 	 */
-	public void receciveRequestToListen(int from, String filename) {
+	public void receiveRequestToListen(int from, String filename) {
 		List<Integer> list = fileListeners.get(filename);
 		if (list == null)
 			list = new ArrayList<Integer>();
@@ -707,20 +701,16 @@ public class TDFSNode extends RIONode {
 		for (Integer i : listeners) {
 			RIOSend(i, MessageType.Learned, msg);
 		}
-		
+
+		// TODO: HIGH: Makes this not suck
 		if ((p.operation instanceof TXCommitLogEntry || p.operation instanceof TXAbortLogEntry)
 				&& txQueue.inTx && txQueue.filenamesInTx.contains(p.filename)) {
 			txQueue.nextTx();
 
 		}
-		
-		if (txQueue.cmdQueue.executingOn(p.filename)){
+
+		if (txQueue.cmdQueue.executingOn(p.filename)) {
 			txQueue.next(p.filename);
 		}
-		/*
-		 * TODO: HIGH: "Unlock" completed commands via
-		 * Command/TXQueue/CommandGraph
-		 */
-
 	}
 }
