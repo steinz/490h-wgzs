@@ -1,5 +1,7 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import edu.washington.cs.cse490h.lib.Utility;
+
 abstract class Command {
 
 	// TODO: HIGH: WAYNE: Check valid to execute
@@ -115,7 +117,8 @@ class ListenCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		// TODO: HIGH: request to listen
+		int coordinatorAddress = TDFSNode.hashFilename(filename);
+		node.RIOSend(coordinatorAddress, MessageType.RequestToListen, Utility.stringToByteArray(filename));
 
 	}
 }
