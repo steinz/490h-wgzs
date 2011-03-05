@@ -638,7 +638,10 @@ public class TDFSNode extends RIONode {
 		 */
 	}
 	
-	// 2PC Coordinator Methods
+	/**
+	 *  2PC Coordinator Methods
+	 */
+	
 	/**
 	 * The 2PC coordinator learns about a operation. It logs it to its own logFS, but also
 	 * tries to discern whether the given command is something it should pay attention to - txstarts,
