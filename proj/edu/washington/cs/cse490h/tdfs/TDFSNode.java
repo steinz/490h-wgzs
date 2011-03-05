@@ -597,7 +597,7 @@ public class TDFSNode extends RIONode {
 	 *            The proposal, in packed form
 	 */
 	public void receiveRequestToListen(int from, String filename) {
-		if (!logFS.isListening(filename)){
+		if (!logFS.isListening(filename)){ // If the group doesn't exist
 			logFS.createGroup(filename);
 			for (Integer i : getParticipants(filename)){
 				if (i != addr)
@@ -608,6 +608,7 @@ public class TDFSNode extends RIONode {
 		if (list == null)
 			list = new ArrayList<Integer>();
 		list.add(from);
+		RIOSend(from, MessageType.AddedListener, Utility.stringToByteArray(filename));
 	}
 
 	/**

@@ -36,7 +36,8 @@ public enum MessageType {
 
 	// TODO: HIGH: Ask the lead proposer to do something
 	Request(HandlingClass.TDFSNode), RequestToListen(HandlingClass.TDFSNode),
-
+	AddedListener(HandlingClass.TDFSNode),
+	
 	// Paxos Messages
 	Prepare(HandlingClass.TDFSNode), PromiseDenial(HandlingClass.TDFSNode), Promise(
 			HandlingClass.TDFSNode), Accept(HandlingClass.TDFSNode), Accepted(
