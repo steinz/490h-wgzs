@@ -9,10 +9,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
+import edu.washington.cs.cse490h.lib.Callback;
 import edu.washington.cs.cse490h.lib.Utility;
 import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
+
 
 	/*
 	 * TODO: HIGH:
@@ -53,6 +55,20 @@ public class TDFSNode extends RIONode {
 	 * leader to propose
 	 */
 
+
+	/**
+	 * BEGIN 2PC structures
+	 */
+	private static final int TwoPCCoordinatorAdress = 100;
+	
+	private final int TXTIMEOUT = 20;
+	
+	private Map<String, String[]> fileTransactionMap;
+
+	/**
+	 * END 2PC structures
+	 */
+	
 	CommandGraph commandGraph;
 
 	private static int coordinatorCount = 4;
@@ -96,6 +112,10 @@ public class TDFSNode extends RIONode {
 		// Paxos
 		this.acceptorsResponded = new HashMap<String, Integer>();
 		this.lastProposalNumberPromised = new HashMap<String, Integer>();
+		
+		// 2PC
+		fileTransactionMap = new HashMap<String, String[]>();
+		
 	}
 
 	private static String commandDelim = " ";
@@ -276,6 +296,11 @@ public class TDFSNode extends RIONode {
 
 		// TDFS handles all non-RIO messages right now
 		Object instance = this;
+		
+		// 2PC handler
+		if (addr == TwoPCCoordinatorAdress){
+			learn(from, msg);
+		}
 
 		// route message
 		try {
@@ -605,5 +630,106 @@ public class TDFSNode extends RIONode {
 		 * if (txQueue.cmdQueue.executingOn(p.filename)) {
 		 * txQueue.next(p.filename); }
 		 */
+	}
+	
+	// 2PC Coordinator Methods
+	/**
+	 * The 2PC coordinator learns about a operation. It logs it to its own logFS, but also
+	 * tries to discern whether the given command is something it should pay attention to - txstarts,
+	 * commits, and aborts.
+	 * @param from The coordinator who sent this message
+	 * @param msg The proposal, packed
+	 */
+	public void learn(int from, byte[] msg) {
+		Proposal p = new Proposal(msg);
+		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
+		String[] txFiles = fileTransactionMap.get(p.filename);
+
+		// check for transactions
+
+		if (p.operation instanceof TXStartLogEntry) {
+			// start callback
+			addTxTimeout(p.filename);
+			// add files
+			String[] files = ((TXStartLogEntry) p.operation).filenames;
+			if (txFiles != null) { // client didn't abort or commit last tx
+				Logger.error(this, "Client: " + from
+						+ " did not commit or abort last tx!");
+			}
+			for (String file : files) {
+				fileTransactionMap.put(file, files);
+			}
+
+		}
+
+		else if (p.operation instanceof TXTryCommitLogEntry) {
+			// commit to each filename coordinator
+			String[] files = ((TXTryCommitLogEntry) p.operation).filenames;
+			createProposal(new TXTryCommitLogEntry(files), files);
+			for (String file : txFiles){
+				fileTransactionMap.put(file, null);
+			}
+		}
+
+		else if (p.operation instanceof TXTryAbortLogEntry) {
+			abortClientTx(p.filename);
+		}
+	}
+	
+	/**
+	 * Aborts all tx for a client, assuming that each file is used in a tx at most once.
+	 * That is, this method will cause all sorts of problems if multiple clients are allowed to
+	 * start a tx on the same file.
+	 * @param filename The filename key to abort
+	 */
+	public void abortClientTx(String filename) {
+		String[] files = fileTransactionMap.get(filename);
+		if (files == null)
+			return; // Assume the client must have already aborted or committed this tx
+		for (String file : files){
+			createProposal(new TXTryAbortLogEntry(files), files);
+			fileTransactionMap.put(file, null);
+		}
+	}
+
+	/**
+	 * Adds a transaction timeout for the given client. If the client hasn't
+	 * committed their transaction by the time the lease expires, then
+	 * 
+	 * @param client
+	 */
+	public void addTxTimeout(String filename) {
+		Method cbMethod = null;
+		try {
+			String[] params = { "java.lang.String" };
+			cbMethod = Callback.getMethod("abortClientTx", this, params);
+			cbMethod.setAccessible(true); // HACK
+		} catch (Exception e) {
+			printError(e);
+			e.printStackTrace();
+		}
+		String[] args = { filename };
+		Callback cb = new Callback(cbMethod, this, args);
+		addTimeout(cb, this.TXTIMEOUT);
+	}
+	
+	
+	/**
+	 * Creates a proposal using the appropriate log entry type, and send to each coordinator
+	 * for the list files
+	 * @param operation The operation to perform
+	 * @param files The list of files involved in this tx
+	 */
+	public void createProposal(LogEntry operation, String[] files){
+		for (String file : files) {
+			List<Integer> coordinators = TDFSNode.getParticipants(file);
+			Proposal newProposal = new Proposal(
+					new TXCommitLogEntry(files), file,
+					logFS.nextLogNumber(file), nextProposalNumber(file));
+
+			for (Integer addr : coordinators){
+				RIOSend(addr, MessageType.Prepare, newProposal.pack());
+			}
+		}
 	}
 }
