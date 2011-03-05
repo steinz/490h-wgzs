@@ -1,6 +1,8 @@
 package edu.washington.cs.cse490h.tdfs;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,7 +44,8 @@ public class CommandGraph {
 			} catch (NoSuchMethodException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
-			}
+			} 
+			// TODO: HIGH: handle exceptions
 
 			/*
 			 * TODO: HIGH: logFS should probably be private, fix how
@@ -75,6 +78,8 @@ public class CommandGraph {
 
 	public CommandGraph(TDFSNode node) {
 		this.node = node;
+		this.executingCommands = new HashSet<CommandNode>();
+		this.tails = new HashMap<String, CommandNode>();
 	}
 
 	public CommandNode addCommand(FileCommand c) {
