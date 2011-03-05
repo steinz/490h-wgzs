@@ -189,9 +189,9 @@ public class TDFSNode extends RIONode {
 
 	CommandGraph commandGraph;
 
-	private int coordinatorCount;
+	private static int coordinatorCount;
 
-	private int coordinatorsPerFile;
+	private static int coordinatorsPerFile;
 
 	// TODO: HIGH: Encapsulate Paxos state in objects for handoff Commands
 
@@ -342,36 +342,7 @@ public class TDFSNode extends RIONode {
 
 	}
 
-	/**
-	 * Checks if the node is listening on this filename already. If it is, then
-	 * it proceeds with preparing and sending a message. If not, then it returns
-	 * and requests to start listening
-	 * 
-	 * @param filename
-	 *            The filename
-	 * @param op
-	 *            The operation
-	 */
-	public void checkIfListening(String filename, LogEntry op) {
-		if (!logFS.isListening(filename)) {
-			Join(filename);
-		}
 
-		int nextOperation = -1;
-		try {
-			nextOperation = logFS.nextLogNumber(filename);
-		} catch (NotListeningException e) {
-			Logger.error(this, e);
-		}
-		Proposal proposal = null;
-		try {
-			proposal = new Proposal(op, filename, nextOperation,
-					nextProposalNumber(filename));
-		} catch (NotListeningException e) {
-			Logger.error(this, e);
-		}
-		prepare(addr, proposal.pack());
-	}
 
 	/**
 	 * Attempts to listen in on a paxos group for the given file. If this node
@@ -435,7 +406,7 @@ public class TDFSNode extends RIONode {
 	/**
 	 * Relies on participants being static for any given operation number
 	 */
-	private int nextProposalNumber(String filename)
+	public int nextProposalNumber(String filename)
 			throws NotListeningException {
 		List<Integer> participants = getParticipants(filename);
 		Integer lastNumSent = lastProposalNumbersSent.get(filename);
@@ -453,11 +424,11 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	public int hashFilename(String filename) {
+	public static int hashFilename(String filename) {
 		return filename.hashCode() % coordinatorCount;
 	}
 
-	public List<Integer> getParticipants(String filename) {
+	public static List<Integer> getParticipants(String filename) {
 		ArrayList<Integer> list = new ArrayList<Integer>();
 		int baseAddr = hashFilename(filename);
 		for (int i = 0; i < coordinatorsPerFile; i++) {
@@ -738,5 +709,7 @@ public class TDFSNode extends RIONode {
 		if (txQueue.cmdQueue.executingOn(p.filename)) {
 			txQueue.next(p.filename);
 		}
+		
+		lastProposalNumbersSent.put(p.filename, 0);
 	}
 }
