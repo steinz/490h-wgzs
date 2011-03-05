@@ -21,13 +21,16 @@ public class CommandGraph {
 			this.children = new ArrayList<CommandNode>();
 		}
 
-		public void execute() {
+		public boolean execute() {
 			/*
 			 * TODO: HIGH: logFS should probably be private, fix how
 			 * command.execute accesses things maybe
 			 */
-			executingCommands.add(this);
-			command.execute(node, node.logFS);
+			if (this.locks == 0) {
+				executingCommands.add(this);
+				command.execute(node, node.logFS);
+			}
+			return this.locks == 0;
 		}
 
 		public void done() {
@@ -39,9 +42,7 @@ public class CommandGraph {
 
 		public void parentFinished() {
 			locks--;
-			if (locks == 0) {
-				execute();
-			}
+			execute();
 		}
 	}
 
@@ -62,8 +63,6 @@ public class CommandGraph {
 		}
 		if (p != null) {
 			addEdge(p, n);
-		} else {
-			n.execute();
 		}
 		tails.put(c.filename, n);
 		return n;
@@ -80,6 +79,8 @@ public class CommandGraph {
 
 		return n;
 	}
+
+	// TODO: HIGH: multiple edges from parent to child allowed?
 
 	public void addEdge(CommandNode parent, CommandNode child) {
 		parent.children.add(child);

@@ -3,7 +3,11 @@ package edu.washington.cs.cse490h.tdfs;
 import java.util.List;
 
 abstract class Command {
+	// TODO: HIGH: WAYNE: Check valid to execute
 	public abstract void execute(TDFSNode node, LogFS fs);
+	
+	// TODO: HIGH: Retry?
+	public abstract void retry(TDFSNode node, LogFS fs);
 }
 
 abstract class FileCommand extends Command {

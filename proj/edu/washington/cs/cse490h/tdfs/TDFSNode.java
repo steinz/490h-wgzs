@@ -1,6 +1,5 @@
 package edu.washington.cs.cse490h.tdfs;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -10,7 +9,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.Set;
+import java.util.Scanner;
 
 import edu.washington.cs.cse490h.lib.Utility;
 import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
@@ -186,6 +185,35 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
+	private static class Tokenizer {
+		private String str;
+		private String delim;
+
+		public Tokenizer(String str, String delim) {
+			this.str = str;
+			this.delim = delim;
+		}
+
+		public String next() {
+			int d = str.indexOf(delim);
+			String result;
+			if (d == -1) {
+				result = str;
+				str = null;
+			} else {
+				result = str.substring(0, d);
+				str = str.substring(d + delim.length());
+			}
+			return result;
+		}
+
+		public String rest() {
+			String result = str;
+			str = null;
+			return result;
+		}
+	}
+
 	TransactionQueue txQueue;
 
 	CommandGraph commandGraph;
@@ -193,6 +221,8 @@ public class TDFSNode extends RIONode {
 	private int coordinatorCount;
 
 	private int coordinatorsPerFile;
+
+	// TODO: HIGH: Encapsulate Paxos state in objects for handoff Commands
 
 	private Map<String, List<Integer>> fileListeners;
 
@@ -240,52 +270,25 @@ public class TDFSNode extends RIONode {
 
 	@Override
 	public void onCommand(String line) {
-		int delim = line.indexOf(commandDelim);
-		String command = line.substring(0, delim);
-		command = command.substring(0, 1).toUpperCase()
-				+ command.substring(1).toLowerCase();
-		Class<?> cmdClass;
-		try {
-			cmdClass = Class.forName("edu.washington.cs.cse490h.tdfs."
-					+ command + "Command");
-		} catch (ClassNotFoundException e) {
-			printError(e);
+		// TODO: HIGH: Parse and call <cmd>Handler
+		Tokenizer t = new Tokenizer(line, commandDelim);
+		String command = t.next();
+		if (command == null) {
+			printError("no command found");
 			return;
 		}
-
-		line = line.substring(delim + commandDelim.length());
+		command = command.toLowerCase();
 
 		try {
-			Command c;
-			if (StartCommand.class.isAssignableFrom(cmdClass)) {
-				String[] filenames = line.split(commandDelim);
-
-				Class<?>[] consArgs = { List.class };
-				Constructor<?> constructor = cmdClass.getConstructor(consArgs);
-				Object[] args = { filenames };
-				c = (Command) constructor.newInstance(args);
-			} else if (WriteCommand.class.isAssignableFrom(cmdClass)) {
-				delim = line.indexOf(commandDelim);
-				String filename = line.substring(0, delim);
-				String contents = line.substring(delim + commandDelim.length());
-
-				Class<?>[] consArgs = { String.class, String.class };
-				Constructor<?> constructor = cmdClass.getConstructor(consArgs);
-				Object[] args = { filename, contents };
-				c = (Command) constructor.newInstance(args);
-			} else if (FileCommand.class.isAssignableFrom(cmdClass)) {
-				String filename = line;
-
-				Class<?>[] consArgs = { String.class };
-				Constructor<?> constructor = cmdClass.getConstructor(consArgs);
-				Object[] args = { filename };
-				c = (Command) constructor.newInstance(args);
-			} else {
-				throw new RuntimeException("failed to create command");
-			}
-			txQueue.execute(c);
+			Class<?>[] paramTypes = { Scanner.class };
+			Method handler = this.getClass().getMethod(command + "Parser",
+					paramTypes);
+			Object[] args = { t };
+			handler.invoke(this, args);
+		} catch (InvocationTargetException e) {
+			printError(e.getCause());
 		} catch (Exception e) {
-			printError(e);
+			printError("invalid command: " + line);
 		}
 	}
 
@@ -295,61 +298,77 @@ public class TDFSNode extends RIONode {
 	 * somewhere else.
 	 */
 
-	abstract class Verifier {
-		/**
-		 * Handed the next node in the chain and the current state of the system
-		 */
-		abstract public boolean verify(Command c, LogFS fs);
-	};
-
-	abstract class VerifierCommand extends Command {
+	public void appendParser(Tokenizer t) {
+		String filename = t.next();
+		String contents = t.rest();
+		append(filename, contents);
 	}
 
-	public void appendHandler(String filename, String contents) {
-		List<Command> chain = new ArrayList<Command>();
-		if (!logFS.isListening(filename)) {
-			chain.add(new ListenCommand(filename));
-		}
-		AppendCommand append = new AppendCommand(filename, contents);
-		chain.add(new VerifierCommand(append) {
-			String filename;
-
-			public Verifier(AppendCommand c) {
-				this.filename = c.filename;
-			}
-
-			@Override
-			public boolean verify(Command c, LogFS fs) {
-				FileCommand fc = (FileCommand) c;
-				return fs.fileExists(fc.filename);
-			}
-		});
-
-		// TODO: HIGH: Finish making this awesome
-		CommandNode l = listen(filename);
-		CommandNode v = commandGraph.addCommand(new VerifierCommand(
-				new Verifier() {
-					@Override
-					public boolean verify(Command c, LogFS fs) {
-						FileCommand fc = (FileCommand) c;
-						return fs.fileExists(fc.filename);
-					}
-				}));
-		CommandNode c = commandGraph.addCommand(new AppendCommand(filename,
-				contents));
-		if (l != null) {
-			commandGraph.addEdge(l, v);
-		}
-		commandGraph.addEdge(v, c);
-		// TODO: HIGH: commandGraph.addCommandString(Command[] cmds)
+	public void createParser(Tokenizer t) {
+		String filename = t.next();
+		create(filename);
 	}
 
-	private CommandNode listen(String filename) {
+	public void deleteParser(Tokenizer t) {
+		String filename = t.next();
+		delete(filename);
+	}
+
+	public void getParser(Tokenizer t) {
+		String filename = t.next();
+		get(filename);
+	}
+
+	public void putParser(Tokenizer t) {
+		String filename = t.next();
+		String contents = t.rest();
+		put(filename, contents);
+	}
+
+	public void txabortParser(Scanner s) {
+		txabort();
+	}
+
+	public void txcommitParser(Scanner s) {
+		txcommit();
+	}
+
+	public void txStartParser(Scanner s) {
+		String[] filenames = s.next(".*").split(commandDelim);
+		txstart(filename);
+	}
+
+	public void append(String filename, String contents) {
+		checkListen(filename, new AppendCommand(filename, contents));
+	}
+
+	public void create(String filename) {
+		checkListen(filename, new CreateCommand(filename));
+	}
+
+	public void delete(String filename) {
+		checkListen(filename, new DeleteCommand(filename));
+	}
+
+	public void get(String filename) {
+		checkListen(filename, new GetCommand(filename));
+	}
+
+	public void put(String filename, String contents) {
+		checkListen(filename, new PutCommand(filename, contents));
+	}
+
+	private void checkListen(String filename, FileCommand after) {
 		if (!logFS.isListening(filename)) {
-			return commandGraph.addCommand(new ListenCommand(filename));
+			CommandNode l = commandGraph
+					.addCommand(new ListenCommand(filename));
+			CommandNode c = commandGraph.addCommand(after);
+			commandGraph.addEdge(l, c);
+			l.execute();
 		} else {
-			return null;
+			commandGraph.addCommand(after).execute();
 		}
+
 	}
 
 	/**
@@ -399,15 +418,15 @@ public class TDFSNode extends RIONode {
 			try {
 				for (Integer next : getParticipants(filename)) {
 					if (next != addr)
-						RIOSend(next, MessageType.CreateGroup, Utility
-								.stringToByteArray(filename));
+						RIOSend(next, MessageType.CreateGroup,
+								Utility.stringToByteArray(filename));
 				}
 			} catch (AlreadyParticipatingException e) {
 				Logger.error(this, e);
 			}
 		} else {
-			RIOSend(coordinator, MessageType.RequestToListen, Utility
-					.stringToByteArray(filename));
+			RIOSend(coordinator, MessageType.RequestToListen,
+					Utility.stringToByteArray(filename));
 		}
 	}
 
@@ -480,7 +499,7 @@ public class TDFSNode extends RIONode {
 	 * Sends a prepare request to all acceptors in this Paxos group.
 	 * 
 	 * @param proposal
-	 *            The proposal to send
+	 *            The proposal to sendThat is
 	 */
 	public void prepare(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
@@ -545,8 +564,8 @@ public class TDFSNode extends RIONode {
 
 		for (Integer next : participants) {
 			if (next != addr)
-				RIOSend(next, MessageType.Learned, Utility
-						.stringToByteArray(msg));
+				RIOSend(next, MessageType.Learned,
+						Utility.stringToByteArray(msg));
 		}
 
 		responded = 0;
@@ -585,8 +604,8 @@ public class TDFSNode extends RIONode {
 			for (int i = 0; i < coordinatorCount; i++) {
 				address = address + i;
 				if (address != addr)
-					RIOSend(address, MessageType.CreateGroup, Utility
-							.stringToByteArray(p.filename));
+					RIOSend(address, MessageType.CreateGroup,
+							Utility.stringToByteArray(p.filename));
 			}
 			// fall through and start the proposal
 		}
@@ -635,17 +654,16 @@ public class TDFSNode extends RIONode {
 
 		if (proposalNumber <= largestProposalNumberAccepted) {
 			String lastProposalNumber = lastProposalNumberPromised
-					.get(filename)
-					+ "";
-			RIOSend(from, MessageType.PromiseDenial, Utility
-					.stringToByteArray(lastProposalNumber));
+					.get(filename) + "";
+			RIOSend(from, MessageType.PromiseDenial,
+					Utility.stringToByteArray(lastProposalNumber));
 			return;
 		}
 
 		try {
 			if (logFS.nextLogNumber(filename) >= operationNumber) {
-				RIOSend(from, MessageType.OldOperation, logFS.getLogEntry(
-						filename, operationNumber).pack());
+				RIOSend(from, MessageType.OldOperation,
+						logFS.getLogEntry(filename, operationNumber).pack());
 
 				// TODO High: Don't force them to resend every operation number,
 				// somehow update them to latest version
@@ -659,8 +677,8 @@ public class TDFSNode extends RIONode {
 		}
 
 		largestProposalNumberAccepted = proposalNumber;
-		RIOSend(from, MessageType.Promise, Utility
-				.stringToByteArray(proposalNumber + ""));
+		RIOSend(from, MessageType.Promise,
+				Utility.stringToByteArray(proposalNumber + ""));
 
 	}
 
@@ -691,8 +709,8 @@ public class TDFSNode extends RIONode {
 
 		for (Integer next : participants) {
 			if (next != addr)
-				RIOSend(next, MessageType.Learned, Utility
-						.stringToByteArray(msg));
+				RIOSend(next, MessageType.Learned,
+						Utility.stringToByteArray(msg));
 		}
 
 		if (responded < (participants.size() / 2))
