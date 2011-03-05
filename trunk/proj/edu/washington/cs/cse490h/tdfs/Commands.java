@@ -83,7 +83,10 @@ class CreateCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		createProposal(node, filename, new CreateLogEntry());
+		if (!node.logFS.fileExists(filename))
+			createProposal(node, filename, new CreateLogEntry());
+		else
+			Logger.error(node, "File already exists: " + filename);
 	}
 }
 
@@ -94,7 +97,10 @@ class DeleteCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		createProposal(node, filename, new DeleteLogEntry());
+		if (node.logFS.fileExists(filename))
+			createProposal(node, filename, new DeleteLogEntry());
+		else
+			Logger.error(node, "File already exists: " + filename);
 	}
 }
 
