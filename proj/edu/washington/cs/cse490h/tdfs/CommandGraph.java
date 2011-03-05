@@ -6,10 +6,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Map.Entry;
 
+import edu.washington.cs.cse490h.lib.Callback;
+
 /**
  * A graph of dependent commands
  */
 public class CommandGraph {
+	private static int commandRetryTimeout = 20;
+
 	public class CommandNode {
 		private Command command;
 		private int locks;
@@ -22,6 +26,24 @@ public class CommandGraph {
 		}
 
 		public boolean execute() {
+			try {
+				String[] params = { "edu.washington.cs.cse490h.tdfs.TDFSNode",
+						"edu.washington.cs.cse490h.tdfs.LogFS" };
+				Object[] args = { node, node.logFS };
+				Callback cb = new Callback(Callback.getMethod("retry", command,
+						params), command, args);
+				node.addTimeout(cb, commandRetryTimeout);
+			} catch (SecurityException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (NoSuchMethodException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
 			/*
 			 * TODO: HIGH: logFS should probably be private, fix how
 			 * command.execute accesses things maybe
