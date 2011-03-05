@@ -184,7 +184,7 @@ class StartCommand extends Command {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {		
-		createProposal(node, s, new TXStartLogEntry(filename));
+		createProposal(node, filename, new TXStartLogEntry(filename));
 	}
 	
 	public void retry(TDFSNode node, LogFS fs){

@@ -12,18 +12,13 @@ public class TwoPCCoordinator extends RIONode {
 
 	private final int TXTIMEOUT = 20;
 	private LogFS logFs;
-	private Map<Integer, List<String>> clientTransactionFiles;
-	private int coordinatorCount;
+	private Map<String, String[]> fileTransactionMap;
 	private Map<String, Integer> lastProposalNumbersSent;
 
 	@Override
 	public void start() {
 		this.logFs = new LogFileSystem();
-		clientTransactionFiles = new HashMap<Integer, List<String>>();
-	}
-
-	public void setCoordinatorCount(int count) {
-		this.coordinatorCount = count;
+		fileTransactionMap = new HashMap<String, String[]>();
 	}
 
 	@Override
@@ -35,9 +30,17 @@ public class TwoPCCoordinator extends RIONode {
 		learn(from, msg);
 	}
 
+	/**
+	 * The 2PC coordinator learns about a operation. It logs it to its own logFS, but also
+	 * tries to discern whether the given command is something it should pay attention to - txstarts,
+	 * commits, and aborts.
+	 * @param from The coordinator who sent this message
+	 * @param msg The proposal, packed
+	 */
 	public void learn(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
 		logFs.writeLogEntry(p.filename, p.operationNumber, p.operation);
+		String[] txFiles = fileTransactionMap.get(p.filename);
 
 		// check for transactions
 
@@ -46,12 +49,12 @@ public class TwoPCCoordinator extends RIONode {
 			addTxTimeout(from);
 			// add files
 			String[] files = ((TXStartLogEntry) p.operation).filenames;
-			if (!clientTransactionFiles.get(from).isEmpty()) { // client didn't abort or commit last tx
+			if (txFiles != null) { // client didn't abort or commit last tx
 				Logger.error(this, "Client: " + from
 						+ " did not commit or abort last tx!");
 			}
 			for (String file : files) {
-				clientTransactionFiles.get(from).add(file);
+				fileTransactionMap.put(file, files);
 			}
 
 		}
@@ -60,20 +63,25 @@ public class TwoPCCoordinator extends RIONode {
 			// commit to each filename coordinator
 			String[] files = ((TXTryCommitLogEntry) p.operation).filenames;
 			createProposal(new TXTryCommitLogEntry(files), files);
-			clientTransactionFiles.get(from).clear();
+			for (String file : txFiles){
+				fileTransactionMap.put(file, null);
+			}
 		}
 
 		else if (p.operation instanceof TXTryAbortLogEntry) {
 			String[] files = ((TXTryAbortLogEntry) p.operation).filenames;
 			createProposal(new TXTryAbortLogEntry(files), files);
-			clientTransactionFiles.get(from).clear();
+			for (String file : txFiles){
+				fileTransactionMap.put(file, null);
+			}
 		}
 	}
 	
 	/**
-	 * Creates a proposal using the appropriate log entry type,
-	 * @param operation
-	 * @param files
+	 * Creates a proposal using the appropriate log entry type, and send to each coordinator
+	 * for the list files
+	 * @param operation The operation to perform
+	 * @param files The list of files involved in this tx
 	 */
 	public void createProposal(LogEntry operation, String[] files){
 		for (String file : files) {
@@ -140,7 +148,7 @@ public class TwoPCCoordinator extends RIONode {
 
 	@Override
 	public void onCommand(String command) {
-		// TODO Auto-generated method stub
+		Logger.error(this, "2PC node does not accept commands");
 
 	}
 
