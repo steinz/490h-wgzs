@@ -185,35 +185,6 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	private static class Tokenizer {
-		private String str;
-		private String delim;
-
-		public Tokenizer(String str, String delim) {
-			this.str = str;
-			this.delim = delim;
-		}
-
-		public String next() {
-			int d = str.indexOf(delim);
-			String result;
-			if (d == -1) {
-				result = str;
-				str = null;
-			} else {
-				result = str.substring(0, d);
-				str = str.substring(d + delim.length());
-			}
-			return result;
-		}
-
-		public String rest() {
-			String result = str;
-			str = null;
-			return result;
-		}
-	}
-
 	TransactionQueue txQueue;
 
 	CommandGraph commandGraph;
@@ -335,7 +306,7 @@ public class TDFSNode extends RIONode {
 
 	public void txStartParser(Scanner s) {
 		String[] filenames = s.next(".*").split(commandDelim);
-		txstart(filename);
+		txstart(filenames);
 	}
 
 	public void append(String filename, String contents) {

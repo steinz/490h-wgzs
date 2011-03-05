@@ -15,44 +15,36 @@ abstract class LogEntry {
 
 	static LogEntry unpack(byte[] bytes) {
 		String msg = Utility.byteArrayToString(bytes);
-		int start = 0;
-		int stop = msg.indexOf(packetDelimiter);
-		String cmd;
-		if (stop == -1) {
-			cmd = msg;
-		} else {
-			cmd = msg.substring(start, stop);
-		}
+		Tokenizer t = new Tokenizer(msg, packetDelimiter);
+		String cmd = t.next();
+
 		if (cmd.equals("Create")) {
 			return new CreateLogEntry();
 		} else if (cmd.equals("Delete")) {
 			return new DeleteLogEntry();
 		} else if (cmd.equals("Lock")) {
-			start = stop + packetDelimiter.length();
-			int address = Integer.parseInt(msg.substring(start));
+			int address = Integer.parseInt(t.next());
 			return new LockLogEntry(address);
 		} else if (cmd.equals("TXAbort")) {
-			return new TXAbortLogEntry();
+			String[] filenames = t.rest().split(packetDelimiter);
+			return new TXAbortLogEntry(filenames);
 		} else if (cmd.equals("TXCommit")) {
-			return new TXCommitLogEntry();
+			String[] filenames = t.rest().split(packetDelimiter);
+			return new TXCommitLogEntry(filenames);
 		} else if (cmd.equals("TXStart")) {
-			return new TXStartLogEntry();
+			String[] filenames = t.rest().split(packetDelimiter);
+			return new TXStartLogEntry(filenames);
 		} else if (cmd.equals("Unlock")) {
-			start = stop + packetDelimiter.length();
-			int address = Integer.parseInt(msg.substring(start));
+			int address = Integer.parseInt(t.next());
 			return new UnlockLogEntry(address);
 		} else if (cmd.equals("Write")) {
-			start = stop + packetDelimiter.length();
-			stop = msg.indexOf(packetDelimiter, start);
-			boolean append = Boolean.parseBoolean(msg.substring(start, stop));
-			start = stop + packetDelimiter.length();
-			String content = msg.substring(start);
+			boolean append = Boolean.parseBoolean(t.next());
+			String content = t.rest();
 			return new WriteLogEntry(content, append);
 		} else {
 			throw new RuntimeException("attempt to unpack invalid operation: "
 					+ msg);
 		}
-
 	}
 }
 
@@ -61,6 +53,26 @@ abstract class MemberLogEntry extends LogEntry {
 
 	public MemberLogEntry(int address) {
 		this.address = address;
+	}
+}
+
+abstract class TXLogEntry extends LogEntry {
+	String[] filenames;
+
+	public TXLogEntry(String[] filenames) {
+		this.filenames = filenames;
+	}
+
+	/**
+	 * map((+) packedDelimiter, filenames).reduce (+)
+	 */
+	String joinFilenames() {
+		StringBuilder joined = new StringBuilder();
+		for (String f : filenames) {
+			joined.append(packetDelimiter);
+			joined.append(f);
+		}
+		return joined.toString();
 	}
 }
 
@@ -92,24 +104,38 @@ class LockLogEntry extends MemberLogEntry {
 	}
 }
 
-class TXAbortLogEntry extends LogEntry {
+// TODO: HIGH: ZACH: Add filenames to TXLogEntries
+
+class TXAbortLogEntry extends TXLogEntry {
+	public TXAbortLogEntry(String[] filenames) {
+		super(filenames);
+	}
+
 	@Override
 	public String toString() {
-		return "TXAbort";
+		return "TXAbort" + joinFilenames();
 	}
 }
 
-class TXCommitLogEntry extends LogEntry {
+class TXCommitLogEntry extends TXLogEntry {
+	public TXCommitLogEntry(String[] filenames) {
+		super(filenames);
+	}
+
 	@Override
 	public String toString() {
-		return "TXCommit";
+		return "TXCommit" + joinFilenames();
 	}
 }
 
-class TXStartLogEntry extends LogEntry {
+class TXStartLogEntry extends TXLogEntry {
+	public TXStartLogEntry(String[] filenames) {
+		super(filenames);
+	}
+
 	@Override
 	public String toString() {
-		return "TXStart";
+		return "TXStart" + joinFilenames();
 	}
 }
 
