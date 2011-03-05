@@ -139,6 +139,28 @@ class TXStartLogEntry extends TXLogEntry {
 	}
 }
 
+class TXTryAbortLogEntry extends TXLogEntry {
+	public TXTryAbortLogEntry(String[] filenames) {
+		super(filenames);
+	}
+	
+	@Override
+	public String toString() {
+		return "TXTryAbort" + joinFilenames();
+	}
+}
+
+class TXTryCommitLogEntry extends TXLogEntry {
+	public TXTryCommitLogEntry(String[] filenames) {
+		super(filenames);
+	}
+	
+	@Override
+	public String toString() {
+		return "TXTryCommit" + joinFilenames();
+	}
+}
+
 class UnlockLogEntry extends MemberLogEntry {
 	public UnlockLogEntry(int address) {
 		super(address);
