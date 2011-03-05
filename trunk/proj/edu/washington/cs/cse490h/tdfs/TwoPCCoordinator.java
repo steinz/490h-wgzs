@@ -121,8 +121,14 @@ public class TwoPCCoordinator extends RIONode {
 
 	}
 
-	public void abortClient(int client) {
-
+	/**
+	 * Aborts all tx for a client, assuming that each file is used in a tx at most once.
+	 * That is, this method will cause all sorts of problems if multiple clients are allowed to
+	 * start a tx on the same file.
+	 * @param filename The filename key to abort
+	 */
+	public void abortClientTx(String filename) {
+		String[] files = fileTransactionMap.get(filename);
 	}
 
 	/**
@@ -131,17 +137,17 @@ public class TwoPCCoordinator extends RIONode {
 	 * 
 	 * @param client
 	 */
-	public void addTxTimeout(int client) {
+	public void addTxTimeout(String filename) {
 		Method cbMethod = null;
 		try {
-			String[] params = { "java.lang.Integer" };
-			cbMethod = Callback.getMethod("abortClient", this, params);
+			String[] params = { "java.lang.String" };
+			cbMethod = Callback.getMethod("abortClientTx", this, params);
 			cbMethod.setAccessible(true); // HACK
 		} catch (Exception e) {
 			printError(e);
 			e.printStackTrace();
 		}
-		Integer[] args = { client };
+		String[] args = { filename };
 		Callback cb = new Callback(cbMethod, this, args);
 		addTimeout(cb, this.TXTIMEOUT);
 	}
