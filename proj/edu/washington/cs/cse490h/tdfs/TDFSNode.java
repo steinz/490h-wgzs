@@ -5,10 +5,8 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Scanner;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -55,143 +53,11 @@ public class TDFSNode extends RIONode {
 	 * leader to propose
 	 */
 
-	/**
-	 * Queues commands on a per filename basis
-	 */
-	private static class FileCommandExecutor {
-		/**
-		 * Filename => Queued Commands
-		 * 
-		 * A filename is "locked" iff it has a queue in this map
-		 */
-		private Map<String, Queue<Command>> fileQueues = new HashMap<String, Queue<Command>>();
-		private TDFSNode node;
-
-		public FileCommandExecutor(TDFSNode node) {
-			this.node = node;
-		}
-
-		// TODO: HIGH: add list of commands that have been executed by handle
-		// but not
-		// finished by next
-
-		public void execute(FileCommand command) {
-			Queue<Command> queue = fileQueues.get(command.filename);
-			if (queue == null) {
-				fileQueues.put(command.filename, new LinkedList<Command>());
-				command.execute(node, node.logFS);
-			} else {
-				queue.add(command);
-			}
-		}
-
-		/**
-		 * Should be called after done handling any command
-		 * 
-		 * If commands have been queued on filename: remove and return the next
-		 * command from the queue
-		 * 
-		 * If no commands are queued on filename: unlock filename by removing
-		 * its queue and return null
-		 */
-		public void next(String filename) {
-			Queue<Command> queue = fileQueues.get(filename);
-			Command command = queue.poll();
-			if (command == null) {
-				fileQueues.remove(filename);
-			} else {
-				command.execute(null, null);
-			}
-		}
-
-		public boolean executingOn(String filename) {
-			return fileQueues.containsKey(filename);
-		}
-
-		public boolean empty() {
-			return fileQueues.size() == 0;
-		}
-	}
-
-	private static class TransactionQueue {
-		private boolean inTx = false;
-		private List<String> filenamesInTx;
-		private boolean waitingForCommitResult = false;
-		private boolean waitingToCommit = false;
-		private Queue<Command> txQueue = new LinkedList<Command>();
-		private FileCommandExecutor cmdQueue;
-		private TDFSNode node;
-
-		// TODO: HIGH: Fix how these things reference eachother
-
-		public TransactionQueue(TDFSNode node, FileCommandExecutor cmdQueue) {
-			this.node = node;
-			this.cmdQueue = cmdQueue;
-		}
-
-		public void execute(Command command) {
-			if (waitingForCommitResult) {
-				txQueue.add(command);
-			} else if (command instanceof StartCommand) {
-				if (inTx) {
-					// TODO: HIGH: fix logging...
-					Logger.error(node, "already in transaction");
-				} else {
-					inTx = true;
-					StartCommand startCommand = (StartCommand) command;
-					this.filenamesInTx = startCommand.filenames;
-					command.execute(node, node.logFS);
-				}
-			} else if (command instanceof AbortCommand
-					|| command instanceof CommitCommand) {
-				if (!inTx) {
-					Logger.error(node, "not in transaction");
-				} else {
-					if (cmdQueue.empty()) {
-						inTx = false;
-						waitingForCommitResult = true;
-						this.filenamesInTx = null;
-						command.execute(node, node.logFS);
-					} else {
-						waitingToCommit = true;
-						txQueue.add(command);
-					}
-				}
-			} else { // FileCommand
-				FileCommand fc = (FileCommand) command;
-				if (inTx && !filenamesInTx.contains(fc.filename)) {
-					node.printError(fc.filename + " not declared in txstart");
-				} else {
-					cmdQueue.execute(fc);
-				}
-			}
-		}
-
-		public void nextTx() {
-			waitingForCommitResult = false;
-			Queue<Command> oldTxQueue = this.txQueue;
-			this.txQueue = new LinkedList<Command>();
-			Command c;
-			while ((c = oldTxQueue.poll()) != null) {
-				execute(c);
-			}
-		}
-
-		public void next(String filename) {
-			cmdQueue.next(filename);
-			if (waitingToCommit && cmdQueue.empty()) {
-				txQueue.poll().execute(node, node.logFS);
-			}
-		}
-	}
-
-	TransactionQueue txQueue;
-
 	CommandGraph commandGraph;
 
-	private static int coordinatorCount;
+	private static int coordinatorCount = 4;
 
-	private static int coordinatorsPerFile;
+	private static int coordinatorsPerFile = 3;
 
 	// TODO: HIGH: Encapsulate Paxos state in objects for handoff Commands
 
@@ -225,12 +91,7 @@ public class TDFSNode extends RIONode {
 	public void start() {
 		this.logFS = new LogFileSystem();
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
-		this.txQueue = new TransactionQueue(this, new FileCommandExecutor(this));
 		this.commandGraph = new CommandGraph(this);
-
-		// TODO: HIGH: Coordinator count config
-		this.coordinatorCount = 4;
-		this.coordinatorsPerFile = 3;
 
 		// Paxos
 		this.acceptorsResponded = new HashMap<String, Integer>();
@@ -296,16 +157,18 @@ public class TDFSNode extends RIONode {
 		put(filename, contents);
 	}
 
-	public void txabortParser(Scanner s) {
-		txabort();
+	private String[] transactingFiles;
+
+	public void txabortParser(Tokenizer t) {
+		txabort(transactingFiles);
 	}
 
-	public void txcommitParser(Scanner s) {
-		txcommit();
+	public void txcommitParser(Tokenizer t) {
+		txcommit(transactingFiles);
 	}
 
-	public void txStartParser(Scanner s) {
-		String[] filenames = s.next(".*").split(commandDelim);
+	public void txStartParser(Tokenizer t) {
+		String[] filenames = t.rest().split(commandDelim);
 		txstart(filenames);
 	}
 
@@ -334,6 +197,7 @@ public class TDFSNode extends RIONode {
 			CommandNode l = commandGraph
 					.addCommand(new ListenCommand(filename));
 			CommandNode c = commandGraph.addCommand(after);
+			// TODO: HIGH: Is this just adding a redudant edge..?
 			commandGraph.addEdge(l, c);
 			l.execute();
 		} else {
@@ -342,7 +206,41 @@ public class TDFSNode extends RIONode {
 
 	}
 
+	public void txabort(String[] filenames) {
+		for (String filename : filenames) {
+			checkListen(filename, new AbortCommand(filenames, filename));
+		}
+		transactingFiles = null;
+	}
 
+	public void txcommit(String[] filenames) {
+		for (String filename : filenames) {
+			checkListen(filename, new CommitCommand(filenames, filename));
+		}
+		transactingFiles = null;
+	}
+
+	public void txstart(String[] filenames) {
+		for (String filename : filenames) {
+			checkListen(filename, new StartCommand(filenames, filename));
+		}
+		transactingFiles = filenames;
+	}
+
+	/**
+	 * Non-FileCommand version
+	 */
+	private void checkListen(String filename, Command after) {
+		if (!logFS.isListening(filename)) {
+			CommandNode l = commandGraph
+					.addCommand(new ListenCommand(filename));
+			CommandNode c = commandGraph.addCheckpoint(after);
+			commandGraph.addEdge(l, c);
+			l.execute();
+		} else {
+			commandGraph.addCheckpoint(after).execute();
+		}
+	}
 
 	/**
 	 * Attempts to listen in on a paxos group for the given file. If this node
@@ -406,8 +304,7 @@ public class TDFSNode extends RIONode {
 	/**
 	 * Relies on participants being static for any given operation number
 	 */
-	public int nextProposalNumber(String filename)
-			throws NotListeningException {
+	public int nextProposalNumber(String filename) throws NotListeningException {
 		List<Integer> participants = getParticipants(filename);
 		Integer lastNumSent = lastProposalNumbersSent.get(filename);
 		if (lastNumSent == null) {
@@ -699,17 +596,14 @@ public class TDFSNode extends RIONode {
 			RIOSend(i, MessageType.Learned, msg);
 		}
 
-		// TODO: HIGH: Makes this not suck
-		if ((p.operation instanceof TXCommitLogEntry || p.operation instanceof TXAbortLogEntry)
-				&& txQueue.inTx && txQueue.filenamesInTx.contains(p.filename)) {
-			txQueue.nextTx();
-
-		}
-
-		if (txQueue.cmdQueue.executingOn(p.filename)) {
-			txQueue.next(p.filename);
-		}
-		
-		lastProposalNumbersSent.put(p.filename, 0);
+		/*
+		 * TODO: HIGH: Change to use commandGraph if ((p.operation instanceof
+		 * TXCommitLogEntry || p.operation instanceof TXAbortLogEntry) &&
+		 * txQueue.inTx && txQueue.filenamesInTx.contains(p.filename)) {
+		 * txQueue.nextTx(); }
+		 * 
+		 * if (txQueue.cmdQueue.executingOn(p.filename)) {
+		 * txQueue.next(p.filename); }
+		 */
 	}
 }

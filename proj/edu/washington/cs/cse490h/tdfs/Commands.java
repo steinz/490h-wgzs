@@ -1,15 +1,15 @@
 package edu.washington.cs.cse490h.tdfs;
 
-
 abstract class Command {
-	
-	
+
 	// TODO: HIGH: WAYNE: Check valid to execute
 	public abstract void execute(TDFSNode node, LogFS fs);
-	
+
 	// TODO: HIGH: Retry?
-	public abstract void retry(TDFSNode node, LogFS fs);
-	
+	public void retry(TDFSNode node, LogFS fs) {
+		execute(node, fs);
+	}
+
 	/**
 	 * Creates the proposal to prepare and send to the list of coordinators
 	 * 
@@ -44,6 +44,16 @@ abstract class FileCommand extends Command {
 	}
 }
 
+abstract class TXCommand extends Command {
+	String[] filenames;
+	String coordinatorFilename;
+
+	public TXCommand(String[] filenames, String coordinatorFilename) {
+		this.filenames = filenames;
+		this.coordinatorFilename = coordinatorFilename;
+	}
+}
+
 abstract class WriteCommand extends FileCommand {
 	String contents;
 
@@ -62,10 +72,6 @@ class AppendCommand extends WriteCommand {
 	public void execute(TDFSNode node, LogFS fs) {
 		createProposal(node, filename, new WriteLogEntry(contents, true));
 	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
-	}
 }
 
 class CreateCommand extends FileCommand {
@@ -76,10 +82,6 @@ class CreateCommand extends FileCommand {
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
 		createProposal(node, filename, new CreateLogEntry());
-	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
 	}
 }
 
@@ -92,10 +94,6 @@ class DeleteCommand extends FileCommand {
 	public void execute(TDFSNode node, LogFS fs) {
 		createProposal(node, filename, new DeleteLogEntry());
 	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
-	}
 }
 
 class GetCommand extends FileCommand {
@@ -106,11 +104,7 @@ class GetCommand extends FileCommand {
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
 		// TODO Auto-generated method stub
-		
-	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
+
 	}
 }
 
@@ -122,11 +116,7 @@ class ListenCommand extends FileCommand {
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
 		// TODO: HIGH: request to listen
-		
-	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
+
 	}
 }
 
@@ -139,57 +129,40 @@ class PutCommand extends WriteCommand {
 	public void execute(TDFSNode node, LogFS fs) {
 		createProposal(node, filename, new WriteLogEntry(contents, false));
 	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
-	}
 }
 
-class AbortCommand extends Command {
+class AbortCommand extends TXCommand {
+	public AbortCommand(String[] filenames, String coordinatorFilename) {
+		super(filenames, coordinatorFilename);
+	}
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		// TODO Auto-generated method stub
-		
-	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
+		createProposal(node, coordinatorFilename, new TXTryAbortLogEntry(
+				filenames));
 	}
 }
 
-class CommitCommand extends Command {
-	String[] filenames;
-	
-	public CommitCommand(String[] filenames){
-		this.filenames = filenames;
+class CommitCommand extends TXCommand {
+	public CommitCommand(String[] filenames, String coordinatorFilename) {
+		super(filenames, coordinatorFilename);
 	}
-	
+
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		createProposal(node, "", new TXCommitLogEntry(filenames));
-	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
+		createProposal(node, coordinatorFilename, new TXTryCommitLogEntry(
+				filenames));
 	}
 }
 
-class StartCommand extends Command {
-	String filename;
-
-	public StartCommand(String filename) {
-		this.filename = filename;
+class StartCommand extends TXCommand {
+	public StartCommand(String[] filenames, String coordinatorFilename) {
+		super(filenames, coordinatorFilename);
 	}
 
 	@Override
-	public void execute(TDFSNode node, LogFS fs) {		
-		createProposal(node, filename, new TXStartLogEntry(filename));
-	}
-	
-	public void retry(TDFSNode node, LogFS fs){
-		execute(node, fs);
+	public void execute(TDFSNode node, LogFS fs) {
+		createProposal(node, coordinatorFilename,
+				new TXStartLogEntry(filenames));
 	}
 }
-
-
