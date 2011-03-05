@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Scanner;
 
 import edu.washington.cs.cse490h.lib.Callback;
 import edu.washington.cs.cse490h.lib.Utility;
@@ -132,7 +131,7 @@ public class TDFSNode extends RIONode {
 		command = command.toLowerCase();
 
 		try {
-			Class<?>[] paramTypes = { Scanner.class };
+			Class<?>[] paramTypes = { Tokenizer.class };
 			Method handler = this.getClass().getMethod(command + "Parser",
 					paramTypes);
 			Object[] args = { t };
@@ -187,7 +186,7 @@ public class TDFSNode extends RIONode {
 		txcommit(transactingFiles);
 	}
 
-	public void txStartParser(Tokenizer t) {
+	public void txstartParser(Tokenizer t) {
 		String[] filenames = t.rest().split(commandDelim);
 		txstart(filenames);
 	}
@@ -212,20 +211,6 @@ public class TDFSNode extends RIONode {
 		checkListen(filename, new PutCommand(filename, contents));
 	}
 
-	private void checkListen(String filename, FileCommand after) {
-		if (!logFS.isListening(filename)) {
-			CommandNode l = commandGraph
-					.addCommand(new ListenCommand(filename));
-			CommandNode c = commandGraph.addCommand(after);
-			// TODO: HIGH: Is this just adding a redudant edge..?
-			commandGraph.addEdge(l, c);
-			l.execute();
-		} else {
-			commandGraph.addCommand(after).execute();
-		}
-
-	}
-
 	public void txabort(String[] filenames) {
 		for (String filename : filenames) {
 			checkListen(filename, new AbortCommand(filenames, filename));
@@ -247,6 +232,17 @@ public class TDFSNode extends RIONode {
 		transactingFiles = filenames;
 	}
 
+	private void checkListen(String filename, FileCommand after) {
+		if (!logFS.isListening(filename)) {
+			CommandNode l = commandGraph
+					.addCommand(new ListenCommand(filename));
+			commandGraph.addCommand(after);
+			l.execute();
+		} else {
+			commandGraph.addCommand(after).execute();
+		}
+	}
+
 	/**
 	 * Non-FileCommand version
 	 */
@@ -254,8 +250,7 @@ public class TDFSNode extends RIONode {
 		if (!logFS.isListening(filename)) {
 			CommandNode l = commandGraph
 					.addCommand(new ListenCommand(filename));
-			CommandNode c = commandGraph.addCheckpoint(after);
-			commandGraph.addEdge(l, c);
+			commandGraph.addCheckpoint(after);
 			l.execute();
 		} else {
 			commandGraph.addCheckpoint(after).execute();
