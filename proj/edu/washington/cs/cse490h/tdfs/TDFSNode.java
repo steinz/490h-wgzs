@@ -627,6 +627,8 @@ public class TDFSNode extends RIONode {
 			RIOSend(i, MessageType.Learned, msg);
 		}
 
+		// AddedListener => 
+		
 		/*
 		 * TODO: HIGH: Change to use commandGraph if ((p.operation instanceof
 		 * TXCommitLogEntry || p.operation instanceof TXAbortLogEntry) &&
