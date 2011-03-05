@@ -46,7 +46,7 @@ public class TwoPCCoordinator extends RIONode {
 
 		if (p.operation instanceof TXStartLogEntry) {
 			// start callback
-			addTxTimeout(from);
+			addTxTimeout(p.filename);
 			// add files
 			String[] files = ((TXStartLogEntry) p.operation).filenames;
 			if (txFiles != null) { // client didn't abort or commit last tx
@@ -69,11 +69,7 @@ public class TwoPCCoordinator extends RIONode {
 		}
 
 		else if (p.operation instanceof TXTryAbortLogEntry) {
-			String[] files = ((TXTryAbortLogEntry) p.operation).filenames;
-			createProposal(new TXTryAbortLogEntry(files), files);
-			for (String file : txFiles){
-				fileTransactionMap.put(file, null);
-			}
+			abortClientTx(p.filename);
 		}
 	}
 	
@@ -129,6 +125,12 @@ public class TwoPCCoordinator extends RIONode {
 	 */
 	public void abortClientTx(String filename) {
 		String[] files = fileTransactionMap.get(filename);
+		if (files == null)
+			return; // Assume the client must have already aborted or committed this tx
+		for (String file : files){
+			createProposal(new TXTryAbortLogEntry(files), files);
+			fileTransactionMap.put(file, null);
+		}
 	}
 
 	/**
