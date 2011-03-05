@@ -1,13 +1,39 @@
 package edu.washington.cs.cse490h.tdfs;
 
-import java.util.List;
 
 abstract class Command {
+	
+	
 	// TODO: HIGH: WAYNE: Check valid to execute
 	public abstract void execute(TDFSNode node, LogFS fs);
 	
 	// TODO: HIGH: Retry?
 	public abstract void retry(TDFSNode node, LogFS fs);
+	
+	/**
+	 * Creates the proposal to prepare and send to the list of coordinators
+	 * 
+	 * @param filename
+	 *            The filename
+	 * @param op
+	 *            The operation
+	 */
+	public void createProposal(TDFSNode node, String filename, LogEntry op) {
+		int nextOperation = -1;
+		try {
+			nextOperation = node.logFS.nextLogNumber(filename);
+		} catch (NotListeningException e) {
+			Logger.error(node, e);
+		}
+		Proposal proposal = null;
+		try {
+			proposal = new Proposal(op, filename, nextOperation,
+					node.nextProposalNumber(filename));
+		} catch (NotListeningException e) {
+			Logger.error(node, e);
+		}
+		node.prepare(node.addr, proposal.pack());
+	}
 }
 
 abstract class FileCommand extends Command {
@@ -34,7 +60,11 @@ class AppendCommand extends WriteCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening(filename, new WriteLogEntry(contents, true));
+		createProposal(node, filename, new WriteLogEntry(contents, true));
+	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
 	}
 }
 
@@ -45,7 +75,11 @@ class CreateCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening(filename, new CreateLogEntry());
+		createProposal(node, filename, new CreateLogEntry());
+	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
 	}
 }
 
@@ -56,7 +90,11 @@ class DeleteCommand extends FileCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening(filename, new DeleteLogEntry());
+		createProposal(node, filename, new DeleteLogEntry());
+	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
 	}
 }
 
@@ -70,6 +108,10 @@ class GetCommand extends FileCommand {
 		// TODO Auto-generated method stub
 		
 	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
+	}
 }
 
 class ListenCommand extends FileCommand {
@@ -82,6 +124,10 @@ class ListenCommand extends FileCommand {
 		// TODO: HIGH: request to listen
 		
 	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
+	}
 }
 
 class PutCommand extends WriteCommand {
@@ -91,7 +137,11 @@ class PutCommand extends WriteCommand {
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening(filename, new WriteLogEntry(contents, false));
+		createProposal(node, filename, new WriteLogEntry(contents, false));
+	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
 	}
 }
 
@@ -102,28 +152,43 @@ class AbortCommand extends Command {
 		// TODO Auto-generated method stub
 		
 	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
+	}
 }
 
 class CommitCommand extends Command {
-
+	String[] filenames;
+	
+	public CommitCommand(String[] filenames){
+		this.filenames = filenames;
+	}
+	
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {
-		node.checkIfListening("", new TXCommitLogEntry());
+		createProposal(node, "", new TXCommitLogEntry(filenames));
+	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
 	}
 }
 
 class StartCommand extends Command {
-	List<String> filenames;
+	String filename;
 
-	public StartCommand(List<String> filenames) {
-		this.filenames = filenames;
+	public StartCommand(String filename) {
+		this.filename = filename;
 	}
 
 	@Override
 	public void execute(TDFSNode node, LogFS fs) {		
-		for (String s : filenames){
-			node.checkIfListening(s, new TXStartLogEntry());
-		}	
+		createProposal(node, s, new TXStartLogEntry(filename));
+	}
+	
+	public void retry(TDFSNode node, LogFS fs){
+		execute(node, fs);
 	}
 }
 
