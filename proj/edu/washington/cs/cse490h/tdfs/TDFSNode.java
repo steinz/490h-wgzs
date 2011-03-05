@@ -110,7 +110,10 @@ public class TDFSNode extends RIONode {
 
 		// Paxos
 		this.acceptorsResponded = new HashMap<String, Integer>();
+		this.fileListeners = new HashMap<String, List<Integer>>();
+		this.lastProposalNumbersSent = new HashMap<String,Integer>();
 		this.lastProposalNumberPromised = new HashMap<String, Integer>();
+		this.promisesReceived = new HashMap<String, Integer>();
 		
 		// 2PC
 		fileTransactionMap = new HashMap<String, String[]>();
