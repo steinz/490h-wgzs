@@ -600,7 +600,8 @@ public class TDFSNode extends RIONode {
 		if (!logFS.isListening(filename)){
 			logFS.createGroup(filename);
 			for (Integer i : getParticipants(filename)){
-				RIOSend(i, MessageType.CreateGroup, Utility.stringToByteArray(filename));
+				if (i != addr)
+					RIOSend(i, MessageType.CreateGroup, Utility.stringToByteArray(filename));
 			}
 		}
 		List<Integer> list = fileListeners.get(filename);
