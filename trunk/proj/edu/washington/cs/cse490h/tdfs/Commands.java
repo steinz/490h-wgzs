@@ -6,7 +6,6 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 abstract class Command {
 
-	// TODO: HIGH: WAYNE: Check valid to execute
 	public abstract void execute(TDFSNode node);
 
 	public void retry(TDFSNode node) {
@@ -22,21 +21,10 @@ abstract class Command {
 	 *            The operation
 	 */
 	public void createProposal(TDFSNode node, String filename, LogEntry op) {
-		int nextOperation = -1;
-		try {
-			nextOperation = node.logFS.nextLogNumber(filename);
-		} catch (NotListeningException e) {
-			Logger.error(node, e);
-		}
-		Proposal proposal;
-		try {
-			proposal = new Proposal(op, filename, nextOperation, node
-					.nextProposalNumber(filename));
-		} catch (NotListeningException e) {
-			Logger.error(node, e);
-			return;
-		}
-		node.prepare(node.addr, proposal.pack());
+		int opNum = node.logFS.nextLogNumber(filename);
+		int propNum = node.nextProposalNumber(filename);
+		Proposal proposal = new Proposal(op, filename, opNum, propNum);
+		node.prepare(node.addr, proposal);
 	}
 }
 
@@ -74,7 +62,11 @@ class AppendCommand extends WriteCommand {
 
 	@Override
 	public void execute(TDFSNode node) {
-		createProposal(node, filename, new WriteLogEntry(contents, true));
+		if (node.logFS.fileExists(filename)) {
+			createProposal(node, filename, new WriteLogEntry(contents, true));
+		} else {
+			node.printError("File does not exist: " + filename);
+		}
 	}
 }
 
@@ -88,7 +80,7 @@ class CreateCommand extends FileCommand {
 		if (!node.logFS.fileExists(filename))
 			createProposal(node, filename, new CreateLogEntry());
 		else
-			Logger.error(node, "File already exists: " + filename);
+			node.printError("File already exists: " + filename);
 	}
 }
 
@@ -102,7 +94,7 @@ class DeleteCommand extends FileCommand {
 		if (node.logFS.fileExists(filename))
 			createProposal(node, filename, new DeleteLogEntry());
 		else
-			Logger.error(node, "File already exists: " + filename);
+			node.printError("File already exists: " + filename);
 	}
 }
 
@@ -131,9 +123,10 @@ class ListenCommand extends FileCommand {
 		if (!node.logFS.isListening(filename)) {
 			node.logFS.createGroup(filename);
 		}
+
 		List<Integer> coordinators = node.getCoordinators(filename);
 		if (coordinators.contains(node.addr)) {
-			for (Integer next : coordinators) {
+			for (int next : coordinators) {
 				if (next != node.addr) {
 					node.RIOSend(next, MessageType.CreateGroup, Utility
 							.stringToByteArray(filename));
@@ -154,7 +147,11 @@ class PutCommand extends WriteCommand {
 
 	@Override
 	public void execute(TDFSNode node) {
-		createProposal(node, filename, new WriteLogEntry(contents, false));
+		if (node.logFS.fileExists(filename)) {
+			createProposal(node, filename, new WriteLogEntry(contents, false));
+		} else {
+			node.printError("File does not exist: " + filename);
+		}
 	}
 }
 
@@ -165,8 +162,10 @@ class AbortCommand extends TXCommand {
 
 	@Override
 	public void execute(TDFSNode node) {
-		createProposal(node, coordinatorFilename, new TXTryAbortLogEntry(
-				filenames));
+		if (node.logFS.checkLocked(coordinatorFilename) == node.addr) {
+			createProposal(node, coordinatorFilename, new TXTryAbortLogEntry(
+					filenames));
+		}
 	}
 }
 
@@ -177,8 +176,10 @@ class CommitCommand extends TXCommand {
 
 	@Override
 	public void execute(TDFSNode node) {
-		createProposal(node, coordinatorFilename, new TXTryCommitLogEntry(
-				filenames));
+		if (node.logFS.checkLocked(coordinatorFilename) == node.addr) {
+			createProposal(node, coordinatorFilename, new TXTryCommitLogEntry(
+					filenames));
+		}
 	}
 }
 
@@ -189,7 +190,9 @@ class StartCommand extends TXCommand {
 
 	@Override
 	public void execute(TDFSNode node) {
-		createProposal(node, coordinatorFilename,
-				new TXStartLogEntry(filenames));
+		if (node.logFS.checkLocked(coordinatorFilename) == null) {
+			createProposal(node, coordinatorFilename, new TXStartLogEntry(
+					filenames));
+		}
 	}
 }
