@@ -22,9 +22,6 @@ abstract class LogEntry {
 			return new CreateLogEntry();
 		} else if (cmd.equals("Delete")) {
 			return new DeleteLogEntry();
-		} else if (cmd.equals("Lock")) {
-			int address = Integer.parseInt(t.next());
-			return new LockLogEntry(address);
 		} else if (cmd.equals("TXAbort")) {
 			String[] filenames = t.rest().split(entryDelimiter);
 			return new TXAbortLogEntry(filenames);
@@ -34,9 +31,6 @@ abstract class LogEntry {
 		} else if (cmd.equals("TXStart")) {
 			String[] filenames = t.rest().split(entryDelimiter);
 			return new TXStartLogEntry(filenames);
-		} else if (cmd.equals("Unlock")) {
-			int address = Integer.parseInt(t.next());
-			return new UnlockLogEntry(address);
 		} else if (cmd.equals("Write")) {
 			boolean append = Boolean.parseBoolean(t.next());
 			String content = t.rest();
@@ -93,19 +87,6 @@ class DeleteLogEntry extends LogEntry {
 
 // shouldn't need Get - doesn't mutate
 
-class LockLogEntry extends MemberLogEntry {
-	public LockLogEntry(int address) {
-		super(address);
-	}
-
-	@Override
-	public String toString() {
-		return "Lock" + entryDelimiter + address;
-	}
-}
-
-// TODO: HIGH: ZACH: Add filenames to TXLogEntries
-
 class TXAbortLogEntry extends TXLogEntry {
 	public TXAbortLogEntry(String[] filenames) {
 		super(filenames);
@@ -158,17 +139,6 @@ class TXTryCommitLogEntry extends TXLogEntry {
 	@Override
 	public String toString() {
 		return "TXTryCommit" + joinFilenames();
-	}
-}
-
-class UnlockLogEntry extends MemberLogEntry {
-	public UnlockLogEntry(int address) {
-		super(address);
-	}
-
-	@Override
-	public String toString() {
-		return "Unlock" + entryDelimiter + address;
 	}
 }
 

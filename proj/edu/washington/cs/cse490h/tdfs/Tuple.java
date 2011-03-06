@@ -1,10 +1,10 @@
 package edu.washington.cs.cse490h.tdfs;
 
-class T {
+class Tup {
 	private final Class<?>[] types;
 	private Object[] values;
 	
-	public T(int size, Class<?>[] types, Object[] values) {
+	public Tup(int size, Class<?>[] types, Object[] values) {
 		this.types = types;
 		for (int i = 0; i < values.length; i++) {
 			set(i, values[i]);
