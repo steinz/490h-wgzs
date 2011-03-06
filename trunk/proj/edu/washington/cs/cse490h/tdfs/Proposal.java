@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Scanner;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
@@ -36,17 +37,16 @@ public class Proposal {
 		ByteBuffer proposalBuf = ByteBuffer.allocate(4);
 		proposalBuf.putInt(proposalNumber);
 		operationBuf.putInt(operationNumber);
-		try{
+		try {
 			out.write(operationBuf.array());
 			out.write(proposalBuf.array());
-		} catch (IOException e){
+		} catch (IOException e) {
 			throw new RuntimeException();
 		}
-		
+
 		byte[] filename = Utility.stringToByteArray(this.filename);
 		byte[] delim = Utility.stringToByteArray(packetDelimiter);
 		byte[] op = this.operation.pack();
-
 
 		try {
 			out.write(filename);
@@ -68,24 +68,23 @@ public class Proposal {
 			this.operationNumber = in.readInt();
 			this.proposalNumber = in.readInt();
 
-			byte[] buf = new byte[packet.length - HEADER_SIZE];
-			//in.read(buf, HEADER_SIZE, buf.length);
-			in.read(buf);
+			Scanner s = new Scanner(in);
+			s.useDelimiter(packetDelimiter);
+			this.filename = s.next();
 
-			String rest = Utility.byteArrayToString(buf);
-			String[] splitArray = rest.split(packetDelimiter);
-			
-			this.filename = splitArray[0];
+			int bytesRead = HEADER_SIZE + this.filename.length()
+					+ packetDelimiter.length();
+			byte[] operationBuf = new byte[packet.length - bytesRead];
+			in.reset();
+			in.skip(bytesRead);
 
-			StringBuilder sb = new StringBuilder();
-			for (int i = 1; i < splitArray.length; i++){
-				sb.append(splitArray[i]);
-				sb.append(packetDelimiter);
+			int rest = in.read(operationBuf);
+			if (rest != packet.length - bytesRead) {
+				throw new RuntimeException("proposal unpack read " + rest
+						+ " bytes, expected " + (packet.length - bytesRead));
 			}
-			
-			byte[] operationBuf = Utility.stringToByteArray(sb.toString().trim());
-			this.operation = LogEntry.unpack(operationBuf);
 
+			this.operation = LogEntry.unpack(operationBuf);
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

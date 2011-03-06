@@ -2,16 +2,14 @@ package edu.washington.cs.cse490h.tdfs;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Map.Entry;
 
 import edu.washington.cs.cse490h.lib.Callback;
 
 /**
- * A graph of dependent commands
+ * A graph of dependent commands and factory of CommandNodes
  */
 public class CommandGraph {
 	private static int commandRetryTimeout = 20;
@@ -29,37 +27,28 @@ public class CommandGraph {
 
 		public boolean execute() {
 			try {
-				String[] params = { "edu.washington.cs.cse490h.tdfs.TDFSNode",
-						"edu.washington.cs.cse490h.tdfs.LogFS" };
-				Object[] args = { node, node.logFS };
+				String[] params = { "edu.washington.cs.cse490h.tdfs.TDFSNode" };
+				Object[] args = { node };
 				Callback cb = new Callback(Callback.getMethod("retry", command,
 						params), command, args);
 				node.addTimeout(cb, commandRetryTimeout);
-			} catch (SecurityException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (ClassNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (NoSuchMethodException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} 
-			// TODO: HIGH: handle exceptions
+			} catch (Exception e) {
+				node.printError(e);
+			}
 
-			/*
-			 * TODO: HIGH: logFS should probably be private, fix how
-			 * command.execute accesses things maybe
-			 */
 			if (this.locks == 0) {
-				executingCommands.add(this);
-				command.execute(node, node.logFS);
+				if (command instanceof FileCommand) {
+					FileCommand fc = (FileCommand) command;
+					heads.put(fc.filename, this);
+				} else {
+					checkpointHead = this;
+				}
+				command.execute(node);
 			}
 			return this.locks == 0;
 		}
 
 		public void done() {
-			executingCommands.remove(this);
 			for (CommandNode node : children) {
 				node.parentFinished();
 			}
@@ -72,13 +61,14 @@ public class CommandGraph {
 	}
 
 	private TDFSNode node;
-	private Set<CommandNode> executingCommands;
+	private Map<String, CommandNode> heads;
 	private Map<String, CommandNode> tails;
-	private CommandNode checkpoint;
+	private CommandNode checkpointHead;
+	private CommandNode checkpointTail;
 
 	public CommandGraph(TDFSNode node) {
 		this.node = node;
-		this.executingCommands = new HashSet<CommandNode>();
+		this.heads = new HashMap<String, CommandNode>();
 		this.tails = new HashMap<String, CommandNode>();
 	}
 
@@ -86,7 +76,7 @@ public class CommandGraph {
 		CommandNode n = new CommandNode(c);
 		CommandNode p = tails.get(c.filename);
 		if (p == null) {
-			p = checkpoint;
+			p = checkpointTail;
 		}
 		if (p != null) {
 			addEdge(p, n);
@@ -102,15 +92,34 @@ public class CommandGraph {
 			addEdge(entry.getValue(), n);
 		}
 		tails.clear();
-		checkpoint = n;
+		checkpointTail = n;
 
 		return n;
 	}
 
-	// TODO: HIGH: multiple edges from parent to child allowed?
+	// TODO: dedup multiple edges from parent to child
 
 	public void addEdge(CommandNode parent, CommandNode child) {
 		parent.children.add(child);
 		child.locks++;
+	}
+
+	public void checkpointDone() {
+		try {
+			checkpointHead.done();
+			checkpointHead = null;
+		} catch (NullPointerException e) {
+			throw new RuntimeException(
+					"checkpointDone called when no checkpoint set", e);
+		}
+	}
+
+	public void filenameDone(String filename) {
+		try {
+			heads.remove(filename).done();
+		} catch (NullPointerException e) {
+			throw new RuntimeException(
+					"filenameDone called on unlocked filename", e);
+		}
 	}
 }
