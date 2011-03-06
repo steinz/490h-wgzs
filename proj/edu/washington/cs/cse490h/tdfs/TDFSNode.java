@@ -14,6 +14,15 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
 
+	/*
+	 * TODO: HIGH: Ensure majority checks using > not >= half count
+	 * 
+	 * TODO: HIGH: Acceptor persistent state
+	 * 
+	 * TODO: HIGH: receivedLearn updates to commandGraph
+	 * 
+	 * TODO: HIGH: receivedPromiseDenial
+	 */
 
 	/*
 	 * TODO: HIGH:
@@ -31,8 +40,6 @@ public class TDFSNode extends RIONode {
 	 * (done)
 	 * 
 	 * Stable Storage
-	 * 
-	 * Ensure majority checks using > not >= half count
 	 */
 
 	/*
@@ -54,24 +61,26 @@ public class TDFSNode extends RIONode {
 	 * leader to propose
 	 */
 
-
 	/**
 	 * BEGIN 2PC structures
 	 */
 	private static final int TwoPCCoordinatorAdress = 100;
-	
+
 	private final int TXTIMEOUT = 20;
-	
+
 	private Map<String, String[]> fileTransactionMap;
 
 	/**
 	 * END 2PC structures
 	 */
-	
+
 	CommandGraph commandGraph;
 
 	private static int coordinatorCount = 4;
 
+	/**
+	 * ceil(cpf / 2) - 1 coordinators can go down
+	 */
 	private static int coordinatorsPerFile = 3;
 
 	// TODO: HIGH: Encapsulate Paxos state in objects for handoff Commands
@@ -111,13 +120,13 @@ public class TDFSNode extends RIONode {
 		// Paxos
 		this.acceptorsResponded = new HashMap<String, Integer>();
 		this.fileListeners = new HashMap<String, List<Integer>>();
-		this.lastProposalNumbersSent = new HashMap<String,Integer>();
+		this.lastProposalNumbersSent = new HashMap<String, Integer>();
 		this.lastProposalNumberPromised = new HashMap<String, Integer>();
 		this.promisesReceived = new HashMap<String, Integer>();
-		
+
 		// 2PC
 		fileTransactionMap = new HashMap<String, String[]>();
-		
+
 	}
 
 	private static String commandDelim = " ";
@@ -260,63 +269,33 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	/**
-	 * Attempts to listen in on a paxos group for the given file. If this node
-	 * is supposed to be the coordinator for that file, attempts to create the
-	 * group.
-	 * 
-	 * @param filename
-	 *            The file
-	 */
-	public void Join(String filename) {
-
-		int coordinator = hashFilename(filename);
-		logFS.createGroup(filename);
-		if (getParticipants(filename).contains(addr)) {
-			try {
-				for (Integer next : getParticipants(filename)) {
-					if (next != addr)
-						RIOSend(next, MessageType.CreateGroup,
-								Utility.stringToByteArray(filename));
-				}
-			} catch (AlreadyParticipatingException e) {
-				Logger.error(this, e);
-			}
-		} else {
-			RIOSend(coordinator, MessageType.RequestToListen,
-					Utility.stringToByteArray(filename));
-		}
-	}
-
 	@Override
 	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
-		String msgString = Utility.byteArrayToString(msg);
-
-		// TDFS handles all non-RIO messages right now
-		Object instance = this;
-		
 		// 2PC handler
-		if (addr == TwoPCCoordinatorAdress){
+		if (addr == TwoPCCoordinatorAdress) {
 			learn(from, msg);
+			return;
 		}
 
 		// route message
 		try {
-			Class<?> handlingClass = instance.getClass();
+			Class<?> handlingClass = this.getClass();
 			Class<?>[] paramTypes = { int.class, String.class };
 			Method handler;
 			Object[] args = { from, null };
 			try {
+				// look for receive<cmd>(int, String)
 				handler = handlingClass.getMethod("receive" + type.name(),
 						paramTypes);
-				args[1] = msgString;
+				args[1] = Utility.byteArrayToString(msg);
 			} catch (Exception e) {
+				// look for receive<cmd>(int, bytep[])
 				paramTypes[1] = byte[].class;
 				handler = handlingClass.getMethod("receive" + type.name(),
 						paramTypes);
 				args[1] = msg;
 			}
-			handler.invoke(instance, args);
+			handler.invoke(this, args);
 		} catch (InvocationTargetException e) {
 			printError(e.getCause());
 		} catch (Exception e) {
@@ -328,7 +307,7 @@ public class TDFSNode extends RIONode {
 	 * Relies on participants being static for any given operation number
 	 */
 	public int nextProposalNumber(String filename) throws NotListeningException {
-		List<Integer> participants = getParticipants(filename);
+		List<Integer> participants = getCoordinators(filename);
 		Integer lastNumSent = lastProposalNumbersSent.get(filename);
 		if (lastNumSent == null) {
 			// use offset
@@ -344,11 +323,11 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	public static int hashFilename(String filename) {
+	private static int hashFilename(String filename) {
 		return filename.hashCode() % coordinatorCount;
 	}
 
-	public static List<Integer> getParticipants(String filename) {
+	public List<Integer> getCoordinators(String filename) {
 		ArrayList<Integer> list = new ArrayList<Integer>();
 		int baseAddr = hashFilename(filename);
 		for (int i = 0; i < coordinatorsPerFile; i++) {
@@ -357,7 +336,21 @@ public class TDFSNode extends RIONode {
 		return list;
 	}
 
+	private int getCoordinatorOffset = 0;
+
 	/**
+	 * Returns a coordinator for filename. Multiple calls to this method will
+	 * cycle through all possible coordinators in order.
+	 */
+	public int getCoordinator(String filename) {
+		getCoordinatorOffset = (getCoordinatorOffset + 1) % coordinatorsPerFile;
+		return hashFilename(filename) + getCoordinatorOffset;
+	}
+
+	/**
+	 * TODO: HIGH: Duplicate of Command.createProposal, refactor to remove
+	 * duplication
+	 * 
 	 * Sends a prepare request to all acceptors in this Paxos group.
 	 * 
 	 * @param proposal
@@ -376,7 +369,7 @@ public class TDFSNode extends RIONode {
 
 		List<Integer> participants = null;
 		try {
-			participants = getParticipants(p.filename);
+			participants = getCoordinators(p.filename);
 		} catch (NotListeningException e) { // assuming this is a coordinator, a
 			// coordinator should never not be
 			// participating
@@ -397,8 +390,15 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * @op The operation
 	 */
-	public void receiveAccept(int from, String msg) {
-		RIOSend(from, MessageType.Accepted, Utility.stringToByteArray(msg));
+	public void receiveAccept(int from, byte[] msg) {
+		Proposal p = new Proposal(msg);
+		// TODO: HIGH: This needs to check propNum >= propNumPromised
+		if (true) { // placeholder
+			List<Integer> coordinators = getCoordinators(p.filename);
+			for (int address : coordinators) {
+				RIOSend(address, MessageType.Accepted, msg);
+			}
+		}
 	}
 
 	/**
@@ -411,29 +411,19 @@ public class TDFSNode extends RIONode {
 	 * @param msg
 	 *            The msg, packed as a byte array
 	 */
-	public void receiveAccepted(int from, String msg) {
-		Proposal proposal = new Proposal(Utility.stringToByteArray(msg));
+	public void receiveAccepted(int from, byte[] msg) {
+		Proposal proposal = new Proposal(msg);
 		String filename = proposal.filename;
-
-		List<Integer> participants = null;
-		participants = getParticipants(filename);
+		List<Integer> participants = getCoordinators(filename);
 
 		Integer responded = acceptorsResponded.get(filename);
-		responded = (responded == null) ? 0 : responded + 1;
+		responded = (responded == null) ? 1 : responded + 1;
+		acceptorsResponded.put(filename, responded);
 
-		if (responded < participants.size() / 2)
-			return;
-
-		for (Integer next : participants) {
-			if (next != addr)
-				RIOSend(next, MessageType.Learned,
-						Utility.stringToByteArray(msg));
+		if (responded > participants.size() / 2) {
+			RIOSend(this.addr, MessageType.Learned, msg);
+			acceptorsResponded.remove(filename);
 		}
-
-		responded = 0;
-
-		// TODO: High - write to local log
-
 	}
 
 	/**
@@ -441,35 +431,14 @@ public class TDFSNode extends RIONode {
 	 * not it checks whether this proposal is a join. If it is not a join and
 	 * the node is not part of the paxos group, then the proposal is rejected.
 	 * 
-	 * @param prop
-	 *            The proposal encapsulated
 	 */
-	public void receiveRequest(int from, String msg) {
-
-		Proposal p = new Proposal(Utility.stringToByteArray(msg));
-
+	public void receiveRequest(int from, byte[] msg) {
+		Proposal p = new Proposal(msg);
 		try {
 			p.operationNumber = logFS.nextLogNumber(p.filename);
 			p.proposalNumber = nextProposalNumber(p.filename);
 		} catch (NotListeningException e) {
-			// Pass the request along
-			try {
-				logFS.createGroup(p.filename);
-			} catch (AlreadyParticipatingException e1) { // Throw a runtime
-				// error - something
-				// went seriously
-				// wrong
-				Logger.error(this, e1);
-				throw new RuntimeException();
-			}
-			int address = hashFilename(p.filename);
-			for (int i = 0; i < coordinatorCount; i++) {
-				address = address + i;
-				if (address != addr)
-					RIOSend(address, MessageType.CreateGroup,
-							Utility.stringToByteArray(p.filename));
-			}
-			// fall through and start the proposal
+			Logger.error(this, e);
 		}
 		prepare(from, p.pack());
 	}
@@ -505,47 +474,35 @@ public class TDFSNode extends RIONode {
 	 * @from Assumed to be the proposer's address
 	 * @proposalNumber The proposal number this node is proposing
 	 */
-	public void receivePrepare(int from, String msg) {
+	public void receivePrepare(int from, byte[] msg) {
+		Proposal p = new Proposal(msg);
 
-		Proposal proposal = new Proposal(Utility.stringToByteArray(msg));
-		int proposalNumber = proposal.proposalNumber;
-		int operationNumber = proposal.operationNumber;
-		String filename = proposal.filename;
-		int largestProposalNumberAccepted = lastProposalNumberPromised
-				.get(filename);
-
-		if (proposalNumber <= largestProposalNumberAccepted) {
-			String lastProposalNumber = lastProposalNumberPromised
-					.get(filename) + "";
-			RIOSend(from, MessageType.PromiseDenial,
-					Utility.stringToByteArray(lastProposalNumber));
-			return;
+		Integer largestProposalNumberAccepted = lastProposalNumberPromised
+				.get(p.filename);
+		if (largestProposalNumberAccepted == null) {
+			largestProposalNumberAccepted = -1;
 		}
 
-		try {
-			if (logFS.nextLogNumber(filename) >= operationNumber) {
-				RIOSend(from, MessageType.OldOperation,
-						logFS.getLogEntry(filename, operationNumber).pack());
-
-				// TODO High: Don't force them to resend every operation number,
-				// somehow update them to latest version
-				// Check if forgotten operation
-				return;
+		if (logFS.nextLogNumber(p.filename) > p.operationNumber) {
+			LogEntry entry = logFS.getLogEntry(p.filename, p.operationNumber);
+			if (entry != null) {
+				RIOSend(from, MessageType.OldOperation, entry.pack());
+				// TODO: HIGH: Get them all the way up to date
+			} else {
+				// TODO: HIGH: GC'd operation, do something
 			}
-		} catch (NotListeningException e) {
-			Logger.error(this, e);
-		} catch (NoSuchOperationNumberException e) {
-			Logger.error(this, e);
+			return;
+		} else if (p.proposalNumber <= largestProposalNumberAccepted) {
+			String lastProposalNumber = lastProposalNumberPromised
+					.get(p.filename)
+					+ "";
+			RIOSend(from, MessageType.PromiseDenial, Utility
+					.stringToByteArray(lastProposalNumber));
+			return;
+		} else {
+			lastProposalNumberPromised.put(p.filename, p.proposalNumber);
+			RIOSend(from, MessageType.Promise, p.pack());
 		}
-
-		largestProposalNumberAccepted = proposalNumber;
-		RIOSend(from, MessageType.Promise,
-				Utility.stringToByteArray(proposalNumber + ""));
-
-	}
-
-	public void sendFile(String filename) {
-
 	}
 
 	/**
@@ -555,37 +512,26 @@ public class TDFSNode extends RIONode {
 	 * acceptable behavior.
 	 * 
 	 */
-	public void receivePromise(int from, String msg) {
-
-		Proposal proposal = new Proposal(Utility.stringToByteArray(msg));
+	public void receivePromise(int from, byte[] msg) {
+		Proposal proposal = new Proposal(msg);
 		String filename = proposal.filename;
-		List<Integer> participants = null;
-
-		participants = getParticipants(filename);
+		List<Integer> participants = getCoordinators(filename);
 
 		Integer responded = promisesReceived.get(filename);
-		responded = (responded == null) ? 0 : responded + 1;
+		responded = (responded == null) ? 1 : responded + 1;
+		promisesReceived.put(filename, responded);
 
-		if (responded < participants.size() / 2)
-			return;
-
-		for (Integer next : participants) {
-			if (next != addr)
-				RIOSend(next, MessageType.Learned,
-						Utility.stringToByteArray(msg));
-		}
-
-		if (responded < (participants.size() / 2))
-			return;
-
-		for (Integer i : participants) {
-			if (i != addr) {
-				RIOSend(i, MessageType.Accept, Utility.stringToByteArray(msg));
+		if (responded > participants.size() / 2) {
+			for (Integer i : participants) {
+				RIOSend(i, MessageType.Accept, msg);
 			}
+			// TODO: HIGH: Ensure DS cleanup on failures / timeouts
+			promisesReceived.remove(filename);
 		}
+	}
 
-		responded = 0;
-
+	public void receivePromiseDenial(int from, byte[] msg) {
+		// TODO: HIGH: Implement receivePromiseDenial
 	}
 
 	/**
@@ -597,18 +543,25 @@ public class TDFSNode extends RIONode {
 	 *            The proposal, in packed form
 	 */
 	public void receiveRequestToListen(int from, String filename) {
-		if (!logFS.isListening(filename)){ // If the group doesn't exist
+		if (!logFS.isListening(filename)) { // If the group doesn't exist
 			logFS.createGroup(filename);
-			for (Integer i : getParticipants(filename)){
+			for (Integer i : getCoordinators(filename)) {
 				if (i != addr)
-					RIOSend(i, MessageType.CreateGroup, Utility.stringToByteArray(filename));
+					RIOSend(i, MessageType.CreateGroup, Utility
+							.stringToByteArray(filename));
 			}
 		}
 		List<Integer> list = fileListeners.get(filename);
-		if (list == null)
+		if (list == null) {
 			list = new ArrayList<Integer>();
+		}
 		list.add(from);
-		RIOSend(from, MessageType.AddedListener, Utility.stringToByteArray(filename));
+		RIOSend(from, MessageType.AddedListener, Utility
+				.stringToByteArray(filename));
+	}
+
+	public void receiveAddedListener(int from, String filename) {
+		commandGraph.filenameDone(filename);
 	}
 
 	/**
@@ -621,35 +574,44 @@ public class TDFSNode extends RIONode {
 		Proposal p = new Proposal(msg);
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
 
-		// inform listeners
-		List<Integer> listeners = fileListeners.get(p.filename);
-		for (Integer i : listeners) {
-			RIOSend(i, MessageType.Learned, msg);
+		// inform listeners iff coordinator for this file
+		if (getCoordinators(p.filename).contains(this.addr)) {
+			List<Integer> listeners = fileListeners.get(p.filename);
+			if (listeners != null) {
+				for (Integer i : listeners) {
+					RIOSend(i, MessageType.Learned, msg);
+				}
+			}
 		}
 
-		// AddedListener => 
-		
 		/*
-		 * TODO: HIGH: Change to use commandGraph if ((p.operation instanceof
-		 * TXCommitLogEntry || p.operation instanceof TXAbortLogEntry) &&
-		 * txQueue.inTx && txQueue.filenamesInTx.contains(p.filename)) {
-		 * txQueue.nextTx(); }
+		 * TODO: HIGH: Tell commandGraph what is done
 		 * 
+		 * if ((p.operation instanceof TXCommitLogEntry || p.operation
+		 * instanceof TXAbortLogEntry) && txQueue.inTx &&
+		 * txQueue.filenamesInTx.contains(p.filename)) { txQueue.nextTx(); }
+		 */
+
+		/*
 		 * if (txQueue.cmdQueue.executingOn(p.filename)) {
 		 * txQueue.next(p.filename); }
 		 */
+
 	}
-	
+
 	/**
-	 *  2PC Coordinator Methods
+	 * 2PC Coordinator Methods
 	 */
-	
+
 	/**
-	 * The 2PC coordinator learns about a operation. It logs it to its own logFS, but also
-	 * tries to discern whether the given command is something it should pay attention to - txstarts,
-	 * commits, and aborts.
-	 * @param from The coordinator who sent this message
-	 * @param msg The proposal, packed
+	 * The 2PC coordinator learns about a operation. It logs it to its own
+	 * logFS, but also tries to discern whether the given command is something
+	 * it should pay attention to - txstarts, commits, and aborts.
+	 * 
+	 * @param from
+	 *            The coordinator who sent this message
+	 * @param msg
+	 *            The proposal, packed
 	 */
 	public void learn(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
@@ -677,7 +639,7 @@ public class TDFSNode extends RIONode {
 			// commit to each filename coordinator
 			String[] files = ((TXTryCommitLogEntry) p.operation).filenames;
 			createProposal(new TXTryCommitLogEntry(files), files);
-			for (String file : txFiles){
+			for (String file : txFiles) {
 				fileTransactionMap.put(file, null);
 			}
 		}
@@ -686,18 +648,21 @@ public class TDFSNode extends RIONode {
 			abortClientTx(p.filename);
 		}
 	}
-	
+
 	/**
-	 * Aborts all tx for a client, assuming that each file is used in a tx at most once.
-	 * That is, this method will cause all sorts of problems if multiple clients are allowed to
-	 * start a tx on the same file.
-	 * @param filename The filename key to abort
+	 * Aborts all tx for a client, assuming that each file is used in a tx at
+	 * most once. That is, this method will cause all sorts of problems if
+	 * multiple clients are allowed to start a tx on the same file.
+	 * 
+	 * @param filename
+	 *            The filename key to abort
 	 */
 	public void abortClientTx(String filename) {
 		String[] files = fileTransactionMap.get(filename);
 		if (files == null)
-			return; // Assume the client must have already aborted or committed this tx
-		for (String file : files){
+			return; // Assume the client must have already aborted or committed
+		// this tx
+		for (String file : files) {
 			createProposal(new TXTryAbortLogEntry(files), files);
 			fileTransactionMap.put(file, null);
 		}
@@ -723,22 +688,23 @@ public class TDFSNode extends RIONode {
 		Callback cb = new Callback(cbMethod, this, args);
 		addTimeout(cb, this.TXTIMEOUT);
 	}
-	
-	
-	/**
-	 * Creates a proposal using the appropriate log entry type, and send to each coordinator
-	 * for the list files
-	 * @param operation The operation to perform
-	 * @param files The list of files involved in this tx
-	 */
-	public void createProposal(LogEntry operation, String[] files){
-		for (String file : files) {
-			List<Integer> coordinators = TDFSNode.getParticipants(file);
-			Proposal newProposal = new Proposal(
-					new TXCommitLogEntry(files), file,
-					logFS.nextLogNumber(file), nextProposalNumber(file));
 
-			for (Integer addr : coordinators){
+	/**
+	 * Creates a proposal using the appropriate log entry type, and send to each
+	 * coordinator for the list files
+	 * 
+	 * @param operation
+	 *            The operation to perform
+	 * @param files
+	 *            The list of files involved in this tx
+	 */
+	public void createProposal(LogEntry operation, String[] files) {
+		for (String file : files) {
+			List<Integer> coordinators = getCoordinators(file);
+			Proposal newProposal = new Proposal(new TXCommitLogEntry(files),
+					file, logFS.nextLogNumber(file), nextProposalNumber(file));
+
+			for (Integer addr : coordinators) {
 				RIOSend(addr, MessageType.Prepare, newProposal.pack());
 			}
 		}
