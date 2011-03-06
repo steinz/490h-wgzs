@@ -20,11 +20,12 @@ public class TDFSNode extends RIONode {
 	 * TODO: HIGH: Remove explicit locks, have TX entries implicitly lock/unlock
 	 * 
 	 * TODO: HIGH: Acceptor persistent state - assumes stream writes are atomic,
-	 * implemented but not merged yet.
+	 * implemented but not merged yet. Malformed logs aren't repaired on rebulid
+	 * either and the log is never purged.
 	 * 
 	 * TODO: HIGH: receivedLearn updates to commandGraph
 	 * 
-	 * TODO: HIGH: Fix Paxos Correctness
+	 * TODO: HIGH: Fix Paxos Correctness - fixed the below bug I think
 	 * 
 	 * If I keep propsing after a value is chosen, will I will get promises
 	 * back, and then I will send accepts - what keeps me from getting
@@ -32,6 +33,10 @@ public class TDFSNode extends RIONode {
 	 * the largest proposal number accepted, which is the only value the
 	 * proposer is allowed to propose (in what paper calls a proposal, we call
 	 * an accept)
+	 * 
+	 * TODO: HIGH: I think it's safer to have proposer/learner Paxos DSs use
+	 * (filename, opNum) as keys. We should also make sure we clean them up
+	 * sometime too - I think when we learn that entry
 	 * 
 	 * TODO: HIGH: Implement receivedPromiseDenial - explicitly call
 	 * command.retry somehow to send a higher proposal number, cancel timeout
@@ -127,6 +132,11 @@ public class TDFSNode extends RIONode {
 	protected LogFS logFS;
 
 	/**
+	 * Encapsulates persistent paxos data structures
+	 */
+	private PersistentPaxosState paxosState;
+
+	/**
 	 * List of transacting files used only by the parsers (client to library)
 	 */
 	private String[] transactingFiles;
@@ -142,11 +152,6 @@ public class TDFSNode extends RIONode {
 	 * file changes
 	 */
 	private Map<String, List<Integer>> fileListeners;
-
-	/**
-	 * Last proposal number promised for a given file
-	 */
-	private Map<String, Integer> lastProposalNumberPromised;
 
 	/**
 	 * Last proposal number prepared for a given file
@@ -176,6 +181,7 @@ public class TDFSNode extends RIONode {
 	public void start() {
 		// Client
 		this.commandGraph = new CommandGraph(this);
+		this.getCoordinatorOffset = new HashMap<String, Integer>();
 		this.logFS = new LogFileSystem();
 		this.transactingFiles = null;
 
@@ -183,7 +189,7 @@ public class TDFSNode extends RIONode {
 		this.acceptorsResponded = new HashMap<String, Integer>();
 		this.fileListeners = new HashMap<String, List<Integer>>();
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
-		this.lastProposalNumberPromised = new HashMap<String, Integer>();
+		this.paxosState = new PersistentPaxosState(this);
 		this.promisesReceived = new HashMap<String, Integer>();
 
 		// 2PC
@@ -409,20 +415,26 @@ public class TDFSNode extends RIONode {
 		ArrayList<Integer> list = new ArrayList<Integer>();
 		int baseAddr = hashFilename(filename);
 		for (int i = 0; i < coordinatorsPerFile; i++) {
-			list.add(baseAddr + i);
+			list.add((baseAddr + i) % coordinatorCount);
 		}
 		return list;
 	}
 
-	private int getCoordinatorOffset = 0;
+	private Map<String, Integer> getCoordinatorOffset;
 
 	/**
 	 * Returns a coordinator for filename. Multiple calls to this method will
 	 * cycle through all possible coordinators in order.
 	 */
 	public int getCoordinator(String filename) {
-		getCoordinatorOffset = (getCoordinatorOffset + 1) % coordinatorsPerFile;
-		return hashFilename(filename) + getCoordinatorOffset;
+		Integer offset = getCoordinatorOffset.get(filename);
+		if (offset == null) {
+			offset = 0;
+		} else {
+			offset = (offset + 1) % coordinatorsPerFile;
+		}
+		getCoordinatorOffset.put(filename, offset);
+		return (hashFilename(filename) + offset) % coordinatorCount;
 	}
 
 	/**
@@ -449,16 +461,15 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receiveAccept(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
-		if (true) { // TODO: HIGH: This needs to check propNum >=
-			// propNumPromised
-			if (false) { // TODO: HIGH: If accepted something, send that back
-
-			} else { // TODO: HIGH: Else accept what you got
-				List<Integer> coordinators = getCoordinators(p.filename);
-				for (int address : coordinators) {
-					RIOSend(address, MessageType.Accepted, msg);
-				}
+		if (p.proposalNumber >= paxosState.highestPromisedProposalNumber(
+				p.filename, p.operationNumber)) {
+			paxosState.accept(p);
+			List<Integer> coordinators = getCoordinators(p.filename);
+			for (int address : coordinators) {
+				RIOSend(address, MessageType.Accepted, msg);
 			}
+		} else {
+			// send some denial, maybe an updated promise or just an abort?
 		}
 	}
 
@@ -473,17 +484,22 @@ public class TDFSNode extends RIONode {
 	 *            The msg, packed as a byte array
 	 */
 	public void receiveAccepted(int from, byte[] msg) {
-		Proposal proposal = new Proposal(msg);
-		String filename = proposal.filename;
-		List<Integer> participants = getCoordinators(filename);
-
-		Integer responded = acceptorsResponded.get(filename);
+		Proposal p = new Proposal(msg);
+		
+		if (logFS.getLogEntry(p.filename, p.operationNumber) != null) {
+			// already learned
+			return;
+		}
+		
+		List<Integer> coordinators = getCoordinators(p.filename);
+		
+		Integer responded = acceptorsResponded.get(p.filename);
 		responded = (responded == null) ? 1 : responded + 1;
-		acceptorsResponded.put(filename, responded);
+		acceptorsResponded.put(p.filename, responded);
 
-		if (responded > participants.size() / 2) {
+		if (responded > coordinators.size() / 2) {
 			RIOSend(this.addr, MessageType.Learned, msg);
-			acceptorsResponded.remove(filename);
+			acceptorsResponded.remove(p.filename);
 		}
 	}
 
@@ -538,8 +554,8 @@ public class TDFSNode extends RIONode {
 	public void receivePrepare(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
 
-		Integer largestProposalNumberPromised = lastProposalNumberPromised
-				.get(p.filename);
+		Integer largestProposalNumberPromised = paxosState
+				.highestPromisedProposalNumber(p.filename, p.operationNumber);
 		if (largestProposalNumberPromised == null) {
 			largestProposalNumberPromised = -1;
 		}
@@ -552,19 +568,27 @@ public class TDFSNode extends RIONode {
 				RIOSend(from, MessageType.Learned, r.pack());
 				// TODO: HIGH: Get them all the way up to date
 			} else {
-				// TODO: HIGH: GC'd operation, do something
+				// TODO: HIGH: GC'd or missing operation, do something
 			}
 			return;
 		} else if (p.proposalNumber <= largestProposalNumberPromised) {
-			String lastProposalNumber = lastProposalNumberPromised
-					.get(p.filename)
+			String highestProposalNumber = paxosState
+					.highestPromisedProposalNumber(p.filename,
+							p.operationNumber)
 					+ "";
 			RIOSend(from, MessageType.PromiseDenial, Utility
-					.stringToByteArray(lastProposalNumber));
+					.stringToByteArray(highestProposalNumber));
 			return;
 		} else {
-			lastProposalNumberPromised.put(p.filename, p.proposalNumber);
-			RIOSend(from, MessageType.Promise, p.pack());
+			paxosState.promise(p.filename, p.operationNumber, p.proposalNumber);
+			Proposal highestAccepted = paxosState.highestAcceptedProposal(
+					p.filename, p.operationNumber);
+			if (highestAccepted != null) {
+				highestAccepted.proposalNumber = p.proposalNumber;
+				RIOSend(from, MessageType.Promise, highestAccepted.pack());
+			} else {
+				RIOSend(from, MessageType.Promise, p.pack());
+			}
 		}
 	}
 
@@ -576,20 +600,18 @@ public class TDFSNode extends RIONode {
 	 * 
 	 */
 	public void receivePromise(int from, byte[] msg) {
-		Proposal proposal = new Proposal(msg);
-		String filename = proposal.filename;
-		List<Integer> participants = getCoordinators(filename);
+		Proposal p = new Proposal(msg);
+		List<Integer> coordinators = getCoordinators(p.filename);
 
-		Integer responded = promisesReceived.get(filename);
+		Integer responded = promisesReceived.get(p.filename);
 		responded = (responded == null) ? 1 : responded + 1;
-		promisesReceived.put(filename, responded);
+		promisesReceived.put(p.filename, responded);
 
-		if (responded > participants.size() / 2) {
-			for (Integer i : participants) {
+		if (responded > coordinators.size() / 2) {
+			for (Integer i : coordinators) {
 				RIOSend(i, MessageType.Accept, msg);
 			}
-			// TODO: HIGH: Ensure DS cleanup on failures / timeouts
-			promisesReceived.remove(filename);
+			promisesReceived.remove(p.filename);
 		}
 	}
 

@@ -14,7 +14,6 @@ import java.util.logging.Logger;
 
 public class LogFileSystem implements LogFS {
 
-	// TODO: HIGH: Use Transactional<T>
 	private static class Transactional<T> {
 		private T persistent;
 		private T transactional;
@@ -51,82 +50,6 @@ public class LogFileSystem implements LogFS {
 		}
 	}
 
-	private static class TXBoolean {
-		private boolean exists = false;
-		private Boolean txExists = null;
-		private boolean inTx = false;
-
-		public void txAbort() {
-			txExists = null;
-			inTx = false;
-		}
-
-		public void txCommit() {
-			if (txExists != null) {
-				exists = txExists;
-			}
-			inTx = false;
-		}
-
-		public void txStart() {
-			txExists = exists;
-			inTx = true;
-		}
-
-		public Boolean getExists() {
-			return exists;
-		}
-
-		public void setExists(Boolean b) {
-			if (inTx) {
-				txExists = b;
-			} else {
-				exists = b;
-			}
-		}
-	}
-
-	private static class TXString {
-		private String content = null;
-		private String txContent = null;
-		private boolean inTx = false;
-
-		public void txAbort() {
-			txContent = null;
-			inTx = false;
-		}
-
-		public void txCommit() {
-			content = txContent;
-			inTx = false;
-		}
-
-		public void txStart() {
-			txContent = content;
-			inTx = true;
-		}
-
-		public String getContent() {
-			return content;
-		}
-
-		public void setContent(String s) {
-			if (inTx) {
-				txContent = s;
-			} else {
-				content = s;
-			}
-		}
-
-		public void appendContent(String s) {
-			if (inTx) {
-				txContent += s;
-			} else {
-				content += s;
-			}
-		}
-	}
-
 	private static class FileLog {
 		// TODO: cache
 
@@ -156,22 +79,22 @@ public class LogFileSystem implements LogFS {
 		}
 
 		public boolean checkExists() {
-			TXBoolean exists = new TXBoolean();
+			Transactional<Boolean> exists = new Transactional<Boolean>();
 			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
 				LogEntry op = entry.getValue();
 				if (op instanceof TXStartLogEntry) {
-					exists.txStart();
+					exists.start();
 				} else if (op instanceof TXAbortLogEntry) {
-					exists.txAbort();
+					exists.abort();
 				} else if (op instanceof TXCommitLogEntry) {
-					exists.txCommit();
+					exists.commit();
 				} else if (op instanceof DeleteLogEntry) {
-					exists.setExists(false);
+					exists.set(false);
 				} else if (op instanceof CreateLogEntry) {
-					exists.setExists(true);
+					exists.set(true);
 				}
 			}
-			return exists.getExists();
+			return exists.getPersistent();
 		}
 
 		public Integer checkLocked() {
@@ -189,29 +112,29 @@ public class LogFileSystem implements LogFS {
 		}
 
 		public String getContent() {
-			TXString content = new TXString();
+			Transactional<String> content = new Transactional<String>();
 			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
 				LogEntry op = entry.getValue();
 				if (op instanceof TXStartLogEntry) {
-					content.txStart();
+					content.start();
 				} else if (op instanceof TXAbortLogEntry) {
-					content.txAbort();
+					content.abort();
 				} else if (op instanceof TXCommitLogEntry) {
-					content.txCommit();
+					content.commit();
 				} else if (op instanceof DeleteLogEntry) {
-					content.setContent(null);
+					content.set(null);
 				} else if (op instanceof CreateLogEntry) {
-					content.setContent("");
+					content.set("");
 				} else if (op instanceof WriteLogEntry) {
 					WriteLogEntry w = (WriteLogEntry) op;
 					if (w.append) {
-						content.appendContent(w.content);
+						content.set(content.getTransactional() + w.content);
 					} else {
-						content.setContent(w.content);
+						content.set(w.content);
 					}
 				}
 			}
-			return content.getContent();
+			return content.getPersistent();
 		}
 
 		public byte[] pack() {
