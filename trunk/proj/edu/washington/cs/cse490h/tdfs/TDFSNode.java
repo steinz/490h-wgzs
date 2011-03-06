@@ -19,7 +19,7 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * TODO: HIGH: Remove explicit locks, have TX entries implicitly lock/unlock
 	 * 
-	 * TODO: HIGH: Acceptor persistent state
+	 * TODO: HIGH: Acceptor persistent state - assumes stream writes are atomic
 	 * 
 	 * TODO: HIGH: receivedLearn updates to commandGraph
 	 * 
