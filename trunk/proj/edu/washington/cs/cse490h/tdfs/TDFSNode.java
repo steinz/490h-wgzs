@@ -23,12 +23,23 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * TODO: HIGH: receivedLearn updates to commandGraph
 	 * 
+	 * TODO: HIGH: Fix Paxos Correctness
+	 * 
+	 * If I keep propsing after a value is chosen, will I will get promises
+	 * back, and then I will send accepts - what keeps me from getting
+	 * sufficient accepted messages back - promises should include the value for
+	 * the largest proposal number accepted, which is the only value the
+	 * proposer is allowed to propose (in what paper calls a proposal, we call
+	 * an accept)
+	 * 
 	 * TODO: HIGH: Implement receivedPromiseDenial - explicitly call
-	 * command.retry somehow, cancel timeout
+	 * command.retry somehow to send a higher proposal number, cancel timeout
+	 * 
+	 * TODO: HIGH: Verify 2PC Coordinator correctness
 	 * 
 	 * TODO: HIGH: author headers at the top of each file
 	 * 
-	 * TODO: HIGH: Verify Paxos Flow / Correctness
+	 * TODO: HIGH: Verify Paxos Flow (Synoptic?):
 	 * 
 	 * (Req -1>) Prepare -> OldOp -1> (done) | PromiseDenial -1> (done) |
 	 * Promise -1> Accept -> AcceptDenial -1> (done) | Accepted -1> Learned ->
@@ -108,10 +119,6 @@ public class TDFSNode extends RIONode {
 	 * List of transacting files used only by the parsers (client to library)
 	 */
 	private String[] transactingFiles;
-
-	/**
-	 * PAXOS Structures
-	 */
 
 	/**
 	 * Learner only: Number of acceptors that have contacted the learner about
