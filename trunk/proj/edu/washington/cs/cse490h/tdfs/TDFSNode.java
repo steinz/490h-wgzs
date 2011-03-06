@@ -20,7 +20,7 @@ public class TDFSNode extends RIONode {
 	 * TODO: HIGH: Remove explicit locks, have TX entries implicitly lock/unlock
 	 * 
 	 * TODO: HIGH: Acceptor persistent state - assumes stream writes are atomic,
-	 * implemented but not merged yet
+	 * implemented but not merged yet.
 	 * 
 	 * TODO: HIGH: receivedLearn updates to commandGraph
 	 * 
@@ -37,6 +37,8 @@ public class TDFSNode extends RIONode {
 	 * command.retry somehow to send a higher proposal number, cancel timeout
 	 * 
 	 * TODO: HIGH: Verify 2PC Coordinator correctness
+	 * 
+	 * TODO: HIGH: Update Paxos comments
 	 * 
 	 * TODO: HIGH: author headers at the top of each file
 	 * 
@@ -83,12 +85,12 @@ public class TDFSNode extends RIONode {
 
 	/**
 	 * The total, static number of coordinators with addresses
-	 * [0,coordinatorCount)
+	 * [0,coordinatorCount). Most of these should be alive at any given time.
 	 */
 	private static final int coordinatorCount = 4;
 
 	/**
-	 * The static number of coordinators per file
+	 * The static number of coordinators per file.
 	 * 
 	 * Progress can be made as long as floor(coordinatorsPerFile / 2) + 1
 	 * coordinators are alive
@@ -96,9 +98,17 @@ public class TDFSNode extends RIONode {
 	private static final int coordinatorsPerFile = 3;
 
 	/**
+	 * The maximum number of nodes allowed in the system.
+	 * 
+	 * Node with addresses [twoPCCoordinatorAddress + 1, maxTotalNodeCount) are
+	 * proposers/clients but not coordinators.
+	 */
+	private static final int maxTotalNodeCount = 10;
+
+	/**
 	 * We currently only support a single 2PC coordinator with this address
 	 */
-	private static final int twoPCCoordinatorAdress = 100;
+	private static final int twoPCCoordinatorAdress = coordinatorCount + 1;
 
 	/**
 	 * Time between when the 2PC Coordinator learns about a transaction starting
@@ -378,23 +388,21 @@ public class TDFSNode extends RIONode {
 	}
 
 	/**
-	 * Relies on participants being static for any given operation number
+	 * Since there is no globally consistent list of proposers, we assign
+	 * proposal numbers round robin to each node in the system
 	 */
 	public int nextProposalNumber(String filename) throws NotListeningException {
-		List<Integer> participants = getCoordinators(filename);
 		Integer lastNumSent = lastProposalNumbersSent.get(filename);
+		int number;
 		if (lastNumSent == null) {
-			// use offset
-			Collections.sort(participants); // TODO: document that this is ok
-			int number = participants.indexOf(this.addr);
-			lastProposalNumbersSent.put(filename, number);
-			return number;
+			// use address as offset
+			number = this.addr;
 		} else {
-			// increment last sent by participation count
-			int number = lastNumSent + participants.size();
-			lastProposalNumbersSent.put(filename, number);
-			return number;
+			// increment last sent by proposer count
+			number = lastNumSent + maxTotalNodeCount;
 		}
+		lastProposalNumbersSent.put(filename, number);
+		return number;
 	}
 
 	public List<Integer> getCoordinators(String filename) {
@@ -418,35 +426,16 @@ public class TDFSNode extends RIONode {
 	}
 
 	/**
-	 * TODO: HIGH: Duplicate of Command.createProposal, refactor to remove
-	 * duplication
-	 * 
 	 * Sends a prepare request to all acceptors in this Paxos group.
 	 * 
 	 * @param proposal
 	 *            The proposal to sendThat is
 	 */
-	public void prepare(int from, Proposal p) {
-		if (p.proposalNumber == -1) {
-			try {
-				p.proposalNumber = nextProposalNumber(p.filename);
-			} catch (NotListeningException e) {
-				Logger.error(this, e);
-			}
-		}
-
-		List<Integer> participants = null;
-		try {
-			participants = getCoordinators(p.filename);
-		} catch (NotListeningException e) { // assuming this is a coordinator, a
-			// coordinator should never not be
-			// participating
-			Logger.error(this, e);
-		}
+	public void prepare(Proposal p) {
+		List<Integer> participants = getCoordinators(p.filename);
 
 		for (Integer next : participants) {
-			if (next != addr)
-				RIOSend(next, MessageType.Prepare, p.pack());
+			RIOSend(next, MessageType.Prepare, p.pack());
 		}
 	}
 
@@ -460,11 +449,15 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receiveAccept(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
-		// TODO: HIGH: This needs to check propNum >= propNumPromised
-		if (true) { // placeholder
-			List<Integer> coordinators = getCoordinators(p.filename);
-			for (int address : coordinators) {
-				RIOSend(address, MessageType.Accepted, msg);
+		if (true) { // TODO: HIGH: This needs to check propNum >=
+			// propNumPromised
+			if (false) { // TODO: HIGH: If accepted something, send that back
+
+			} else { // TODO: HIGH: Else accept what you got
+				List<Integer> coordinators = getCoordinators(p.filename);
+				for (int address : coordinators) {
+					RIOSend(address, MessageType.Accepted, msg);
+				}
 			}
 		}
 	}
@@ -508,7 +501,7 @@ public class TDFSNode extends RIONode {
 		} catch (NotListeningException e) {
 			Logger.error(this, e);
 		}
-		prepare(from, p);
+		prepare(p);
 	}
 
 	/**
@@ -545,10 +538,10 @@ public class TDFSNode extends RIONode {
 	public void receivePrepare(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
 
-		Integer largestProposalNumberAccepted = lastProposalNumberPromised
+		Integer largestProposalNumberPromised = lastProposalNumberPromised
 				.get(p.filename);
-		if (largestProposalNumberAccepted == null) {
-			largestProposalNumberAccepted = -1;
+		if (largestProposalNumberPromised == null) {
+			largestProposalNumberPromised = -1;
 		}
 
 		if (logFS.nextLogNumber(p.filename) > p.operationNumber) {
@@ -562,7 +555,7 @@ public class TDFSNode extends RIONode {
 				// TODO: HIGH: GC'd operation, do something
 			}
 			return;
-		} else if (p.proposalNumber <= largestProposalNumberAccepted) {
+		} else if (p.proposalNumber <= largestProposalNumberPromised) {
 			String lastProposalNumber = lastProposalNumberPromised
 					.get(p.filename)
 					+ "";

@@ -11,12 +11,14 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class Proposal {
 
-	static int HEADER_SIZE = 8;
+	// TODO: HIGH: final variables?
+	
+	static final int HEADER_SIZE = 8;
 	static final String packetDelimiter = " ";
 	public String filename;
 	public LogEntry operation;
-	public Integer operationNumber;
-	public Integer proposalNumber;
+	public int operationNumber;
+	public int proposalNumber;
 
 	public Proposal(LogEntry op, String filename, int operationNumber,
 			int proposalNumber) {
