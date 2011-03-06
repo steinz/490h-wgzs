@@ -26,6 +26,7 @@ public class CommandGraph {
 		}
 
 		public boolean execute() {
+			// TODO: OPT: Fail after x retrys, declare file unavailable
 			try {
 				String[] params = { "edu.washington.cs.cse490h.tdfs.TDFSNode" };
 				Object[] args = { node };

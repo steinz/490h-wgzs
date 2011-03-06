@@ -13,15 +13,18 @@ import edu.washington.cs.cse490h.lib.Utility;
 import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
-
 	/*
-	 * TODO: HIGH: Ensure majority checks using > not >= half count
-	 * 
 	 * TODO: HIGH: Acceptor persistent state
 	 * 
 	 * TODO: HIGH: receivedLearn updates to commandGraph
 	 * 
 	 * TODO: HIGH: receivedPromiseDenial
+	 * 
+	 * Explicitly call command.retry somehow, cancel timeout
+	 * 
+	 * TODO: OPT: GC logs
+	 * 
+	 * TODO: OPT:
 	 */
 
 	/*
@@ -116,6 +119,7 @@ public class TDFSNode extends RIONode {
 		this.logFS = new LogFileSystem();
 		this.lastProposalNumbersSent = new HashMap<String, Integer>();
 		this.commandGraph = new CommandGraph(this);
+		this.transactingFiles = null;
 
 		// Paxos
 		this.acceptorsResponded = new HashMap<String, Integer>();
@@ -224,24 +228,36 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void txabort(String[] filenames) {
-		for (String filename : filenames) {
-			checkListen(filename, new AbortCommand(filenames, filename));
+		if (transactingFiles != null) {
+			for (String filename : filenames) {
+				checkListen(filename, new AbortCommand(filenames, filename));
+			}
+			transactingFiles = null;
+		} else {
+			printError("not in a transaction");
 		}
-		transactingFiles = null;
 	}
 
 	public void txcommit(String[] filenames) {
-		for (String filename : filenames) {
-			checkListen(filename, new CommitCommand(filenames, filename));
+		if (transactingFiles != null) {
+			for (String filename : filenames) {
+				checkListen(filename, new CommitCommand(filenames, filename));
+			}
+			transactingFiles = null;
+		} else {
+			printError("not in transaction");
 		}
-		transactingFiles = null;
 	}
 
 	public void txstart(String[] filenames) {
-		for (String filename : filenames) {
-			checkListen(filename, new StartCommand(filenames, filename));
+		if (transactingFiles == null) {
+			for (String filename : filenames) {
+				checkListen(filename, new StartCommand(filenames, filename));
+			}
+			transactingFiles = filenames;
+		} else {
+			printError("already in transaction");
 		}
-		transactingFiles = filenames;
 	}
 
 	private void checkListen(String filename, FileCommand after) {
@@ -356,9 +372,7 @@ public class TDFSNode extends RIONode {
 	 * @param proposal
 	 *            The proposal to sendThat is
 	 */
-	public void prepare(int from, byte[] msg) {
-		Proposal p = new Proposal(msg);
-
+	public void prepare(int from, Proposal p) {
 		if (p.proposalNumber == -1) {
 			try {
 				p.proposalNumber = nextProposalNumber(p.filename);
@@ -440,7 +454,7 @@ public class TDFSNode extends RIONode {
 		} catch (NotListeningException e) {
 			Logger.error(this, e);
 		}
-		prepare(from, p.pack());
+		prepare(from, p);
 	}
 
 	/**
@@ -544,16 +558,12 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receiveRequestToListen(int from, String filename) {
 		if (!logFS.isListening(filename)) { // If the group doesn't exist
-			logFS.createGroup(filename);
-			for (Integer i : getCoordinators(filename)) {
-				if (i != addr)
-					RIOSend(i, MessageType.CreateGroup, Utility
-							.stringToByteArray(filename));
-			}
+			new ListenCommand(filename).execute(this);
 		}
 		List<Integer> list = fileListeners.get(filename);
 		if (list == null) {
 			list = new ArrayList<Integer>();
+			fileListeners.put(filename, list);
 		}
 		list.add(from);
 		RIOSend(from, MessageType.AddedListener, Utility
@@ -571,6 +581,7 @@ public class TDFSNode extends RIONode {
 	 *            The proposal, as a byte array
 	 */
 	public void receiveLearned(int from, byte[] msg) {
+		// TODO: HIGH: coordinators don't have to record these if not listening
 		Proposal p = new Proposal(msg);
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
 
