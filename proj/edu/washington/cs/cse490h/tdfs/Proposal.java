@@ -12,7 +12,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 public class Proposal {
 
 	static int HEADER_SIZE = 8;
-	static String packetDelimiter = " ";
+	static final String packetDelimiter = " ";
 	public String filename;
 	public LogEntry operation;
 	public Integer operationNumber;
