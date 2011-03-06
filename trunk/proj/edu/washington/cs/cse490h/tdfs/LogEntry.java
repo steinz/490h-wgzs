@@ -7,7 +7,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 // TODO: Contention friendly ops
 
 abstract class LogEntry {
-	static String packetDelimiter = " ";
+	static final String entryDelimiter = " ";
 
 	byte[] pack() {
 		return Utility.stringToByteArray(toString());
@@ -15,7 +15,7 @@ abstract class LogEntry {
 
 	static LogEntry unpack(byte[] bytes) {
 		String msg = Utility.byteArrayToString(bytes);
-		Tokenizer t = new Tokenizer(msg, packetDelimiter);
+		Tokenizer t = new Tokenizer(msg, entryDelimiter);
 		String cmd = t.next();
 
 		if (cmd.equals("Create")) {
@@ -26,13 +26,13 @@ abstract class LogEntry {
 			int address = Integer.parseInt(t.next());
 			return new LockLogEntry(address);
 		} else if (cmd.equals("TXAbort")) {
-			String[] filenames = t.rest().split(packetDelimiter);
+			String[] filenames = t.rest().split(entryDelimiter);
 			return new TXAbortLogEntry(filenames);
 		} else if (cmd.equals("TXCommit")) {
-			String[] filenames = t.rest().split(packetDelimiter);
+			String[] filenames = t.rest().split(entryDelimiter);
 			return new TXCommitLogEntry(filenames);
 		} else if (cmd.equals("TXStart")) {
-			String[] filenames = t.rest().split(packetDelimiter);
+			String[] filenames = t.rest().split(entryDelimiter);
 			return new TXStartLogEntry(filenames);
 		} else if (cmd.equals("Unlock")) {
 			int address = Integer.parseInt(t.next());
@@ -69,7 +69,7 @@ abstract class TXLogEntry extends LogEntry {
 	String joinFilenames() {
 		StringBuilder joined = new StringBuilder();
 		for (String f : filenames) {
-			joined.append(packetDelimiter);
+			joined.append(entryDelimiter);
 			joined.append(f);
 		}
 		return joined.toString();
@@ -100,7 +100,7 @@ class LockLogEntry extends MemberLogEntry {
 
 	@Override
 	public String toString() {
-		return "Lock" + packetDelimiter + address;
+		return "Lock" + entryDelimiter + address;
 	}
 }
 
@@ -168,7 +168,7 @@ class UnlockLogEntry extends MemberLogEntry {
 
 	@Override
 	public String toString() {
-		return "Unlock" + packetDelimiter + address;
+		return "Unlock" + entryDelimiter + address;
 	}
 }
 
@@ -183,6 +183,6 @@ class WriteLogEntry extends LogEntry {
 
 	@Override
 	public String toString() {
-		return "Write" + packetDelimiter + append + packetDelimiter + content;
+		return "Write" + entryDelimiter + append + entryDelimiter + content;
 	}
 }

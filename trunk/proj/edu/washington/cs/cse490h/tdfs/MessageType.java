@@ -17,32 +17,13 @@ public enum MessageType {
 
 	Ack(HandlingClass.RIOLayer), Handshake(HandlingClass.RIOLayer),
 
-	/*
-	 * TODO: HIGH: Rebuild coordinator state after coordinator failure
-	 */
-	CoordinatorRebooted(HandlingClass.TDFSNode),
+	Request(HandlingClass.TDFSNode), RequestToListen(HandlingClass.TDFSNode), AddedListener(
+			HandlingClass.TDFSNode), CreateGroup(HandlingClass.TDFSNode),
 
-	/*
-	 * TODO: HIGH: Coordinators tell other coordinators to start a new Paxos
-	 * group
-	 */
-	CreateGroup(HandlingClass.TDFSNode),
-
-	/*
-	 * TODO: HIGH: Tells a node that they have successfully joined a group,
-	 * contains filename and log
-	 */
-	Joined(HandlingClass.TDFSNode),
-
-	// TODO: HIGH: Ask the lead proposer to do something
-	Request(HandlingClass.TDFSNode), RequestToListen(HandlingClass.TDFSNode),
-	AddedListener(HandlingClass.TDFSNode),
-	
 	// Paxos Messages
 	Prepare(HandlingClass.TDFSNode), PromiseDenial(HandlingClass.TDFSNode), Promise(
 			HandlingClass.TDFSNode), Accept(HandlingClass.TDFSNode), Accepted(
-			HandlingClass.TDFSNode), Learned(HandlingClass.TDFSNode), OldOperation(
-			HandlingClass.TDFSNode);
+			HandlingClass.TDFSNode), Learned(HandlingClass.TDFSNode);
 
 	public enum HandlingClass {
 		RIOLayer, TDFSNode;
@@ -82,7 +63,7 @@ public enum MessageType {
 				if (mt.ordinal() == i) {
 					cached = mt;
 					ordinalToMessageTypeCache.put(i, cached);
-					break;
+					return cached;
 				}
 			}
 		}

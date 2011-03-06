@@ -13,82 +13,101 @@ import edu.washington.cs.cse490h.lib.Utility;
 import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
+
 	/*
+	 * Giant todo list...
+	 * 
+	 * TODO: HIGH: Remove explicit locks, have TX entries implicitly lock/unlock
+	 * 
 	 * TODO: HIGH: Acceptor persistent state
 	 * 
 	 * TODO: HIGH: receivedLearn updates to commandGraph
 	 * 
-	 * TODO: HIGH: receivedPromiseDenial
+	 * TODO: HIGH: Implement receivedPromiseDenial - explicitly call
+	 * command.retry somehow, cancel timeout
 	 * 
-	 * Explicitly call command.retry somehow, cancel timeout
+	 * TODO: HIGH: author headers at the top of each file
 	 * 
-	 * TODO: OPT: GC logs
-	 * 
-	 * TODO: OPT:
-	 */
-
-	/*
-	 * TODO: HIGH:
-	 * 
-	 * OnCommand Handlers:
-	 * 
-	 * TXStart(f1); x = Get(f1); Put(f1, "..."); TXCommit(); ->
-	 * 
-	 * Lock(f1); TXStart(f1); Get(f1); Put(f1, "..."); TXCommit(f1); Unlock(f1);
-	 * 
-	 * Paxos Flow / Correctness
+	 * TODO: HIGH: Verify Paxos Flow / Correctness
 	 * 
 	 * (Req -1>) Prepare -> OldOp -1> (done) | PromiseDenial -1> (done) |
 	 * Promise -1> Accept -> AcceptDenial -1> (done) | Accepted -1> Learned ->
 	 * (done)
 	 * 
-	 * Stable Storage
-	 */
-
-	/*
-	 * TODO: Support dynamic coordinator groups:
+	 * TODO: txaborts and txcommits currently use commandGraph.addCheckpoint,
+	 * which means they don't happen parallel for no good reason. They should
+	 * depend on all tails, and everything added after them should depend on
+	 * them, but they shouldn't depend on each other.
 	 * 
-	 * Include the coordinator count as part of the filename (not necessarily
-	 * literally), and then use a biased hash function so that the expected
-	 * distribution of hash codes stays ~uniform even when the number of
-	 * coordinators changes: as long as nodes usually know the actual total
-	 * number of coordinators, the distribution of hash codes should be good
-	 */
-
-	/*
-	 * TODO: HIGH: Coordinator is lead proposer/learner - if can't reach
-	 * coordinator, go to second or third coordinator ((hash + {1,2}) %
-	 * nodeCount)
+	 * TODO: Support a StopListening command clients can use when they lose
+	 * interest in a file. This way they can also request to listen from a
+	 * second coordinator if one becomes unresponsive and clean up when the
+	 * first becomes responsive again
 	 * 
-	 * Client sends to lead (operationNumber, operation) pairs it wants the
-	 * leader to propose
+	 * TODO: Support multiple 2PC coordinators for reliability - cold
+	 * replacements with leases should be fine
+	 * 
+	 * TODO: OPT: GC logs
+	 * 
+	 * TODO: Lead proposer support - send MessageType.Request to elected lead
+	 * proposer for lively Paxos
+	 * 
+	 * TODO: Consistent Hashing?
+	 * 
+	 * TODO: Support dynamic coordinator groups -
+	 * 
+	 * Interesting idea: include the coordinator count as part of the filename
+	 * (not necessarily literally), and then use a biased hash function so that
+	 * the expected distribution of hash codes stays ~uniform even when the
+	 * number of coordinators changes: as long as nodes usually know the actual
+	 * total number of coordinators, the distribution of hash codes should be
+	 * good.
 	 */
 
 	/**
-	 * BEGIN 2PC structures
+	 * Delimiter used by the parsers (client to library)
 	 */
-	private static final int TwoPCCoordinatorAdress = 100;
-
-	private final int TXTIMEOUT = 20;
-
-	private Map<String, String[]> fileTransactionMap;
+	private static final String commandDelim = " ";
 
 	/**
-	 * END 2PC structures
+	 * The total, static number of coordinators with addresses
+	 * [0,coordinatorCount)
 	 */
-
-	CommandGraph commandGraph;
-
-	private static int coordinatorCount = 4;
+	private static final int coordinatorCount = 4;
 
 	/**
-	 * ceil(cpf / 2) - 1 coordinators can go down
+	 * The static number of coordinators per file
+	 * 
+	 * Progress can be made as long as floor(coordinatorsPerFile / 2) + 1
+	 * coordinators are alive
 	 */
-	private static int coordinatorsPerFile = 3;
+	private static final int coordinatorsPerFile = 3;
 
-	// TODO: HIGH: Encapsulate Paxos state in objects for handoff Commands
+	/**
+	 * We currently only support a single 2PC coordinator with this address
+	 */
+	private static final int twoPCCoordinatorAdress = 100;
 
-	private Map<String, List<Integer>> fileListeners;
+	/**
+	 * Time between when the 2PC Coordinator learns about a transaction starting
+	 * and will abort it
+	 */
+	private static final int txTimeout = 50;
+
+	/**
+	 * Graph of commands used by clients for concurrency control
+	 */
+	private CommandGraph commandGraph;
+
+	/**
+	 * In memory logs of recent file changes
+	 */
+	protected LogFS logFS;
+
+	/**
+	 * List of transacting files used only by the parsers (client to library)
+	 */
+	private String[] transactingFiles;
 
 	/**
 	 * PAXOS Structures
@@ -101,24 +120,45 @@ public class TDFSNode extends RIONode {
 	private Map<String, Integer> acceptorsResponded;
 
 	/**
-	 * Proposer only: Number of acceptors that have responded with a promise
+	 * List of addresses this coordinator passes on changes to when it learns a
+	 * file changes
 	 */
-	private Map<String, Integer> promisesReceived;
+	private Map<String, List<Integer>> fileListeners;
 
 	/**
 	 * Last proposal number promised for a given file
 	 */
 	private Map<String, Integer> lastProposalNumberPromised;
 
+	/**
+	 * Last proposal number prepared for a given file
+	 */
 	private Map<String, Integer> lastProposalNumbersSent;
 
-	LogFS logFS;
+	/**
+	 * Proposer only: Number of acceptors that have responded with a promise
+	 */
+	private Map<String, Integer> promisesReceived;
+
+	/**
+	 * 2PC
+	 * 
+	 * TODO: HIGH: WAYNE: Describe what this is for
+	 */
+	private Map<String, String[]> fileTransactionMap;
+
+	/**
+	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
+	 */
+	private static int hashFilename(String filename) {
+		return filename.hashCode() % coordinatorCount;
+	}
 
 	@Override
 	public void start() {
-		this.logFS = new LogFileSystem();
-		this.lastProposalNumbersSent = new HashMap<String, Integer>();
+		// Client
 		this.commandGraph = new CommandGraph(this);
+		this.logFS = new LogFileSystem();
 		this.transactingFiles = null;
 
 		// Paxos
@@ -133,11 +173,12 @@ public class TDFSNode extends RIONode {
 
 	}
 
-	private static String commandDelim = " ";
-
+	/**
+	 * Extracts the first word in line as the cmd and calls cmdParser via
+	 * dynamic dispatch
+	 */
 	@Override
 	public void onCommand(String line) {
-		// TODO: HIGH: Parse and call <cmd>Handler
 		Tokenizer t = new Tokenizer(line, commandDelim);
 		String command = t.next();
 		if (command == null) {
@@ -158,12 +199,6 @@ public class TDFSNode extends RIONode {
 			printError("invalid command: " + line);
 		}
 	}
-
-	/*
-	 * TODO: HIGH: Re-enstate handlers, but with better args so they are caller
-	 * from other, higher level handlers. This means we have to do parsing
-	 * somewhere else.
-	 */
 
 	public void appendParser(Tokenizer t) {
 		String filename = t.next();
@@ -191,8 +226,6 @@ public class TDFSNode extends RIONode {
 		String contents = t.rest();
 		put(filename, contents);
 	}
-
-	private String[] transactingFiles;
 
 	public void txabortParser(Tokenizer t) {
 		txabort(transactingFiles);
@@ -227,6 +260,17 @@ public class TDFSNode extends RIONode {
 		checkListen(filename, new PutCommand(filename, contents));
 	}
 
+	private void checkListen(String filename, FileCommand after) {
+		if (!logFS.isListening(filename)) {
+			CommandNode l = commandGraph
+					.addCommand(new ListenCommand(filename));
+			commandGraph.addCommand(after);
+			l.execute();
+		} else {
+			commandGraph.addCommand(after).execute();
+		}
+	}
+
 	public void txabort(String[] filenames) {
 		if (transactingFiles != null) {
 			for (String filename : filenames) {
@@ -251,7 +295,19 @@ public class TDFSNode extends RIONode {
 
 	public void txstart(String[] filenames) {
 		if (transactingFiles == null) {
+			// sort filenames
+			List<String> sorted = new ArrayList<String>(filenames.length);
 			for (String filename : filenames) {
+				sorted.add(filename);
+			}
+			Collections.sort(sorted);
+			filenames = sorted.toArray(filenames);
+
+			for (String filename : filenames) {
+				/*
+				 * uses addCheckpoint, so each listen/start depends on the
+				 * previous txstart and they get executed and finish in order
+				 */
 				checkListen(filename, new StartCommand(filenames, filename));
 			}
 			transactingFiles = filenames;
@@ -260,19 +316,8 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	private void checkListen(String filename, FileCommand after) {
-		if (!logFS.isListening(filename)) {
-			CommandNode l = commandGraph
-					.addCommand(new ListenCommand(filename));
-			commandGraph.addCommand(after);
-			l.execute();
-		} else {
-			commandGraph.addCommand(after).execute();
-		}
-	}
-
 	/**
-	 * Non-FileCommand version
+	 * non-FileCommand version used for transactions
 	 */
 	private void checkListen(String filename, Command after) {
 		if (!logFS.isListening(filename)) {
@@ -285,10 +330,15 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
+	/**
+	 * Dynamically dispatches messages to receiveType(int, String|byte[])
+	 * 
+	 * Routes all messages to learn for 2PC coordinators
+	 */
 	@Override
 	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
 		// 2PC handler
-		if (addr == TwoPCCoordinatorAdress) {
+		if (addr == twoPCCoordinatorAdress) {
 			learn(from, msg);
 			return;
 		}
@@ -337,10 +387,6 @@ public class TDFSNode extends RIONode {
 			lastProposalNumbersSent.put(filename, number);
 			return number;
 		}
-	}
-
-	private static int hashFilename(String filename) {
-		return filename.hashCode() % coordinatorCount;
 	}
 
 	public List<Integer> getCoordinators(String filename) {
@@ -500,7 +546,9 @@ public class TDFSNode extends RIONode {
 		if (logFS.nextLogNumber(p.filename) > p.operationNumber) {
 			LogEntry entry = logFS.getLogEntry(p.filename, p.operationNumber);
 			if (entry != null) {
-				RIOSend(from, MessageType.OldOperation, entry.pack());
+				Proposal r = new Proposal(entry, p.filename, p.operationNumber,
+						-1);
+				RIOSend(from, MessageType.Learned, r.pack());
 				// TODO: HIGH: Get them all the way up to date
 			} else {
 				// TODO: HIGH: GC'd operation, do something
@@ -545,7 +593,7 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void receivePromiseDenial(int from, byte[] msg) {
-		// TODO: HIGH: Implement receivePromiseDenial
+
 	}
 
 	/**
@@ -697,7 +745,7 @@ public class TDFSNode extends RIONode {
 		}
 		String[] args = { filename };
 		Callback cb = new Callback(cbMethod, this, args);
-		addTimeout(cb, this.TXTIMEOUT);
+		addTimeout(cb, TDFSNode.txTimeout);
 	}
 
 	/**
