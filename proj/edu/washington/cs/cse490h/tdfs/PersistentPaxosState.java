@@ -28,21 +28,21 @@ public class PersistentPaxosState {
 	 * The node this FS is associated with - used to access the underlying file
 	 * system and for logging
 	 */
-	protected TDFSNode n;
+	private TDFSNode n;
 
-	protected PersistentStorageOutputStream acceptedStream;
+	private PersistentStorageOutputStream acceptedStream;
 
-	protected PersistentStorageOutputStream promisedStream;
-
-	/**
-	 * Last proposal number promised for a given file
-	 */
-	private Map<String, Integer> promised;
+	private PersistentStorageOutputStream promisedStream;
 
 	/**
-	 * filename -> (opNum -> acceptedVal)
+	 * Last propNum promised for (file, opNum)
 	 */
-	private Map<String, Proposal> accepted;
+	private Map<Tuple<String, Integer>, Integer> promised;
+
+	/**
+	 * Accepted ((file, opNum), value) with highest propNum
+	 */
+	private Map<Tuple<String, Integer>, Proposal> accepted;
 
 	public PersistentPaxosState(TDFSNode n) {
 		try {
@@ -55,8 +55,9 @@ public class PersistentPaxosState {
 		}
 	}
 
-	protected void accept(Proposal value) {
-		accepted.put(value.filename, value);
+	public void accept(Proposal value) {
+		accepted.put(new Tuple<String, Integer>(value.filename,
+				value.operationNumber), value);
 		try {
 			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 			DataOutputStream out = new DataOutputStream(bytes);
@@ -70,13 +71,24 @@ public class PersistentPaxosState {
 			throw new RuntimeException(e);
 		}
 	}
+	
+	public Proposal highestAcceptedProposal(String filename, int operationNumber) {
+		return accepted.get(new Tuple<String, Integer>(filename, operationNumber));
+	}
+	
+	public Integer highestPromisedProposalNumber(String filename, int operationNumber) {
+		return promised.get(new Tuple<String, Integer>(filename, operationNumber));
+	}
 
-	protected void promise(String filename, int proposalNumber) {
-		promised.put(filename, proposalNumber);
+	public void promise(String filename, int operationNumber,
+			int proposalNumber) {
+		promised.put(new Tuple<String, Integer>(filename, operationNumber),
+				proposalNumber);
 		try {
 			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 			DataOutputStream out = new DataOutputStream(bytes);
 			out.writeInt(proposalNumber);
+			out.writeInt(operationNumber);
 			out.writeInt(2 * filename.length());
 			out.writeChars(filename);
 			out.close();
@@ -87,7 +99,7 @@ public class PersistentPaxosState {
 		}
 	}
 
-	protected void rebuild() {
+	private void rebuild() {
 		try {
 			DataInputStream in = new DataInputStream(n
 					.getInputStream(acceptedLog));
@@ -98,7 +110,8 @@ public class PersistentPaxosState {
 					throw new EOFException();
 				}
 				Proposal p = new Proposal(bytes);
-				accepted.put(p.filename, p);
+				accepted.put(new Tuple<String, Integer>(p.filename,
+						p.operationNumber), p);
 			}
 		} catch (EOFException e) {
 			// done
@@ -111,13 +124,15 @@ public class PersistentPaxosState {
 					.getInputStream(promisedLog));
 			while (true) {
 				int proposalNumber = in.readInt();
+				int operationNumber = in.readInt();
 				int len = in.readInt();
 				byte[] bytes = new byte[len];
 				if (in.read(bytes) != len) {
 					throw new EOFException();
 				}
 				String filename = new String(bytes);
-				promised.put(filename, proposalNumber);
+				promised.put(new Tuple<String, Integer>(filename,
+						operationNumber), proposalNumber);
 			}
 		} catch (EOFException e) {
 			// done

@@ -24,7 +24,7 @@ abstract class Command {
 		int opNum = node.logFS.nextLogNumber(filename);
 		int propNum = node.nextProposalNumber(filename);
 		Proposal proposal = new Proposal(op, filename, opNum, propNum);
-		node.prepare(node.addr, proposal);
+		node.prepare(proposal);
 	}
 }
 
