@@ -40,7 +40,7 @@ public class Proposal {
 		ByteBuffer originalBuf = ByteBuffer.allocate(4);
 		proposalBuf.putInt(proposalNumber);
 		operationBuf.putInt(operationNumber);
-		originalBuf.putInt(originalProposal);
+		originalBuf.putInt(originalProposal); 
 		try {
 			out.write(operationBuf.array());
 			out.write(proposalBuf.array());

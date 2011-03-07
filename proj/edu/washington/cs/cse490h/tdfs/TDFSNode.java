@@ -53,7 +53,7 @@ public class TDFSNode extends RIONode {
 	 * detect if we're getting Paxos messages from other coordinators except the
 	 * coordinator we expect to be notifying us of log changes
 	 * 
-	 * TODO: Enforce transactingFiles list
+	 * TODO: abortCommands for CommandNodes should propose TXTryAborts, not TXAborts
 	 * 
 	 * TODO: Test w/ handshakes
 	 * 
