@@ -10,22 +10,22 @@ import java.util.Scanner;
 import edu.washington.cs.cse490h.lib.Utility;
 
 public class Proposal {
-
-	// TODO: HIGH: final variables?
-	
-	static final int HEADER_SIZE = 8;
+	static final int HEADER_SIZE = 12;
 	static final String packetDelimiter = " ";
 	public String filename;
 	public LogEntry operation;
 	public int operationNumber;
 	public int proposalNumber;
-
+	
+	public int originalProposal;
+	
 	public Proposal(LogEntry op, String filename, int operationNumber,
 			int proposalNumber) {
 		this.filename = filename;
 		this.operationNumber = operationNumber;
 		this.proposalNumber = proposalNumber;
 		this.operation = op;
+		this.originalProposal = -1;
 	}
 
 	public Proposal(byte[] buf) {
@@ -37,11 +37,14 @@ public class Proposal {
 
 		ByteBuffer operationBuf = ByteBuffer.allocate(4);
 		ByteBuffer proposalBuf = ByteBuffer.allocate(4);
+		ByteBuffer originalBuf = ByteBuffer.allocate(4);
 		proposalBuf.putInt(proposalNumber);
 		operationBuf.putInt(operationNumber);
+		originalBuf.putInt(originalProposal);
 		try {
 			out.write(operationBuf.array());
 			out.write(proposalBuf.array());
+			out.write(originalBuf.array());
 		} catch (IOException e) {
 			throw new RuntimeException();
 		}
@@ -69,6 +72,7 @@ public class Proposal {
 		try {
 			this.operationNumber = in.readInt();
 			this.proposalNumber = in.readInt();
+			this.originalProposal = in.readInt();
 
 			Scanner s = new Scanner(in);
 			s.useDelimiter(packetDelimiter);

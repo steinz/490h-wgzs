@@ -18,38 +18,67 @@ public class CommandGraph {
 		private Command command;
 		private int locks;
 		private List<CommandNode> children;
+		private boolean done;
 
 		public CommandNode(Command c) {
 			this.command = c;
 			this.locks = 0;
 			this.children = new ArrayList<CommandNode>();
+			this.done = false;
 		}
 
+		/**
+		 * Returns true if the command is already done, otherwise returns
+		 * whether or not execute actually executed
+		 */
 		public boolean execute() {
-			// TODO: OPT: Fail after x retrys, declare file unavailable
-			try {
-				String[] params = { "edu.washington.cs.cse490h.tdfs.TDFSNode" };
-				Object[] args = { node };
-				Callback cb = new Callback(Callback.getMethod("retry", command,
-						params), command, args);
-				node.addTimeout(cb, commandRetryTimeout);
-			} catch (Exception e) {
-				node.printError(e);
+			if (done) {
+				return true;
 			}
 
 			if (this.locks == 0) {
+				// TODO: OPT: Fail after x retrys, declare file unavailable
+				try {
+					String[] params = {};
+					Object[] args = {};
+					Callback cb = new Callback(Callback.getMethod("execute",
+							this, params), this, args);
+					node.addTimeout(cb, commandRetryTimeout);
+				} catch (Exception e) {
+					node.printError(e);
+				}
+
 				if (command instanceof FileCommand) {
 					FileCommand fc = (FileCommand) command;
 					heads.put(fc.filename, this);
 				} else {
 					checkpointHead = this;
 				}
-				command.execute(node);
+				try {
+					command.execute(node);
+				} catch (Exception e) {
+					abort();
+				}
 			}
 			return this.locks == 0;
 		}
 
+		public void abort() {
+			checkpointHead = checkpointTail = null;
+			heads.clear();
+			tails.clear();
+			abortRecur();
+		}
+		
+		private void abortRecur() {
+			this.done = true;
+			for (CommandNode node : children) {
+				node.abortRecur();
+			}
+		}
+		
 		public void done() {
+			this.done = true;
 			for (CommandNode node : children) {
 				node.parentFinished();
 			}
@@ -92,6 +121,10 @@ public class CommandGraph {
 		for (Entry<String, CommandNode> entry : tails.entrySet()) {
 			addEdge(entry.getValue(), n);
 		}
+		if (checkpointTail != null) {
+			addEdge(checkpointTail, n);
+		}
+
 		tails.clear();
 		checkpointTail = n;
 
