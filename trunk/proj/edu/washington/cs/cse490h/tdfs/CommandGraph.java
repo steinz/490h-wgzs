@@ -145,6 +145,9 @@ public class CommandGraph {
 	public void checkpointDone(String filename) {
 		if (checkpointHeadFilename == filename) {
 			try {
+				if (checkpointTail == checkpointHead) {
+					checkpointTail = null;
+				}
 				checkpointHead.done();
 				checkpointHead = null;
 				checkpointHeadFilename = null;
@@ -165,7 +168,12 @@ public class CommandGraph {
 		if (c.operationNumber == operationNumber
 				&& c.proposalNumber == proposalNumber) {
 			try {
-				heads.remove(filename).done();
+				CommandNode head = 	heads.remove(filename);
+				CommandNode tail = tails.get(filename);
+				if (tail.equals(head)) {
+					tails.remove(filename);
+				}
+				head.done();
 			} catch (NullPointerException e) {
 				throw new RuntimeException(
 						"filenameDone called on unlocked filename", e);
