@@ -15,36 +15,12 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
-	 * Giant todo list...
-	 * 
-	 * TODO: HIGH: Remove explicit locks, have TX entries implicitly lock/unlock
-	 * 
 	 * TODO: HIGH: receivedLearn updates to commandGraph
 	 * 
-	 * TODO: HIGH: Fix Paxos Correctness - fixed the below bug I think
-	 * 
-	 * If I keep propsing after a value is chosen, will I will get promises
-	 * back, and then I will send accepts - what keeps me from getting
-	 * sufficient accepted messages back - promises should include the value for
-	 * the largest proposal number accepted, which is the only value the
-	 * proposer is allowed to propose (in what paper calls a proposal, we call
-	 * an accept)
-	 * 
-	 * TODO: HIGH: I think it's safer to have proposer/learner Paxos DSs use
-	 * (filename, opNum) as keys. We should also make sure we clean them up
-	 * sometime too - I think when we learn that entry
-	 * 
-	 * TODO: HIGH: Command retries need to increment opNum at some point
-	 * 
-	 * TODO: HIGH: Commands need to verify there aren't any "holes" in the log
-	 * before verifying things
-	 * 
-	 * TODO: HIGH: Implement receivedPromiseDenial - explicitly call
-	 * command.retry somehow to send a higher proposal number, cancel timeout
+	 * TODO: HIGH: Cleanup Paxos (filename, opNum) -> X data structures when we
+	 * learn entries for those keys.
 	 * 
 	 * TODO: HIGH: Verify 2PC Coordinator correctness
-	 * 
-	 * TODO: HIGH: WAYNE: fileTransactionMap descrip
 	 * 
 	 * TODO: HIGH: Update Paxos comments
 	 * 
@@ -118,7 +94,7 @@ public class TDFSNode extends RIONode {
 	/**
 	 * We currently only support a single 2PC coordinator with this address
 	 */
-	private static final int twoPCCoordinatorAdress = coordinatorCount + 1;
+	private static final int twoPCCoordinatorAddress = coordinatorCount + 1;
 
 	/**
 	 * Time between when the 2PC Coordinator learns about a transaction starting
@@ -150,7 +126,7 @@ public class TDFSNode extends RIONode {
 	 * Learner only: Number of acceptors that have contacted the learner about
 	 * accepting a particular N,V pair
 	 */
-	private Map<String, Integer> acceptorsResponded;
+	private Map<Tuple<String, Integer>, Integer> acceptorsResponded;
 
 	/**
 	 * List of addresses this coordinator passes on changes to when it learns a
@@ -161,15 +137,29 @@ public class TDFSNode extends RIONode {
 	/**
 	 * Last proposal number prepared for a given file
 	 */
-	private Map<String, Integer> lastProposalNumbersSent;
+	private Map<Tuple<String, Integer>, Integer> lastProposalNumbersSent;
 
 	/**
 	 * Proposer only: Number of acceptors that have responded with a promise
 	 */
-	private Map<String, Integer> promisesReceived;
+	private Map<Tuple<String, Integer>, Integer> promisesReceived;
+
+	/**
+	 * Proposer only: Highest proposal value accepted from received promises
+	 */
+	private Map<Tuple<String, Integer>, Proposal> highestProposalReceived;
 
 	/**
 	 * 2PC
+	 * 
+	 * Ties individual files to transactions, so for example, if a client is
+	 * doing a transaction on files f1, f2, f3, the map would look like:
+	 * 
+	 * f1 -> f1, f2, f3
+	 * 
+	 * f2 -> f1, f2, f3
+	 * 
+	 * etc.
 	 */
 	private Map<String, String[]> fileTransactionMap;
 
@@ -189,11 +179,12 @@ public class TDFSNode extends RIONode {
 		this.transactingFiles = null;
 
 		// Paxos
-		this.acceptorsResponded = new HashMap<String, Integer>();
+		this.acceptorsResponded = new HashMap<Tuple<String, Integer>, Integer>();
 		this.fileListeners = new HashMap<String, List<Integer>>();
-		this.lastProposalNumbersSent = new HashMap<String, Integer>();
+		this.lastProposalNumbersSent = new HashMap<Tuple<String, Integer>, Integer>();
 		this.paxosState = new PersistentPaxosState(this);
-		this.promisesReceived = new HashMap<String, Integer>();
+		this.promisesReceived = new HashMap<Tuple<String, Integer>, Integer>();
+		this.highestProposalReceived = new HashMap<Tuple<String, Integer>, Proposal>();
 
 		// 2PC
 		fileTransactionMap = new HashMap<String, String[]>();
@@ -224,6 +215,22 @@ public class TDFSNode extends RIONode {
 			printError(e.getCause());
 		} catch (Exception e) {
 			printError("invalid command: " + line);
+		}
+	}
+
+	private String username;
+
+	public void addFriendParser(Tokenizer t) {
+		String friendName = t.next();
+
+		String[] filenames = { username, friendName };
+		txstart(filenames);
+		try {
+			append(username + ".friends", friendName);
+			append(friendName + ".friends", username);
+			txcommit(filenames);
+		} catch (Exception e) {
+			txabort(filenames);
 		}
 	}
 
@@ -365,7 +372,7 @@ public class TDFSNode extends RIONode {
 	@Override
 	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
 		// 2PC handler
-		if (addr == twoPCCoordinatorAdress) {
+		if (addr == twoPCCoordinatorAddress) {
 			learn(from, msg);
 			return;
 		}
@@ -399,9 +406,14 @@ public class TDFSNode extends RIONode {
 	/**
 	 * Since there is no globally consistent list of proposers, we assign
 	 * proposal numbers round robin to each node in the system
+	 * 
+	 * @param operationNumber
+	 *            TODO
 	 */
-	public int nextProposalNumber(String filename) throws NotListeningException {
-		Integer lastNumSent = lastProposalNumbersSent.get(filename);
+	public int nextProposalNumber(String filename, int operationNumber)
+			throws NotListeningException {
+		Integer lastNumSent = lastProposalNumbersSent
+				.get(new Tuple<String, Integer>(filename, operationNumber));
 		int number;
 		if (lastNumSent == null) {
 			// use address as offset
@@ -410,7 +422,8 @@ public class TDFSNode extends RIONode {
 			// increment last sent by proposer count
 			number = lastNumSent + maxTotalNodeCount;
 		}
-		lastProposalNumbersSent.put(filename, number);
+		lastProposalNumbersSent.put(new Tuple<String, Integer>(filename,
+				operationNumber), number);
 		return number;
 	}
 
@@ -449,8 +462,10 @@ public class TDFSNode extends RIONode {
 	public void prepare(Proposal p) {
 		List<Integer> participants = getCoordinators(p.filename);
 
+		byte[] packed = p.pack();
+
 		for (Integer next : participants) {
-			RIOSend(next, MessageType.Prepare, p.pack());
+			RIOSend(next, MessageType.Prepare, packed);
 		}
 	}
 
@@ -498,7 +513,8 @@ public class TDFSNode extends RIONode {
 
 		Integer responded = acceptorsResponded.get(p.filename);
 		responded = (responded == null) ? 1 : responded + 1;
-		acceptorsResponded.put(p.filename, responded);
+		acceptorsResponded.put(new Tuple<String, Integer>(p.filename,
+				p.operationNumber), responded);
 
 		if (responded > coordinators.size() / 2) {
 			RIOSend(this.addr, MessageType.Learned, msg);
@@ -516,7 +532,7 @@ public class TDFSNode extends RIONode {
 		Proposal p = new Proposal(msg);
 		try {
 			p.operationNumber = logFS.nextLogNumber(p.filename);
-			p.proposalNumber = nextProposalNumber(p.filename);
+			p.proposalNumber = nextProposalNumber(p.filename, p.operationNumber);
 		} catch (NotListeningException e) {
 			Logger.error(this, e);
 		}
@@ -575,19 +591,23 @@ public class TDFSNode extends RIONode {
 			}
 			return;
 		} else if (p.proposalNumber <= largestProposalNumberPromised) {
-			String highestProposalNumber = paxosState
+			int highestProposalNumber = paxosState
 					.highestPromisedProposalNumber(p.filename,
-							p.operationNumber)
-					+ "";
-			RIOSend(from, MessageType.PromiseDenial,
-					Utility.stringToByteArray(highestProposalNumber));
+							p.operationNumber);
+
+			while (p.proposalNumber < highestProposalNumber) {
+				// HACK HACK HACk
+				p.proposalNumber += maxTotalNodeCount;
+			}
+
+			RIOSend(from, MessageType.PromiseDenial, p.pack());
 			return;
 		} else {
 			paxosState.promise(p.filename, p.operationNumber, p.proposalNumber);
 			Proposal highestAccepted = paxosState.highestAcceptedProposal(
 					p.filename, p.operationNumber);
 			if (highestAccepted != null) {
-				highestAccepted.proposalNumber = p.proposalNumber;
+				highestAccepted.originalProposal = p.proposalNumber;
 				RIOSend(from, MessageType.Promise, highestAccepted.pack());
 			} else {
 				RIOSend(from, MessageType.Promise, p.pack());
@@ -606,20 +626,35 @@ public class TDFSNode extends RIONode {
 		Proposal p = new Proposal(msg);
 		List<Integer> coordinators = getCoordinators(p.filename);
 
-		Integer responded = promisesReceived.get(p.filename);
+		Integer responded = promisesReceived.get(new Tuple<String, Integer>(
+				p.filename, p.operationNumber));
 		responded = (responded == null) ? 1 : responded + 1;
-		promisesReceived.put(p.filename, responded);
+		promisesReceived.put(new Tuple<String, Integer>(p.filename,
+				p.operationNumber), responded);
+
+		Proposal highestResponse = highestProposalReceived
+				.get(new Tuple<String, Integer>(p.filename, p.operationNumber));
+		// BAM!
+		if (highestResponse == null
+				|| (p.originalProposal != -1 && (highestResponse.originalProposal == -1 || highestResponse.proposalNumber < p.proposalNumber))) {
+			highestResponse = p;
+			highestProposalReceived.put(new Tuple<String, Integer>(p.filename,
+					p.operationNumber), p);
+		}
 
 		if (responded > coordinators.size() / 2) {
+			byte[] packed = highestResponse.pack();
 			for (Integer i : coordinators) {
-				RIOSend(i, MessageType.Accept, msg);
+				RIOSend(i, MessageType.Accept, packed);
 			}
-			promisesReceived.remove(p.filename);
+			promisesReceived.remove(new Tuple<String, Integer>(p.filename,
+					p.operationNumber));
 		}
 	}
 
 	public void receivePromiseDenial(int from, byte[] msg) {
-
+		// PACK, UNPACK!
+		prepare(new Proposal(msg));
 	}
 
 	/**
@@ -637,6 +672,7 @@ public class TDFSNode extends RIONode {
 		List<Integer> list = fileListeners.get(filename);
 		if (list == null) {
 			list = new ArrayList<Integer>();
+			list.add(twoPCCoordinatorAddress);
 			fileListeners.put(filename, list);
 		}
 		list.add(from);
@@ -787,10 +823,12 @@ public class TDFSNode extends RIONode {
 		for (String file : files) {
 			List<Integer> coordinators = getCoordinators(file);
 			Proposal newProposal = new Proposal(new TXCommitLogEntry(files),
-					file, logFS.nextLogNumber(file), nextProposalNumber(file));
+					file, logFS.nextLogNumber(file), nextProposalNumber(file,
+							logFS.nextLogNumber(file)));
 
+			byte[] packed = newProposal.pack();
 			for (Integer addr : coordinators) {
-				RIOSend(addr, MessageType.Prepare, newProposal.pack());
+				RIOSend(addr, MessageType.Prepare, packed);
 			}
 		}
 	}
