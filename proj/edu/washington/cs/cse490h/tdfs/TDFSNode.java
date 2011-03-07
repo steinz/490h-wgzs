@@ -15,9 +15,17 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
-	 * TODO: HIGH: If a node prepares a txstart, but that txstart is not accepted (possibly
-	 * because another value has been accepted for that proposal number), then the node
-	 * will think it is in a tx even though it is not, because the txstart was not accepted.
+	 * TODO: HIGH: Verify not proposing things on txing files
+	 * 
+	 * TODO: HIGH: Node count config commands
+	 * 
+	 * TODO: HIGH: Is there any reason coordinators should auto-listen to all
+	 * files they coordinate? I don't think it's necessary.
+	 * 
+	 * TODO: HIGH: If a node prepares a txstart, but that txstart is not
+	 * accepted (possibly because another value has been accepted for that
+	 * proposal number), then the node will think it is in a tx even though it
+	 * is not, because the txstart was not accepted.
 	 * 
 	 * TODO: HIGH: When listener joins group, it needs the latest copy of the
 	 * log
@@ -39,6 +47,14 @@ public class TDFSNode extends RIONode {
 	 * Promise -1> Accept -> AcceptDenial -1> (done) | Accepted -1> Learned ->
 	 * (done)
 	 * 
+	 * TODO: re-request to listen when notifying coordinator goes down: maybe
+	 * detect if we're getting Paxos messages from other coordinators except the
+	 * coordinator we expect to be notifying us of log changes
+	 * 
+	 * TODO: Enforce transactingFiles list
+	 * 
+	 * TODO: Test w/ handshakes
+	 * 
 	 * TODO: Logger config
 	 * 
 	 * TODO: txaborts and txcommits currently use commandGraph.addCheckpoint,
@@ -53,6 +69,8 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * TODO: Support multiple 2PC coordinators for reliability - cold
 	 * replacements with leases should be fine
+	 * 
+	 * TODO: Contention friendly ops - coordinator declare lead proposer
 	 * 
 	 * TODO: OPT: GC logs
 	 * 
@@ -419,9 +437,6 @@ public class TDFSNode extends RIONode {
 	/**
 	 * Since there is no globally consistent list of proposers, we assign
 	 * proposal numbers round robin to each node in the system
-	 * 
-	 * @param operationNumber
-	 *            TODO
 	 */
 	public int nextProposalNumber(String filename, int operationNumber)
 			throws NotListeningException {
@@ -492,8 +507,8 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receiveAccept(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
-		if (p.proposalNumber >= paxosState.highestPromised(
-				p.filename, p.operationNumber)) {
+		if (p.proposalNumber >= paxosState.highestPromised(p.filename,
+				p.operationNumber)) {
 			paxosState.accept(p);
 			List<Integer> coordinators = getCoordinators(p.filename);
 			for (int address : coordinators) {
@@ -599,8 +614,8 @@ public class TDFSNode extends RIONode {
 	public void receivePrepare(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
 
-		Integer largestProposalNumberPromised = paxosState
-				.highestPromised(p.filename, p.operationNumber);
+		Integer largestProposalNumberPromised = paxosState.highestPromised(
+				p.filename, p.operationNumber);
 		if (largestProposalNumberPromised == null) {
 			largestProposalNumberPromised = -1;
 		}
@@ -617,9 +632,8 @@ public class TDFSNode extends RIONode {
 			}
 			return;
 		} else if (p.proposalNumber <= largestProposalNumberPromised) {
-			int highestProposalNumber = paxosState
-					.highestPromised(p.filename,
-							p.operationNumber);
+			int highestProposalNumber = paxosState.highestPromised(p.filename,
+					p.operationNumber);
 
 			while (p.proposalNumber < highestProposalNumber) {
 				// HACK HACK HACk
@@ -630,8 +644,8 @@ public class TDFSNode extends RIONode {
 			return;
 		} else {
 			paxosState.promise(p.filename, p.operationNumber, p.proposalNumber);
-			Proposal highestAccepted = paxosState.highestAccepted(
-					p.filename, p.operationNumber);
+			Proposal highestAccepted = paxosState.highestAccepted(p.filename,
+					p.operationNumber);
 			if (highestAccepted != null) {
 				highestAccepted.originalProposal = p.proposalNumber;
 				RIOSend(from, MessageType.Promise, highestAccepted.pack());
@@ -696,8 +710,8 @@ public class TDFSNode extends RIONode {
 			new ListenCommand(filename).execute(this);
 		}
 		fileListeners.get(filename).add(from);
-		RIOSend(from, MessageType.AddedListener,
-				Utility.stringToByteArray(filename));
+		RIOSend(from, MessageType.AddedListener, Utility
+				.stringToByteArray(filename));
 	}
 
 	public void receiveAddedListener(int from, String filename) {
@@ -711,7 +725,6 @@ public class TDFSNode extends RIONode {
 	 *            The proposal, as a byte array
 	 */
 	public void receiveLearned(int from, byte[] msg) {
-		// TODO: HIGH: coordinators don't have to record these if not listening
 		Proposal p = new Proposal(msg);
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
 
@@ -752,15 +765,15 @@ public class TDFSNode extends RIONode {
 		// check for transactions
 
 		if (p.operation instanceof TXStartLogEntry) {
-			TXStartLogEntry txCommand = (TXStartLogEntry)p.operation;
-			
+			TXStartLogEntry txCommand = (TXStartLogEntry) p.operation;
+
 			// check for duplicate learns
 			if (txFiles != null && txFiles.equals(txCommand.filenames))
 				return;
-			
+
 			// start callback
 			addTxTimeout(p.filename);
-		
+
 			// add files
 			String[] files = txCommand.filenames;
 			int client = txCommand.address;

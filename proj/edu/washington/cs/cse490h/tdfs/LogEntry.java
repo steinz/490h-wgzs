@@ -2,10 +2,6 @@ package edu.washington.cs.cse490h.tdfs;
 
 import edu.washington.cs.cse490h.lib.Utility;
 
-// TODO: HIGH: Define toString, pack in terms of toString
-
-// TODO: Contention friendly ops
-
 abstract class LogEntry {
 	static final String entryDelimiter = " ";
 
