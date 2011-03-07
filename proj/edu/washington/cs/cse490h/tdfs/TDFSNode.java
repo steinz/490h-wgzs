@@ -19,10 +19,6 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * TODO: HIGH: Remove explicit locks, have TX entries implicitly lock/unlock
 	 * 
-	 * TODO: HIGH: Acceptor persistent state - assumes stream writes are atomic,
-	 * implemented but not merged yet. Malformed logs aren't repaired on rebulid
-	 * either and the log is never purged.
-	 * 
 	 * TODO: HIGH: receivedLearn updates to commandGraph
 	 * 
 	 * TODO: HIGH: Fix Paxos Correctness - fixed the below bug I think
@@ -38,10 +34,17 @@ public class TDFSNode extends RIONode {
 	 * (filename, opNum) as keys. We should also make sure we clean them up
 	 * sometime too - I think when we learn that entry
 	 * 
+	 * TODO: HIGH: Command retries need to increment opNum at some point
+	 * 
+	 * TODO: HIGH: Commands need to verify there aren't any "holes" in the log
+	 * before verifying things
+	 * 
 	 * TODO: HIGH: Implement receivedPromiseDenial - explicitly call
 	 * command.retry somehow to send a higher proposal number, cancel timeout
 	 * 
 	 * TODO: HIGH: Verify 2PC Coordinator correctness
+	 * 
+	 * TODO: HIGH: WAYNE: fileTransactionMap descrip
 	 * 
 	 * TODO: HIGH: Update Paxos comments
 	 * 
@@ -52,6 +55,8 @@ public class TDFSNode extends RIONode {
 	 * (Req -1>) Prepare -> OldOp -1> (done) | PromiseDenial -1> (done) |
 	 * Promise -1> Accept -> AcceptDenial -1> (done) | Accepted -1> Learned ->
 	 * (done)
+	 * 
+	 * TODO: Logger config
 	 * 
 	 * TODO: txaborts and txcommits currently use commandGraph.addCheckpoint,
 	 * which means they don't happen parallel for no good reason. They should
@@ -165,8 +170,6 @@ public class TDFSNode extends RIONode {
 
 	/**
 	 * 2PC
-	 * 
-	 * TODO: HIGH: WAYNE: Describe what this is for
 	 */
 	private Map<String, String[]> fileTransactionMap;
 
@@ -485,14 +488,14 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receiveAccepted(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
-		
+
 		if (logFS.getLogEntry(p.filename, p.operationNumber) != null) {
 			// already learned
 			return;
 		}
-		
+
 		List<Integer> coordinators = getCoordinators(p.filename);
-		
+
 		Integer responded = acceptorsResponded.get(p.filename);
 		responded = (responded == null) ? 1 : responded + 1;
 		acceptorsResponded.put(p.filename, responded);
@@ -576,8 +579,8 @@ public class TDFSNode extends RIONode {
 					.highestPromisedProposalNumber(p.filename,
 							p.operationNumber)
 					+ "";
-			RIOSend(from, MessageType.PromiseDenial, Utility
-					.stringToByteArray(highestProposalNumber));
+			RIOSend(from, MessageType.PromiseDenial,
+					Utility.stringToByteArray(highestProposalNumber));
 			return;
 		} else {
 			paxosState.promise(p.filename, p.operationNumber, p.proposalNumber);
@@ -637,8 +640,8 @@ public class TDFSNode extends RIONode {
 			fileListeners.put(filename, list);
 		}
 		list.add(from);
-		RIOSend(from, MessageType.AddedListener, Utility
-				.stringToByteArray(filename));
+		RIOSend(from, MessageType.AddedListener,
+				Utility.stringToByteArray(filename));
 	}
 
 	public void receiveAddedListener(int from, String filename) {
