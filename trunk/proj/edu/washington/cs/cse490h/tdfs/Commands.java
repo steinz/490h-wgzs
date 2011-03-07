@@ -5,6 +5,15 @@ import java.util.List;
 import edu.washington.cs.cse490h.lib.Utility;
 
 abstract class Command {
+	String filename;
+
+	int operationNumber, proposalNumber;
+
+	public Command(String filename) {
+		this.filename = filename;
+		this.operationNumber = -1;
+		this.proposalNumber = -1;
+	}
 
 	public abstract void execute(TDFSNode node) throws Exception;
 
@@ -17,28 +26,28 @@ abstract class Command {
 	 *            The operation
 	 */
 	public void createProposal(TDFSNode node, String filename, LogEntry op) {
-		int opNum = node.logFS.nextLogNumber(filename);
-		int propNum = node.nextProposalNumber(filename, node.logFS.nextLogNumber(filename));
-		Proposal proposal = new Proposal(op, filename, opNum, propNum);
+		this.operationNumber = node.logFS.nextLogNumber(filename);
+		this.proposalNumber = node.nextProposalNumber(filename,
+				node.logFS.nextLogNumber(filename));
+		Proposal proposal = new Proposal(op, filename, this.operationNumber,
+				this.proposalNumber);
 		node.prepare(proposal);
 	}
 }
 
 abstract class FileCommand extends Command {
-	String filename;
 
 	public FileCommand(String filename) {
-		this.filename = filename;
+		super(filename);
 	}
 }
 
 abstract class TXCommand extends Command {
 	String[] filenames;
-	String coordinatorFilename;
 
 	public TXCommand(String[] filenames, String coordinatorFilename) {
+		super(coordinatorFilename);
 		this.filenames = filenames;
-		this.coordinatorFilename = coordinatorFilename;
 	}
 }
 
@@ -124,14 +133,14 @@ class ListenCommand extends FileCommand {
 		if (coordinators.contains(node.addr)) {
 			for (int next : coordinators) {
 				if (next != node.addr) {
-					node.RIOSend(next, MessageType.CreateGroup, Utility
-							.stringToByteArray(filename));
+					node.RIOSend(next, MessageType.CreateGroup,
+							Utility.stringToByteArray(filename));
 				}
 			}
 		} else {
 			node.RIOSend(node.getCoordinator(filename),
-					MessageType.RequestToListen, Utility
-							.stringToByteArray(filename));
+					MessageType.RequestToListen,
+					Utility.stringToByteArray(filename));
 		}
 	}
 }
@@ -158,9 +167,8 @@ class AbortCommand extends TXCommand {
 
 	@Override
 	public void execute(TDFSNode node) {
-		if (node.logFS.checkLocked(coordinatorFilename) == node.addr) {
-			createProposal(node, coordinatorFilename, new TXTryAbortLogEntry(
-					filenames));
+		if (node.logFS.checkLocked(filename) == node.addr) {
+			createProposal(node, filename, new TXTryAbortLogEntry(filenames));
 		}
 	}
 }
@@ -172,9 +180,8 @@ class CommitCommand extends TXCommand {
 
 	@Override
 	public void execute(TDFSNode node) {
-		if (node.logFS.checkLocked(coordinatorFilename) == node.addr) {
-			createProposal(node, coordinatorFilename, new TXTryCommitLogEntry(
-					filenames));
+		if (node.logFS.checkLocked(filename) == node.addr) {
+			createProposal(node, filename, new TXTryCommitLogEntry(filenames));
 		}
 	}
 }
@@ -186,9 +193,9 @@ class StartCommand extends TXCommand {
 
 	@Override
 	public void execute(TDFSNode node) {
-		if (node.logFS.checkLocked(coordinatorFilename) == null) {
-			createProposal(node, coordinatorFilename, new TXStartLogEntry(
-					filenames, node.addr));
+		if (node.logFS.checkLocked(filename) == null) {
+			createProposal(node, filename, new TXStartLogEntry(filenames,
+					node.addr));
 		}
 	}
 }
