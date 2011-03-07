@@ -49,10 +49,10 @@ public class CommandGraph {
 				}
 
 				if (command instanceof FileCommand) {
-					FileCommand fc = (FileCommand) command;
-					heads.put(fc.filename, this);
+					heads.put(command.filename, this);
 				} else {
 					checkpointHead = this;
+					checkpointHeadFilename = command.filename;
 				}
 				try {
 					command.execute(node);
@@ -65,18 +65,19 @@ public class CommandGraph {
 
 		public void abort() {
 			checkpointHead = checkpointTail = null;
+			checkpointHeadFilename = null;
 			heads.clear();
 			tails.clear();
 			abortRecur();
 		}
-		
+
 		private void abortRecur() {
 			this.done = true;
 			for (CommandNode node : children) {
 				node.abortRecur();
 			}
 		}
-		
+
 		public void done() {
 			this.done = true;
 			for (CommandNode node : children) {
@@ -93,6 +94,8 @@ public class CommandGraph {
 	private TDFSNode node;
 	private Map<String, CommandNode> heads;
 	private Map<String, CommandNode> tails;
+
+	private String checkpointHeadFilename;
 	private CommandNode checkpointHead;
 	private CommandNode checkpointTail;
 
@@ -138,22 +141,34 @@ public class CommandGraph {
 		child.locks++;
 	}
 
-	public void checkpointDone() {
-		try {
-			checkpointHead.done();
-			checkpointHead = null;
-		} catch (NullPointerException e) {
-			throw new RuntimeException(
-					"checkpointDone called when no checkpoint set", e);
+	public void checkpointDone(String filename) {
+		if (checkpointHeadFilename == filename) {
+			try {
+				checkpointHead.done();
+				checkpointHead = null;
+				checkpointHeadFilename = null;
+			} catch (NullPointerException e) {
+				throw new RuntimeException(
+						"checkpointDone called when no checkpoint set", e);
+			}
 		}
 	}
 
-	public void filenameDone(String filename) {
-		try {
-			heads.remove(filename).done();
-		} catch (NullPointerException e) {
-			throw new RuntimeException(
-					"filenameDone called on unlocked filename", e);
+	public void filenameDone(String filename, int operationNumber,
+			int proposalNumber) {
+		CommandNode n = heads.get(filename);
+		if (n == null) {
+			return;
+		}
+		Command c = n.command;
+		if (c.operationNumber == operationNumber
+				&& c.proposalNumber == proposalNumber) {
+			try {
+				heads.remove(filename).done();
+			} catch (NullPointerException e) {
+				throw new RuntimeException(
+						"filenameDone called on unlocked filename", e);
+			}
 		}
 	}
 }

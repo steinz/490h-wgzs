@@ -15,8 +15,6 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
-	 * TODO: HIGH: receivedLearn updates to commandGraph
-	 * 
 	 * TODO: HIGH: Cleanup Paxos (filename, opNum) -> X data structures when we
 	 * learn entries for those keys.
 	 * 
@@ -681,7 +679,7 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void receiveAddedListener(int from, String filename) {
-		commandGraph.filenameDone(filename);
+		commandGraph.filenameDone(filename, -1, -1);
 	}
 
 	/**
@@ -705,19 +703,16 @@ public class TDFSNode extends RIONode {
 			}
 		}
 
-		/*
-		 * TODO: HIGH: Tell commandGraph what is done
-		 * 
-		 * if ((p.operation instanceof TXCommitLogEntry || p.operation
-		 * instanceof TXAbortLogEntry) && txQueue.inTx &&
-		 * txQueue.filenamesInTx.contains(p.filename)) { txQueue.nextTx(); }
-		 */
-
-		/*
-		 * if (txQueue.cmdQueue.executingOn(p.filename)) {
-		 * txQueue.next(p.filename); }
-		 */
-
+		// tell the commandGraph to finish commands it might be executing
+		if (p.operation instanceof TXAbortLogEntry
+				|| p.operation instanceof TXCommitLogEntry
+				|| p.operation instanceof TXStartLogEntry) {
+			commandGraph.checkpointDone(p.filename);
+		} else if (!(p.operation instanceof TXTryAbortLogEntry)
+				&& !(p.operation instanceof TXTryCommitLogEntry)) {
+			commandGraph.filenameDone(p.filename, p.operationNumber,
+					p.proposalNumber);
+		}
 	}
 
 	/**
