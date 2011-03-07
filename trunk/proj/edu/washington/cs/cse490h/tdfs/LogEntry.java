@@ -29,8 +29,9 @@ abstract class LogEntry {
 			String[] filenames = t.rest().split(entryDelimiter);
 			return new TXCommitLogEntry(filenames);
 		} else if (cmd.equals("TXStart")) {
+			int address = Integer.parseInt(t.next());
 			String[] filenames = t.rest().split(entryDelimiter);
-			return new TXStartLogEntry(filenames);
+			return new TXStartLogEntry(filenames, address);
 		} else if (cmd.equals("Write")) {
 			boolean append = Boolean.parseBoolean(t.next());
 			String content = t.rest();
@@ -110,13 +111,16 @@ class TXCommitLogEntry extends TXLogEntry {
 }
 
 class TXStartLogEntry extends TXLogEntry {
-	public TXStartLogEntry(String[] filenames) {
+	int address;
+	
+	public TXStartLogEntry(String[] filenames, int address) {
 		super(filenames);
+		this.address = address;
 	}
 
 	@Override
 	public String toString() {
-		return "TXStart" + joinFilenames();
+		return "TXStart " + address + joinFilenames();
 	}
 }
 

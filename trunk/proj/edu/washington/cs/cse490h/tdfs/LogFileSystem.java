@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -58,7 +59,7 @@ public class LogFileSystem implements LogFS {
 		private int nextOperationNumber;
 
 		/**
-		 * New file is implicitly: unlocked, deleted
+		 * New file is implicitly: unlocked/not in a tx, deleted
 		 */
 		public FileLog() {
 			this.operations = new TreeMap<Integer, LogEntry>();
@@ -101,10 +102,11 @@ public class LogFileSystem implements LogFS {
 			Integer locked = null;
 			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
 				LogEntry op = entry.getValue();
-				if (op instanceof LockLogEntry) {
-					LockLogEntry l = (LockLogEntry) op;
+				if (op instanceof TXStartLogEntry) {
+					TXStartLogEntry l = (TXStartLogEntry) op;
 					locked = l.address;
-				} else if (op instanceof UnlockLogEntry) {
+				} else if (op instanceof TXCommitLogEntry
+						|| op instanceof TXAbortLogEntry) {
 					locked = null;
 				}
 			}
@@ -165,18 +167,20 @@ public class LogFileSystem implements LogFS {
 					new ByteArrayInputStream(packedLog));
 
 			SortedMap<Integer, LogEntry> operations = new TreeMap<Integer, LogEntry>();
-			int nextOpNumber;
+			int nextOpNumber = 0;
 
 			try {
 				nextOpNumber = stream.readInt();
 
-				while (stream.available() > 0) {
+				while (true) {
 					int opNumber = stream.readInt();
 					int opLength = stream.readInt();
 					byte[] packedOp = new byte[opLength];
 					stream.read(packedOp, 0, opLength);
 					operations.put(opNumber, LogEntry.unpack(packedOp));
 				}
+			} catch (EOFException e) {
+				// done
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
@@ -193,7 +197,6 @@ public class LogFileSystem implements LogFS {
 		this.logs = new HashMap<String, FileLog>();
 		this.logger = Logger
 				.getLogger("edu.washington.cs.cse490h.dfs.LogFileSystem");
-		// TODO: HIGH: Logger config file, etc
 	}
 
 	/**
@@ -214,10 +217,12 @@ public class LogFileSystem implements LogFS {
 		return l.checkExists();
 	}
 
+	/**
+	 * Returns the most recent committed version of the file known
+	 */
 	public String getFile(String filename) throws NotListeningException {
-		logAccess(filename, "Get");
+		logAccess(filename, "get");
 		FileLog l = getLog(filename);
-		// TODO: HIGH: I think it's okay to let someone Get a locked file...
 		return l.getContent();
 	}
 
@@ -235,15 +240,17 @@ public class LogFileSystem implements LogFS {
 	}
 
 	/**
-	 * null if opearationNumber has been forgotten
+	 * null if opearationNumber is missing (GC'd, never learned)
 	 * 
-	 * exception if operationNumber isn't known to have ever existed
+	 * NoSuchOperationNumberException if operationNumber is >=
+	 * nextOperationNumber (never learned)
 	 */
 	public LogEntry getLogEntry(String filename, int operationNumber)
 			throws NotListeningException, NoSuchOperationNumberException {
 		FileLog l = getLog(filename);
 		if (operationNumber >= l.nextOperationNumber) {
-			throw new NoSuchOperationNumberException();
+			throw new NoSuchOperationNumberException("requested: "
+					+ operationNumber + ", next: " + l.nextOperationNumber);
 		}
 		LogEntry op = l.operations.get(operationNumber);
 		return op;
@@ -259,12 +266,7 @@ public class LogFileSystem implements LogFS {
 	}
 
 	private void logAccess(String filename, String operation) {
-		logAccess(filename, operation, null);
-	}
-
-	private void logAccess(String filename, String operation, String content) {
-		String msg = operation.toString().toLowerCase() + " file: " + filename
-				+ (content == null ? "" : " content: " + content);
+		String msg = operation.toLowerCase() + filename;
 		logger.finer(msg);
 	}
 
@@ -283,7 +285,7 @@ public class LogFileSystem implements LogFS {
 
 	public void writeLogEntry(String filename, int logEntryNumber, LogEntry op)
 			throws NotListeningException {
-		logAccess(filename, "Add");
+		logAccess(filename, op.toString());
 		FileLog l = getLog(filename);
 		l.addOperation(logEntryNumber, op);
 	}
