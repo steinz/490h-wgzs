@@ -1,29 +1,5 @@
 package edu.washington.cs.cse490h.tdfs;
 
-class Tup {
-	private final Class<?>[] types;
-	private Object[] values;
-	
-	public Tup(int size, Class<?>[] types, Object[] values) {
-		this.types = types;
-		for (int i = 0; i < values.length; i++) {
-			set(i, values[i]);
-		}
-	}
-	
-	public Class<?> getType(int index) {
-		return types[index];
-	}
-	
-	public Object get(int index) {
-		return values[index];
-	}
-	
-	public void set(int index, Object value) {
-		values[index] = types[index].cast(value);
-	}
-}
-
 public class Tuple<T, U> {
 	public final T first;
 	public final U second;

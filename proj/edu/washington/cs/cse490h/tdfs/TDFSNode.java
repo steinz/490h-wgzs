@@ -492,7 +492,7 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receiveAccept(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
-		if (p.proposalNumber >= paxosState.highestPromisedProposalNumber(
+		if (p.proposalNumber >= paxosState.highestPromised(
 				p.filename, p.operationNumber)) {
 			paxosState.accept(p);
 			List<Integer> coordinators = getCoordinators(p.filename);
@@ -600,7 +600,7 @@ public class TDFSNode extends RIONode {
 		Proposal p = new Proposal(msg);
 
 		Integer largestProposalNumberPromised = paxosState
-				.highestPromisedProposalNumber(p.filename, p.operationNumber);
+				.highestPromised(p.filename, p.operationNumber);
 		if (largestProposalNumberPromised == null) {
 			largestProposalNumberPromised = -1;
 		}
@@ -618,7 +618,7 @@ public class TDFSNode extends RIONode {
 			return;
 		} else if (p.proposalNumber <= largestProposalNumberPromised) {
 			int highestProposalNumber = paxosState
-					.highestPromisedProposalNumber(p.filename,
+					.highestPromised(p.filename,
 							p.operationNumber);
 
 			while (p.proposalNumber < highestProposalNumber) {
@@ -630,7 +630,7 @@ public class TDFSNode extends RIONode {
 			return;
 		} else {
 			paxosState.promise(p.filename, p.operationNumber, p.proposalNumber);
-			Proposal highestAccepted = paxosState.highestAcceptedProposal(
+			Proposal highestAccepted = paxosState.highestAccepted(
 					p.filename, p.operationNumber);
 			if (highestAccepted != null) {
 				highestAccepted.originalProposal = p.proposalNumber;
