@@ -15,6 +15,10 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
+	 * TODO: HIGH: If a node prepares a txstart, but that txstart is not accepted (possibly
+	 * because another value has been accepted for that proposal number), then the node
+	 * will think it is in a tx even though it is not, because the txstart was not accepted.
+	 * 
 	 * TODO: HIGH: When listener joins group, it needs the latest copy of the
 	 * log
 	 * 
@@ -749,6 +753,11 @@ public class TDFSNode extends RIONode {
 
 		if (p.operation instanceof TXStartLogEntry) {
 			TXStartLogEntry txCommand = (TXStartLogEntry)p.operation;
+			
+			// check for duplicate learns
+			if (txFiles != null && txFiles.equals(txCommand.filenames))
+				return;
+			
 			// start callback
 			addTxTimeout(p.filename);
 		
@@ -756,7 +765,7 @@ public class TDFSNode extends RIONode {
 			String[] files = txCommand.filenames;
 			int client = txCommand.address;
 			if (txFiles != null) { // client didn't abort or commit last tx
-				Logger.error(this, "Client: " + from
+				Logger.error(this, "Client: " + client
 						+ " did not commit or abort last tx!");
 			}
 			for (String file : files) {
