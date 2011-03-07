@@ -8,22 +8,62 @@ import java.util.Map.Entry;
 
 import edu.washington.cs.cse490h.lib.Callback;
 
-class cg2 {
+class cg2<K> {
 	private static int commandRetryTimeout = 20;
 
 	private class CommandNode {
+		private List<Command> abortCommands;
 		private Command command;
 		private int locks;
 		private List<CommandNode> children;
+		private boolean checkpoint;
 		private boolean done;
 
-		public CommandNode(Command c) {
+		public CommandNode(Command c, boolean checkpoint,
+				List<Command> abortCommands) {
+			this.abortCommands = abortCommands;
 			this.command = c;
 			this.locks = 0;
 			this.children = new ArrayList<CommandNode>();
+			this.checkpoint = checkpoint;
 			this.done = false;
 		}
 
+		public void abort() {
+			start();
+			for (Command c : abortCommands) {
+				try {
+					c.execute(node);
+				} catch (Exception e) {
+					node.printError(e);
+				}
+			}
+			cancel();
+		}
+
+		private void cancel() {
+			this.done = true;
+			for (CommandNode node : children) {
+				node.cancel();
+			}
+		}
+
+		public void done() {
+			this.done = true;
+			for (CommandNode node : children) {
+				node.parentFinished();
+			}
+		}
+
+		public void parentFinished() {
+			locks--;
+			execute();
+		}
+
+		/**
+		 * returns true if the command has already been marked done or is
+		 * executed
+		 */
 		public boolean execute() {
 			if (this.done) {
 				return true;
@@ -37,12 +77,107 @@ class cg2 {
 				} catch (Exception e) {
 					node.printError(e);
 				}
-				
+
+				if (checkpoint) {
+					checkpointHead = new Tuple<K, CommandNode>(command.key(), this);
+				} else {
+					heads.put(command.key(), this);
+				}
+
+				try {
+					command.execute(node);
+				} catch (Exception e) {
+					node.printError(e);
+					abort();
+				}
 				return true;
 			} else {
 				return false;
 			}
 		}
+
+	}
+
+	private TDFSNode node;
+	private Tuple<K, CommandNode> checkpointHead;
+	private CommandNode checkpointTail;
+	private Map<K, CommandNode> heads;
+	private Map<K, CommandNode> tails;
+
+	public cg2(TDFSNode node) {
+		this.node = node;
+		this.heads = new HashMap<K, CommandNode>();
+		this.tails = new HashMap<K, CommandNode>();
+		start();
+	}
+
+	public CommandNode addCommand(Command c, boolean checkpoint,
+			List<Command> abortCommands) {
+		CommandNode n = new CommandNode(c, checkpoint, abortCommands);
+		if (checkpoint) {
+			for (Entry<K, CommandNode> entry : tails.entrySet()) {
+				addDependency(entry.getValue(), n);
+			}
+			if (checkpointTail != null) {
+				addDependency(checkpointTail, n);
+			}
+			tails.clear();
+			checkpointTail = n;
+		} else {
+			K key = c.key();
+			CommandNode p = tails.get(key);
+			if (p == null) {
+				p = checkpointTail;
+			}
+			if (p != null) {
+				addDependency(p, n);
+			}
+			tails.put(key, n);
+		}
+		return n;
+	}
+
+	public boolean done(K key) {
+		if (checkpointHead != null && checkpointHead.second.equals(key)) {
+			if (checkpointTail == checkpointHead.second) {
+				checkpointTail = null;
+			}
+			checkpointHead.second.done();
+			checkpointHead = null;
+			return true;
+		} else {
+			CommandNode n = heads.get(key);
+			if (n == null) {
+				return false;
+			} else {
+				Command c = n.command;
+				if (c.key().equals(key)) {
+					CommandNode head = heads.remove(key);
+					CommandNode tail = tails.get(key);
+					if (tail == head) {
+						tails.remove(key);
+					}
+					head.done();
+					// TODO: NPE?
+				} else {
+					return false;
+				}
+			}
+		}
+	}
+
+	public void addDependency(CommandNode parent, CommandNode child) {
+		if (!parent.done) {
+			parent.children.add(child);
+			child.locks++;
+		}
+	}
+
+	private void start() {
+		checkpointHead = null;
+		checkpointTail = null;
+		heads.clear();
+		tails.clear();
 	}
 }
 

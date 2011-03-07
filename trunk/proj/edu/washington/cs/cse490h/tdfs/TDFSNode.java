@@ -15,6 +15,8 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
+	 * TODO: HIGH: Change -1 int special cases in Commands to null Integer cases
+	 * 
 	 * TODO: HIGH: Verify not proposing things on txing files
 	 * 
 	 * TODO: HIGH: Node count config commands
@@ -710,8 +712,8 @@ public class TDFSNode extends RIONode {
 			new ListenCommand(filename).execute(this);
 		}
 		fileListeners.get(filename).add(from);
-		RIOSend(from, MessageType.AddedListener, Utility
-				.stringToByteArray(filename));
+		RIOSend(from, MessageType.AddedListener,
+				Utility.stringToByteArray(filename));
 	}
 
 	public void receiveAddedListener(int from, String filename) {
