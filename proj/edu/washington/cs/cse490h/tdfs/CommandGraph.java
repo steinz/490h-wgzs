@@ -57,6 +57,7 @@ public class CommandGraph {
 				try {
 					command.execute(node);
 				} catch (Exception e) {
+					node.printError(e);
 					abort();
 				}
 			}

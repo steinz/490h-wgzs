@@ -1,5 +1,6 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -131,6 +132,15 @@ class ListenCommand extends FileCommand {
 
 		List<Integer> coordinators = node.getCoordinators(filename);
 		if (coordinators.contains(node.addr)) {
+			
+			List<Integer> listeners = node.fileListeners.get(filename);
+			if (listeners == null) {
+				listeners = new ArrayList<Integer>();
+				listeners.add(node.addr);
+				listeners.add(TDFSNode.twoPCCoordinatorAddress);
+				node.fileListeners.put(filename, listeners);
+			}
+			
 			for (int next : coordinators) {
 				if (next != node.addr) {
 					node.RIOSend(next, MessageType.CreateGroup,

@@ -20,6 +20,10 @@ public class LogFileSystem implements LogFS {
 		private T transactional;
 		private boolean transacting;
 
+		public Transactional(T defaultValue) {
+			this.persistent = defaultValue;
+		}
+
 		public void abort() {
 			transacting = false;
 		}
@@ -79,8 +83,8 @@ public class LogFileSystem implements LogFS {
 			}
 		}
 
-		public boolean checkExists() {
-			Transactional<Boolean> exists = new Transactional<Boolean>();
+		public boolean checkFileExists() {
+			Transactional<Boolean> exists = new Transactional<Boolean>(false);
 			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
 				LogEntry op = entry.getValue();
 				if (op instanceof TXStartLogEntry) {
@@ -114,7 +118,7 @@ public class LogFileSystem implements LogFS {
 		}
 
 		public String getContent() {
-			Transactional<String> content = new Transactional<String>();
+			Transactional<String> content = new Transactional<String>(null);
 			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
 				LogEntry op = entry.getValue();
 				if (op instanceof TXStartLogEntry) {
@@ -214,7 +218,7 @@ public class LogFileSystem implements LogFS {
 
 	public boolean fileExists(String filename) throws NotListeningException {
 		FileLog l = getLog(filename);
-		return l.checkExists();
+		return l.checkFileExists();
 	}
 
 	/**
@@ -254,6 +258,12 @@ public class LogFileSystem implements LogFS {
 		}
 		LogEntry op = l.operations.get(operationNumber);
 		return op;
+	}
+
+	public boolean hasLogNumber(String filename, int operationNumber)
+			throws NotListeningException {
+		FileLog l = getLog(filename);
+		return l.operations.containsKey(operationNumber);
 	}
 
 	public boolean isListening(String filename) {

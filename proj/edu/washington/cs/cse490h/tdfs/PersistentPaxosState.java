@@ -5,6 +5,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import edu.washington.cs.cse490h.lib.PersistentStorageOutputStream;
@@ -46,8 +47,10 @@ public class PersistentPaxosState {
 
 	public PersistentPaxosState(TDFSNode n) {
 		try {
-			this.n = n;
+			this.accepted = new HashMap<Tuple<String, Integer>, Proposal>();
 			this.acceptedStream = n.getOutputStream(acceptedLog, true);
+			this.n = n;
+			this.promised = new HashMap<Tuple<String, Integer>, Integer>();
 			this.promisedStream = n.getOutputStream(promisedLog, true);
 			this.rebuild();
 		} catch (IOException e) {
