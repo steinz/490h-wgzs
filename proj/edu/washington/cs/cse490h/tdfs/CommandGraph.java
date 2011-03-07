@@ -8,6 +8,44 @@ import java.util.Map.Entry;
 
 import edu.washington.cs.cse490h.lib.Callback;
 
+class cg2 {
+	private static int commandRetryTimeout = 20;
+
+	private class CommandNode {
+		private Command command;
+		private int locks;
+		private List<CommandNode> children;
+		private boolean done;
+
+		public CommandNode(Command c) {
+			this.command = c;
+			this.locks = 0;
+			this.children = new ArrayList<CommandNode>();
+			this.done = false;
+		}
+
+		public boolean execute() {
+			if (this.done) {
+				return true;
+			} else if (this.locks == 0) {
+				try {
+					String[] params = {};
+					Object[] args = {};
+					Callback cb = new Callback(Callback.getMethod("execute",
+							this, params), this, args);
+					node.addTimeout(cb, commandRetryTimeout);
+				} catch (Exception e) {
+					node.printError(e);
+				}
+				
+				return true;
+			} else {
+				return false;
+			}
+		}
+	}
+}
+
 /**
  * A graph of dependent commands and factory of CommandNodes
  */
@@ -168,7 +206,7 @@ public class CommandGraph {
 		if (c.operationNumber == operationNumber
 				&& c.proposalNumber == proposalNumber) {
 			try {
-				CommandNode head = 	heads.remove(filename);
+				CommandNode head = heads.remove(filename);
 				CommandNode tail = tails.get(filename);
 				if (tail.equals(head)) {
 					tails.remove(filename);
