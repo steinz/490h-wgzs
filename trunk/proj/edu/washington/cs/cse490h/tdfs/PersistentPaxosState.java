@@ -1,14 +1,14 @@
 package edu.washington.cs.cse490h.tdfs;
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import edu.washington.cs.cse490h.lib.PersistentStorageOutputStream;
+import edu.washington.cs.cse490h.lib.Utility;
 
 /**
  * CSE 490h
@@ -21,38 +21,44 @@ import edu.washington.cs.cse490h.lib.PersistentStorageOutputStream;
  */
 public class PersistentPaxosState {
 
-	private static final String acceptedLog = "accepted.log";
-
-	private static final String promisedLog = "promised.log";
+	/**
+	 * Log filenames
+	 */
+	protected static final String acceptedLog = "accepted.log",
+			promisedLog = "promised.log";
 
 	/**
 	 * The node this FS is associated with - used to access the underlying file
 	 * system and for logging
 	 */
-	private TDFSNode n;
-
-	private PersistentStorageOutputStream acceptedStream;
-
-	private PersistentStorageOutputStream promisedStream;
+	protected TDFSNode n;
 
 	/**
-	 * Last propNum promised for (file, opNum)
+	 * Log streams
 	 */
-	private Map<Tuple<String, Integer>, Integer> promised;
+	protected DataOutputStream acceptedStream, promisedStream;
 
 	/**
 	 * Accepted ((file, opNum), value) with highest propNum
 	 */
-	private Map<Tuple<String, Integer>, Proposal> accepted;
+	protected Map<Tuple<String, Integer>, Proposal> accepted;
+
+	/**
+	 * Highest propNum promised for (file, opNum)
+	 */
+	protected Map<Tuple<String, Integer>, Integer> promised;
 
 	public PersistentPaxosState(TDFSNode n) {
+		this.accepted = new HashMap<Tuple<String, Integer>, Proposal>();
+		this.n = n;
+		this.promised = new HashMap<Tuple<String, Integer>, Integer>();
+
 		try {
-			this.accepted = new HashMap<Tuple<String, Integer>, Proposal>();
-			this.acceptedStream = n.getOutputStream(acceptedLog, true);
-			this.n = n;
-			this.promised = new HashMap<Tuple<String, Integer>, Integer>();
-			this.promisedStream = n.getOutputStream(promisedLog, true);
 			this.rebuild();
+			this.acceptedStream = new DataOutputStream(n.getOutputStream(
+					acceptedLog, true));
+			this.promisedStream = new DataOutputStream(n.getOutputStream(
+					promisedLog, true));
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -62,47 +68,55 @@ public class PersistentPaxosState {
 		accepted.put(new Tuple<String, Integer>(value.filename,
 				value.operationNumber), value);
 		try {
-			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-			DataOutputStream out = new DataOutputStream(bytes);
 			byte[] packed = value.pack();
-			out.writeInt(packed.length);
-			out.write(packed);
-			out.close();
-			acceptedStream.write(bytes.toByteArray());
+			acceptedStream.writeInt(packed.length);
+			acceptedStream.write(packed);
 			acceptedStream.flush();
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
-	
-	public Proposal highestAcceptedProposal(String filename, int operationNumber) {
-		return accepted.get(new Tuple<String, Integer>(filename, operationNumber));
+
+	/**
+	 * Closes the underlying stream for tests
+	 */
+	public void close() throws IOException {
+		acceptedStream.close();
+		promisedStream.close();
 	}
 	
-	public Integer highestPromisedProposalNumber(String filename, int operationNumber) {
-		return promised.get(new Tuple<String, Integer>(filename, operationNumber));
+	public Proposal highestAccepted(String filename, int operationNumber) {
+		return accepted.get(new Tuple<String, Integer>(filename,
+				operationNumber));
 	}
 
-	public void promise(String filename, int operationNumber,
-			int proposalNumber) {
-		promised.put(new Tuple<String, Integer>(filename, operationNumber),
-				proposalNumber);
+	public Integer highestPromised(String filename, int operationNumber) {
+		return promised.get(new Tuple<String, Integer>(filename,
+				operationNumber));
+	}
+
+	public void promise(String filename, int operationNumber, int proposalNumber) {
+		Tuple<String, Integer> key = new Tuple<String, Integer>(filename,
+				operationNumber);
+		Integer current = promised.get(key);
+		if (current != null && current > proposalNumber) {
+			return;
+		}
+
+		promised.put(key, proposalNumber);
 		try {
-			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-			DataOutputStream out = new DataOutputStream(bytes);
-			out.writeInt(proposalNumber);
-			out.writeInt(operationNumber);
-			out.writeInt(2 * filename.length());
-			out.writeChars(filename);
-			out.close();
-			promisedStream.write(bytes.toByteArray());
+			promisedStream.writeInt(proposalNumber);
+			promisedStream.writeInt(operationNumber);
+			byte[] filenameBytes = Utility.stringToByteArray(filename);
+			promisedStream.writeInt(filenameBytes.length);
+			promisedStream.write(filenameBytes);
 			promisedStream.flush();
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	private void rebuild() {
+	protected void rebuild() throws IOException {
 		try {
 			DataInputStream in = new DataInputStream(n
 					.getInputStream(acceptedLog));
@@ -116,10 +130,10 @@ public class PersistentPaxosState {
 				accepted.put(new Tuple<String, Integer>(p.filename,
 						p.operationNumber), p);
 			}
+		} catch (FileNotFoundException e) {
+			// nothing to do
 		} catch (EOFException e) {
 			// done
-		} catch (IOException e) {
-			throw new RuntimeException(e);
 		}
 
 		try {
@@ -133,14 +147,14 @@ public class PersistentPaxosState {
 				if (in.read(bytes) != len) {
 					throw new EOFException();
 				}
-				String filename = new String(bytes);
+				String filename = Utility.byteArrayToString(bytes);
 				promised.put(new Tuple<String, Integer>(filename,
 						operationNumber), proposalNumber);
 			}
+		} catch (FileNotFoundException e) {
+			// nothing to do
 		} catch (EOFException e) {
 			// done
-		} catch (IOException e) {
-			throw new RuntimeException(e);
 		}
 	}
 }
