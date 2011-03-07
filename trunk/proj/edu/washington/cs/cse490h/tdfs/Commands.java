@@ -16,8 +16,6 @@ abstract class Command {
 		this.proposalNumber = -1;
 	}
 
-	public abstract void execute(TDFSNode node) throws Exception;
-
 	/**
 	 * Creates the proposal to prepare and send to the list of coordinators
 	 * 
@@ -33,6 +31,12 @@ abstract class Command {
 		Proposal proposal = new Proposal(op, filename, this.operationNumber,
 				this.proposalNumber);
 		node.prepare(proposal);
+	}
+
+	public abstract void execute(TDFSNode node) throws Exception;
+
+	public CommandKey getKey() {
+		return new CommandKey(this.filename, this.operationNumber, this.proposalNumber);
 	}
 }
 
@@ -134,7 +138,7 @@ class ListenCommand extends FileCommand {
 
 		List<Integer> coordinators = node.getCoordinators(filename);
 		if (coordinators.contains(node.addr)) {
-			
+
 			List<Integer> listeners = node.fileListeners.get(filename);
 			if (listeners == null) {
 				listeners = new ArrayList<Integer>();
@@ -142,7 +146,7 @@ class ListenCommand extends FileCommand {
 				listeners.add(TDFSNode.twoPCCoordinatorAddress);
 				node.fileListeners.put(filename, listeners);
 			}
-			
+
 			for (int next : coordinators) {
 				if (next != node.addr) {
 					node.RIOSend(next, MessageType.CreateGroup,

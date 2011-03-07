@@ -1,5 +1,8 @@
 package edu.washington.cs.cse490h.tdfs;
 
+/**
+ * Immutable 2-tuple 
+ */
 public class Tuple<T, U> {
 	public final T first;
 	public final U second;

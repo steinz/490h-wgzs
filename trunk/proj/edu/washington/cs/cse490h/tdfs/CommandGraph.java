@@ -8,7 +8,7 @@ import java.util.Map.Entry;
 
 import edu.washington.cs.cse490h.lib.Callback;
 
-class cg2<K> {
+public class CommandGraph {
 	private static int commandRetryTimeout = 20;
 
 	private class CommandNode {
@@ -79,9 +79,9 @@ class cg2<K> {
 				}
 
 				if (checkpoint) {
-					checkpointHead = new Tuple<K, CommandNode>(command.key(), this);
+					checkpointHead = new Tuple<CommandKey, CommandNode>(command.getKey(), this);
 				} else {
-					heads.put(command.key(), this);
+					heads.put(command.getKey(), this);
 				}
 
 				try {
@@ -99,15 +99,15 @@ class cg2<K> {
 	}
 
 	private TDFSNode node;
-	private Tuple<K, CommandNode> checkpointHead;
+	private Tuple<CommandKey, CommandNode> checkpointHead;
 	private CommandNode checkpointTail;
-	private Map<K, CommandNode> heads;
-	private Map<K, CommandNode> tails;
+	private Map<CommandKey, CommandNode> heads;
+	private Map<CommandKey, CommandNode> tails;
 
-	public cg2(TDFSNode node) {
+	public CommandGraph(TDFSNode node) {
 		this.node = node;
-		this.heads = new HashMap<K, CommandNode>();
-		this.tails = new HashMap<K, CommandNode>();
+		this.heads = new HashMap<CommandKey, CommandNode>();
+		this.tails = new HashMap<CommandKey, CommandNode>();
 		start();
 	}
 
@@ -115,7 +115,7 @@ class cg2<K> {
 			List<Command> abortCommands) {
 		CommandNode n = new CommandNode(c, checkpoint, abortCommands);
 		if (checkpoint) {
-			for (Entry<K, CommandNode> entry : tails.entrySet()) {
+			for (Entry<CommandKey, CommandNode> entry : tails.entrySet()) {
 				addDependency(entry.getValue(), n);
 			}
 			if (checkpointTail != null) {
@@ -124,7 +124,7 @@ class cg2<K> {
 			tails.clear();
 			checkpointTail = n;
 		} else {
-			K key = c.key();
+			CommandKey key = c.getKey();
 			CommandNode p = tails.get(key);
 			if (p == null) {
 				p = checkpointTail;
@@ -137,7 +137,7 @@ class cg2<K> {
 		return n;
 	}
 
-	public boolean done(K key) {
+	public boolean done(CommandKey key) {
 		if (checkpointHead != null && checkpointHead.second.equals(key)) {
 			if (checkpointTail == checkpointHead.second) {
 				checkpointTail = null;
@@ -151,14 +151,14 @@ class cg2<K> {
 				return false;
 			} else {
 				Command c = n.command;
-				if (c.key().equals(key)) {
+				if (c.getKey().equals(key)) {
 					CommandNode head = heads.remove(key);
 					CommandNode tail = tails.get(key);
 					if (tail == head) {
 						tails.remove(key);
 					}
 					head.done();
-					// TODO: NPE?
+					return true;
 				} else {
 					return false;
 				}
@@ -178,179 +178,5 @@ class cg2<K> {
 		checkpointTail = null;
 		heads.clear();
 		tails.clear();
-	}
-}
-
-/**
- * A graph of dependent commands and factory of CommandNodes
- */
-public class CommandGraph {
-	private static int commandRetryTimeout = 20;
-
-	public class CommandNode {
-		private Command command;
-		private int locks;
-		private List<CommandNode> children;
-		private boolean done;
-
-		public CommandNode(Command c) {
-			this.command = c;
-			this.locks = 0;
-			this.children = new ArrayList<CommandNode>();
-			this.done = false;
-		}
-
-		/**
-		 * Returns true if the command is already done, otherwise returns
-		 * whether or not execute actually executed
-		 */
-		public boolean execute() {
-			if (done) {
-				return true;
-			}
-
-			if (this.locks == 0) {
-				// TODO: OPT: Fail after x retrys, declare file unavailable
-				try {
-					String[] params = {};
-					Object[] args = {};
-					Callback cb = new Callback(Callback.getMethod("execute",
-							this, params), this, args);
-					node.addTimeout(cb, commandRetryTimeout);
-				} catch (Exception e) {
-					node.printError(e);
-				}
-
-				if (command instanceof FileCommand) {
-					heads.put(command.filename, this);
-				} else {
-					checkpointHead = this;
-					checkpointHeadFilename = command.filename;
-				}
-				try {
-					command.execute(node);
-				} catch (Exception e) {
-					node.printError(e);
-					abort();
-				}
-			}
-			return this.locks == 0;
-		}
-
-		public void abort() {
-			checkpointHead = checkpointTail = null;
-			checkpointHeadFilename = null;
-			heads.clear();
-			tails.clear();
-			abortRecur();
-		}
-
-		private void abortRecur() {
-			this.done = true;
-			for (CommandNode node : children) {
-				node.abortRecur();
-			}
-		}
-
-		public void done() {
-			this.done = true;
-			for (CommandNode node : children) {
-				node.parentFinished();
-			}
-		}
-
-		public void parentFinished() {
-			locks--;
-			execute();
-		}
-	}
-
-	private TDFSNode node;
-	private Map<String, CommandNode> heads;
-	private Map<String, CommandNode> tails;
-
-	private String checkpointHeadFilename;
-	private CommandNode checkpointHead;
-	private CommandNode checkpointTail;
-
-	public CommandGraph(TDFSNode node) {
-		this.node = node;
-		this.heads = new HashMap<String, CommandNode>();
-		this.tails = new HashMap<String, CommandNode>();
-	}
-
-	public CommandNode addCommand(FileCommand c) {
-		CommandNode n = new CommandNode(c);
-		CommandNode p = tails.get(c.filename);
-		if (p == null) {
-			p = checkpointTail;
-		}
-		if (p != null) {
-			addEdge(p, n);
-		}
-		tails.put(c.filename, n);
-		return n;
-	}
-
-	public CommandNode addCheckpoint(Command c) {
-		CommandNode n = new CommandNode(c);
-
-		for (Entry<String, CommandNode> entry : tails.entrySet()) {
-			addEdge(entry.getValue(), n);
-		}
-		if (checkpointTail != null) {
-			addEdge(checkpointTail, n);
-		}
-
-		tails.clear();
-		checkpointTail = n;
-
-		return n;
-	}
-
-	// TODO: dedup multiple edges from parent to child
-
-	public void addEdge(CommandNode parent, CommandNode child) {
-		parent.children.add(child);
-		child.locks++;
-	}
-
-	public void checkpointDone(String filename) {
-		if (checkpointHeadFilename == filename) {
-			try {
-				if (checkpointTail == checkpointHead) {
-					checkpointTail = null;
-				}
-				checkpointHead.done();
-				checkpointHead = null;
-				checkpointHeadFilename = null;
-			} catch (NullPointerException e) {
-				throw new RuntimeException(
-						"checkpointDone called when no checkpoint set", e);
-			}
-		}
-	}
-
-	public void filenameDone(String filename, int operationNumber,
-			int proposalNumber) {
-		CommandNode n = heads.get(filename);
-		if (n == null) {
-			return;
-		}
-		Command c = n.command;
-		if (c.operationNumber == operationNumber
-				&& c.proposalNumber == proposalNumber) {
-			try {
-				CommandNode head = heads.remove(filename);
-				CommandNode tail = tails.get(filename);
-				if (tail.equals(head)) {
-					tails.remove(filename);
-				}
-				head.done();
-			} catch (NullPointerException e) {
-				throw new RuntimeException(
-						"filenameDone called on unlocked filename", e);
-			}
-		}
 	}
 }
