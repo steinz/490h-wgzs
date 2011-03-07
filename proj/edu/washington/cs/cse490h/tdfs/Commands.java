@@ -113,6 +113,8 @@ class GetCommand extends FileCommand {
 	public void execute(TDFSNode node) throws FileDoesNotExistException {
 		if (node.logFS.fileExists(filename)) {
 			node.printInfo(node.logFS.getFile(filename));
+			// HACK HACK HACK
+			node.commandGraph.filenameDone(filename, -1, -1);
 		} else {
 			throw new FileDoesNotExistException();
 		}

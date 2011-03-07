@@ -15,6 +15,9 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
+	 * TODO: HIGH: When listener joins group, it needs the latest copy of the
+	 * log
+	 * 
 	 * TODO: HIGH: Coordinator rebuild active file list on restart
 	 * 
 	 * TODO: HIGH: Cleanup Paxos (filename, opNum) -> X data structures when we
@@ -105,7 +108,7 @@ public class TDFSNode extends RIONode {
 	/**
 	 * Graph of commands used by clients for concurrency control
 	 */
-	private CommandGraph commandGraph;
+	CommandGraph commandGraph;
 
 	/**
 	 * In memory logs of recent file changes
@@ -516,7 +519,8 @@ public class TDFSNode extends RIONode {
 
 		List<Integer> coordinators = getCoordinators(p.filename);
 
-		Integer responded = acceptorsResponded.get(new Tuple<String, Integer>(p.filename, p.operationNumber));
+		Integer responded = acceptorsResponded.get(new Tuple<String, Integer>(
+				p.filename, p.operationNumber));
 		responded = (responded == null) ? 1 : responded + 1;
 		acceptorsResponded.put(new Tuple<String, Integer>(p.filename,
 				p.operationNumber), responded);
@@ -555,12 +559,19 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * @param from
 	 *            The sender
-	 * @param msg
+	 * @param filename
 	 *            The filename
 	 */
-	public void receiveCreateGroup(int from, String msg) {
+	public void receiveCreateGroup(int from, String filename) {
 		try {
-			logFS.createGroup(msg);
+			logFS.createGroup(filename);
+			List<Integer> listeners = fileListeners.get(filename);
+			if (listeners == null) {
+				listeners = new ArrayList<Integer>();
+				fileListeners.put(filename, listeners);
+				listeners.add(this.addr);
+				listeners.add(twoPCCoordinatorAddress);
+			}
 		} catch (AlreadyParticipatingException e) {
 			Logger.error(this, e);
 			// TODO: High:
@@ -728,16 +739,22 @@ public class TDFSNode extends RIONode {
 	 */
 	public void learn(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
+		if (!logFS.isListening(p.filename)) {
+			logFS.createGroup(p.filename);
+		}
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
 		String[] txFiles = fileTransactionMap.get(p.filename);
 
 		// check for transactions
 
 		if (p.operation instanceof TXStartLogEntry) {
+			TXStartLogEntry txCommand = (TXStartLogEntry)p.operation;
 			// start callback
 			addTxTimeout(p.filename);
+		
 			// add files
-			String[] files = ((TXStartLogEntry) p.operation).filenames;
+			String[] files = txCommand.filenames;
+			int client = txCommand.address;
 			if (txFiles != null) { // client didn't abort or commit last tx
 				Logger.error(this, "Client: " + from
 						+ " did not commit or abort last tx!");
