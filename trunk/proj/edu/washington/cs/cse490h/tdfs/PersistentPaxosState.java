@@ -65,6 +65,13 @@ public class PersistentPaxosState {
 	}
 
 	public void accept(Proposal value) {
+		Tuple<String, Integer> key = new Tuple<String, Integer>(value.filename,
+				value.operationNumber);
+		Proposal current = accepted.get(key);
+		if (current != null && current.proposalNumber > value.proposalNumber) {
+			return;
+		}
+
 		accepted.put(new Tuple<String, Integer>(value.filename,
 				value.operationNumber), value);
 		try {
@@ -84,7 +91,7 @@ public class PersistentPaxosState {
 		acceptedStream.close();
 		promisedStream.close();
 	}
-	
+
 	public Proposal highestAccepted(String filename, int operationNumber) {
 		return accepted.get(new Tuple<String, Integer>(filename,
 				operationNumber));
