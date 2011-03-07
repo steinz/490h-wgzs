@@ -17,6 +17,9 @@ public interface LogFS {
 	public LogEntry getLogEntry(String filename, int operationNumber)
 			throws NotListeningException, NoSuchOperationNumberException;
 
+	public boolean hasLogNumber(String filename, int operationNumber)
+			throws NotListeningException;
+
 	public boolean isListening(String filename);
 
 	public void listen(String filename, byte[] packedLog)
@@ -26,6 +29,7 @@ public interface LogFS {
 
 	public byte[] packLog(String filename) throws NotListeningException;
 
-	public void writeLogEntry(String filename, int logEntryNumber, LogEntry op) throws NotListeningException;
+	public void writeLogEntry(String filename, int logEntryNumber, LogEntry op)
+			throws NotListeningException;
 
 }

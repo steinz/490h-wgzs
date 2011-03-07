@@ -15,6 +15,8 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
+	 * TODO: HIGH: Coordinator rebuild active file list on restart
+	 * 
 	 * TODO: HIGH: Cleanup Paxos (filename, opNum) -> X data structures when we
 	 * learn entries for those keys.
 	 * 
@@ -92,7 +94,7 @@ public class TDFSNode extends RIONode {
 	/**
 	 * We currently only support a single 2PC coordinator with this address
 	 */
-	private static final int twoPCCoordinatorAddress = coordinatorCount + 1;
+	static final int twoPCCoordinatorAddress = coordinatorCount + 1;
 
 	/**
 	 * Time between when the 2PC Coordinator learns about a transaction starting
@@ -130,7 +132,7 @@ public class TDFSNode extends RIONode {
 	 * List of addresses this coordinator passes on changes to when it learns a
 	 * file changes
 	 */
-	private Map<String, List<Integer>> fileListeners;
+	Map<String, List<Integer>> fileListeners;
 
 	/**
 	 * Last proposal number prepared for a given file
@@ -298,6 +300,9 @@ public class TDFSNode extends RIONode {
 					.addCommand(new ListenCommand(filename));
 			commandGraph.addCommand(after);
 			l.execute();
+			if (getCoordinators(filename).contains(this.addr)) {
+				commandGraph.filenameDone(filename, -1, -1);
+			}
 		} else {
 			commandGraph.addCommand(after).execute();
 		}
@@ -357,6 +362,9 @@ public class TDFSNode extends RIONode {
 					.addCommand(new ListenCommand(filename));
 			commandGraph.addCheckpoint(after);
 			l.execute();
+			if (getCoordinators(filename).contains(this.addr)) {
+				commandGraph.filenameDone(filename, -1, -1);
+			}
 		} else {
 			commandGraph.addCheckpoint(after).execute();
 		}
@@ -502,20 +510,25 @@ public class TDFSNode extends RIONode {
 	public void receiveAccepted(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
 
-		if (logFS.getLogEntry(p.filename, p.operationNumber) != null) {
-			// already learned
+		if (logFS.hasLogNumber(p.filename, p.operationNumber)) {
 			return;
 		}
 
 		List<Integer> coordinators = getCoordinators(p.filename);
 
-		Integer responded = acceptorsResponded.get(p.filename);
+		Integer responded = acceptorsResponded.get(new Tuple<String, Integer>(p.filename, p.operationNumber));
 		responded = (responded == null) ? 1 : responded + 1;
 		acceptorsResponded.put(new Tuple<String, Integer>(p.filename,
 				p.operationNumber), responded);
 
 		if (responded > coordinators.size() / 2) {
-			RIOSend(this.addr, MessageType.Learned, msg);
+			// inform listeners iff coordinator for this file
+			List<Integer> listeners = fileListeners.get(p.filename);
+			if (listeners != null) {
+				for (Integer i : listeners) {
+					RIOSend(i, MessageType.Learned, msg);
+				}
+			}
 			acceptorsResponded.remove(p.filename);
 		}
 	}
@@ -667,13 +680,7 @@ public class TDFSNode extends RIONode {
 		if (!logFS.isListening(filename)) { // If the group doesn't exist
 			new ListenCommand(filename).execute(this);
 		}
-		List<Integer> list = fileListeners.get(filename);
-		if (list == null) {
-			list = new ArrayList<Integer>();
-			list.add(twoPCCoordinatorAddress);
-			fileListeners.put(filename, list);
-		}
-		list.add(from);
+		fileListeners.get(filename).add(from);
 		RIOSend(from, MessageType.AddedListener,
 				Utility.stringToByteArray(filename));
 	}
@@ -692,16 +699,6 @@ public class TDFSNode extends RIONode {
 		// TODO: HIGH: coordinators don't have to record these if not listening
 		Proposal p = new Proposal(msg);
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
-
-		// inform listeners iff coordinator for this file
-		if (getCoordinators(p.filename).contains(this.addr)) {
-			List<Integer> listeners = fileListeners.get(p.filename);
-			if (listeners != null) {
-				for (Integer i : listeners) {
-					RIOSend(i, MessageType.Learned, msg);
-				}
-			}
-		}
 
 		// tell the commandGraph to finish commands it might be executing
 		if (p.operation instanceof TXAbortLogEntry
