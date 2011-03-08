@@ -10,6 +10,8 @@ main();
 sub main {
     
     $classpath = "proj/:jars/plume.jar:jars/lib.jar";
+
+    $properties = "-Djava.util.logging.config.file=logging.properties";
     
     $args = join " ", @ARGV;
 
