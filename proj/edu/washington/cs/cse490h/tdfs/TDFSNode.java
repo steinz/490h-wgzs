@@ -16,7 +16,7 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
 
-	/* 
+	/*
 	 * TODO: HIGH: Coordinator rebuild active file list on restart
 	 * 
 	 * TODO: HIGH: Cleanup Paxos (filename, opNum) -> X data structures when we
@@ -37,36 +37,27 @@ public class TDFSNode extends RIONode {
 	 * TODO: Support multiple 2PC coordinators for reliability - cold
 	 * replacements with leases should be fine
 	 * 
-	 * TODO: re-request to listen when notifying coordinator goes down: maybe
-	 * detect if we're getting Paxos messages from other coordinators except the
-	 * coordinator we expect to be notifying us of log changes
-	 * 
-	 * TODO: abortCommands for CommandNodes should propose TXTryAborts, not
-	 * TXAborts
-	 * 
-	 * TODO: Test w/ handshakes
-	 * 
-	 * TODO: Logger config
-	 * 
-	 * TODO: support concurrent transactions
-	 * 
 	 * TODO: Support a StopListening command clients can use when they lose
 	 * interest in a file. This way they can also request to listen from a
 	 * second coordinator if one becomes unresponsive and clean up when the
 	 * first becomes responsive again
 	 * 
+	 * TODO: Test w/ handshakes
+	 * 
+	 * TODO: Logger config
+	 * 
 	 * TODO: Contention friendly ops - coordinator declare lead proposer
+	 * 
+	 * TODO: support concurrent transactions
 	 * 
 	 * TODO: Clean filenames
 	 * 
 	 * TODO: OPT: GC logs
 	 * 
-	 * TODO: Lead proposer support - send MessageType.Request to elected lead
-	 * proposer for lively Paxos
+	 * TODO: Lead proposer support - send requests with MessageType.Request and
+	 * elect lead proposer with a lease for lively Paxos
 	 * 
-	 * TODO: Consistent Hashing?
-	 * 
-	 * TODO: Support dynamic coordinator groups -
+	 * TODO: Consistent Hashing / Dynamic Coordinator Groups -
 	 * 
 	 * Interesting idea: include the coordinator count as part of the filename
 	 * (not necessarily literally), and then use a biased hash function so that
@@ -252,21 +243,21 @@ public class TDFSNode extends RIONode {
 	public void coordinatorsParser(Tokenizer t) {
 		coordinatorCount = Integer.parseInt(t.next());
 	}
-	
+
 	public void perfileParser(Tokenizer t) {
 		coordinatorsPerFile = Integer.parseInt(t.next());
 	}
-	
+
 	public void nodesParser(Tokenizer t) {
 		maxTotalNodeCount = Integer.parseInt(t.next());
 	}
-	
+
 	public void appendParser(Tokenizer t) {
 		String filename = t.next();
 		String contents = t.rest();
 		append(filename, contents);
 	}
-	
+
 	public void createParser(Tokenizer t) {
 		String filename = t.next();
 		create(filename);
@@ -280,6 +271,11 @@ public class TDFSNode extends RIONode {
 	public void getParser(Tokenizer t) {
 		String filename = t.next();
 		get(filename);
+	}
+
+	public void listenParser(Tokenizer t) {
+		String filename = t.next();
+		listen(filename);
 	}
 
 	public void putParser(Tokenizer t) {
@@ -327,6 +323,11 @@ public class TDFSNode extends RIONode {
 
 	public void get(String filename) {
 		checkListen(filename, new GetCommand(filename, this.addr));
+	}
+
+	public void listen(String filename) {
+		commandGraph.addCommand(new ListenCommand(filename, this.addr), false,
+				null).execute();
 	}
 
 	public void put(String filename, String contents) {
