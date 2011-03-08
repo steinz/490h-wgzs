@@ -175,7 +175,7 @@ public class TDFSNode extends RIONode {
 	 * A map from filenames in a transaction to the client transacting on these
 	 * files.
 	 */
-	private Map<String[], Integer> transactionAddressMap;
+	private Map<String, Integer> transactionAddressMap;
 
 	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
@@ -203,7 +203,7 @@ public class TDFSNode extends RIONode {
 
 		// 2PC
 		fileTransactionMap = new HashMap<String, String[]>();
-		transactionAddressMap = new HashMap<String[], Integer>();
+		transactionAddressMap = new HashMap<String, Integer>();
 
 	}
 
@@ -845,9 +845,8 @@ public class TDFSNode extends RIONode {
 
 			for (String file : files) {
 				fileTransactionMap.put(file, files);
+				transactionAddressMap.put(file, txCommand.address);
 			}
-			transactionAddressMap.put(files, txCommand.address);
-
 		}
 
 		else if (p.operation instanceof TXTryCommitLogEntry) {
@@ -868,7 +867,7 @@ public class TDFSNode extends RIONode {
 
 		else if (p.operation instanceof TXTryAbortLogEntry) {
 			String[] files = ((TXTryAbortLogEntry) p.operation).filenames;
-			Integer client = transactionAddressMap.get(files);
+			Integer client = transactionAddressMap.get(files[0]);
 			abortClientTx(p.filename, client);
 		}
 	}
