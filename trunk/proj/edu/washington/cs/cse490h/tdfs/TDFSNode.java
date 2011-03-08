@@ -172,6 +172,12 @@ public class TDFSNode extends RIONode {
 	private Map<String, String[]> fileTransactionMap;
 
 	/**
+	 * A map from filenames in a transaction to the client transacting on these
+	 * files.
+	 */
+	private Map<String[], Integer> transactionAddressMap;
+
+	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
 	 */
 	private static int hashFilename(String filename) {
@@ -197,6 +203,7 @@ public class TDFSNode extends RIONode {
 
 		// 2PC
 		fileTransactionMap = new HashMap<String, String[]>();
+		transactionAddressMap = new HashMap<String[], Integer>();
 
 	}
 
@@ -426,11 +433,6 @@ public class TDFSNode extends RIONode {
 	 */
 	@Override
 	public void onRIOReceive(Integer from, MessageType type, byte[] msg) {
-		// 2PC handler
-		if (addr == twoPCCoordinatorAddress) {
-			learn(from, msg);
-			return;
-		}
 
 		// route message
 		try {
@@ -539,6 +541,8 @@ public class TDFSNode extends RIONode {
 				RIOSend(address, MessageType.Accepted, msg);
 			}
 		} else {
+			Logger.verbose(this, " not accepting proposal: " + p.proposalNumber);
+			Logger.verbose(this, "highest proposal number promised: " + paxosState.highestPromised(p.filename, p.operationNumber));
 			// send some denial, maybe an updated promise or just an abort?
 		}
 	}
@@ -713,7 +717,8 @@ public class TDFSNode extends RIONode {
 	}
 
 	/**
-	 * Set of (filename, (opNum, propNum)) tracking promisesDenial responses send
+	 * Set of (filename, (opNum, propNum)) tracking promisesDenial responses
+	 * send
 	 * 
 	 * TODO: cleanup on learns
 	 */
@@ -770,6 +775,11 @@ public class TDFSNode extends RIONode {
 	 *            The proposal, as a byte array
 	 */
 	public void receiveLearned(int from, byte[] msg) {
+		// 2PC handler
+		if (addr == twoPCCoordinatorAddress) {
+			learn(from, msg);
+			return;
+		}
 		Proposal p = new Proposal(msg);
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
 
@@ -779,10 +789,12 @@ public class TDFSNode extends RIONode {
 				|| p.operation instanceof TXStartLogEntry) {
 			if (commandGraph.done(new CommandKey(p.filename, this.addr))) {
 				printVerbose("finished: " + p.operation.toString());
-			} else {
-				printVerbose("abort injected, cancelling all pending operations");
-				commandGraph = new CommandGraph(this);
-				transactingFiles = null;
+			} else if (p.operation instanceof TXAbortLogEntry) {
+				if (((TXAbortLogEntry) p.operation).address == this.addr) {
+					printVerbose("abort injected, cancelling all pending operations");
+					commandGraph = new CommandGraph(this);
+					transactingFiles = null;
+				}
 			}
 		} else {
 			// txTryCommands aren't picked up here because they use a different
@@ -826,32 +838,33 @@ public class TDFSNode extends RIONode {
 				return;
 
 			// start callback
-			addTxTimeout(p.filename);
+			addTxTimeout(p.filename, txCommand.address);
 
 			// add files
 			String[] files = txCommand.filenames;
-			int client = txCommand.address;
-			if (txFiles != null) { // client didn't abort or commit last tx
-				Logger.error(this, "Client: " + client
-						+ " did not commit or abort last tx!");
-			}
+
 			for (String file : files) {
 				fileTransactionMap.put(file, files);
 			}
+			transactionAddressMap.put(files, txCommand.address);
 
 		}
 
 		else if (p.operation instanceof TXTryCommitLogEntry) {
 			// commit to each filename coordinator
 			String[] files = ((TXTryCommitLogEntry) p.operation).filenames;
-			createProposal(new TXTryCommitLogEntry(files), files);
-			for (String file : txFiles) {
-				fileTransactionMap.put(file, null);
+			createProposal(new TXCommitLogEntry(files), files);
+			if (txFiles != null) {
+				for (String file : txFiles) {
+					fileTransactionMap.put(file, null);
+				}
 			}
 		}
 
 		else if (p.operation instanceof TXTryAbortLogEntry) {
-			abortClientTx(p.filename);
+			String[] files = ((TXTryAbortLogEntry) p.operation).filenames;
+			Integer client = transactionAddressMap.get(files);
+			abortClientTx(p.filename, client);
 		}
 	}
 
@@ -863,13 +876,14 @@ public class TDFSNode extends RIONode {
 	 * @param filename
 	 *            The filename key to abort
 	 */
-	public void abortClientTx(String filename) {
+	public void abortClientTx(String filename, Integer address) {
 		String[] files = fileTransactionMap.get(filename);
 		if (files == null)
 			return; // Assume the client must have already aborted or committed
 		// this tx
+
+		createProposal(new TXAbortLogEntry(files, address), files);
 		for (String file : files) {
-			createProposal(new TXTryAbortLogEntry(files), files);
 			fileTransactionMap.put(file, null);
 		}
 	}
@@ -880,17 +894,17 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * @param client
 	 */
-	public void addTxTimeout(String filename) {
+	public void addTxTimeout(String filename, Integer address) {
 		Method cbMethod = null;
 		try {
-			String[] params = { "java.lang.String" };
+			String[] params = { "java.lang.String", "java.lang.Integer" };
 			cbMethod = Callback.getMethod("abortClientTx", this, params);
 			cbMethod.setAccessible(true); // HACK
 		} catch (Exception e) {
 			printError(e);
 			e.printStackTrace();
 		}
-		String[] args = { filename };
+		Object[] args = { filename, address };
 		Callback cb = new Callback(cbMethod, this, args);
 		addTimeout(cb, TDFSNode.txTimeout);
 	}
@@ -906,14 +920,16 @@ public class TDFSNode extends RIONode {
 	 */
 	public void createProposal(LogEntry operation, String[] files) {
 		for (String file : files) {
-			List<Integer> coordinators = getCoordinators(file);
-			Proposal newProposal = new Proposal(new TXCommitLogEntry(files),
-					file, logFS.nextLogNumber(file), nextProposalNumber(file,
-							logFS.nextLogNumber(file)));
+			if (logFS.checkLocked(file) != null) {
+				List<Integer> coordinators = getCoordinators(file);
+				Proposal newProposal = new Proposal(operation, file,
+						logFS.nextLogNumber(file), nextProposalNumber(file,
+								logFS.nextLogNumber(file)));
 
-			byte[] packed = newProposal.pack();
-			for (Integer addr : coordinators) {
-				RIOSend(addr, MessageType.Prepare, packed);
+				byte[] packed = newProposal.pack();
+				for (Integer addr : coordinators) {
+					RIOSend(addr, MessageType.Prepare, packed);
+				}
 			}
 		}
 	}
