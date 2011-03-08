@@ -161,7 +161,9 @@ public class LogFileSystem implements LogFS {
 					int opNumber = stream.readInt();
 					int opLength = stream.readInt();
 					byte[] packedOp = new byte[opLength];
-					stream.read(packedOp, 0, opLength);
+					if (stream.read(packedOp) != opLength) {
+						throw new EOFException("premature EOF detected in LogEntry");
+					}
 					operations.put(opNumber, LogEntry.unpack(packedOp));
 				}
 			} catch (EOFException e) {
