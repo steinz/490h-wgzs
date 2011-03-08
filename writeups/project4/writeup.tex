@@ -96,6 +96,14 @@ Clients are all proposers. By not using a lead proposer, we eliminate the need t
 Coordinators could easily detect contention on a specific file and then switch on lead-proposer-mode via a log entry to ensure Paxos liveliness, however at this time we do not support that feature.
 The coordinators assigned to each file act as the acceptors and learners for that file. This means that clients do not learn about operations directly, but rather via a coordinator who treats the client as a "listener", and simply tells the client about all values it learns.
 
+If a client has not heard anything from a coordinator in awhile about a particular file and is not sure whether a coordinator has gone down or if simply no operations have been performed, a client can explicitly request to listen to a file by typing the "listen" command, like so:
+
+\begin{verbatim}
+1 listen f1
+\end{verbatim}
+
+The client could be added to the listener list twice, but this allows the client to discover whether the coordinator has gone down or not.
+
 Coordinators are assigned to files using a simple hash function.
 The filename's hash code and following integers are used as the addresses of the coordinators.
 In a multiple data center setting, addresses should be distributed round-robin amongst data centers for maximum reliability.
