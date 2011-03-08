@@ -26,7 +26,8 @@ The user must also specify the number of coordinators to assign to each filename
 Coordinators are expected to take on the lowest addresses in the address space, followed by the 2PC coordinators, and any other clients.
 
 The majority of the coordinator address space should be alive at any given time to ensure responsiveness. 
-A majority of 2PC coordinators must be alive in order for the system to successfully abort or commit any transactions, however this condition is trivially met in our system by only supporting one 2PC coordinator.
+A majority of 2PC coordinators must be alive in order for the system to successfully abort or commit any transactions - 
+however our current implementation only supports a single 2PC coordinator.
 The system's availability is unaffected by other client's liveliness.
 
 \section{Commands} 
