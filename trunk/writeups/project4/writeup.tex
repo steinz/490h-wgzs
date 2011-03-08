@@ -150,21 +150,19 @@ Which would be 4 packets, not including ACKs. That same write in our system woul
 \begin{verbatim}
 Client Listen File -> Coordinator
 Coordinator Added Client as Listener -> Client
-Client Prepare  -> Coordinators 1,2,3
-Coordinators 1,2,3 Promise -> Client
-Client Accept -> Coordinators 1,2,3
-Coordinators 1,2,3 Learn -> Coordinators 1,2,3
+Client Prepare  -> Coordinators (1..N)
+Coordinators (1..N) Promise -> Client
+Client Accept -> Coordinators (1..N)
+Coordinators (1..N) Learn -> Coordinators (1..N)
 Coordinator Learned -> Client
 \end{verbatim}
-Which would be 21 packets, not including ACKs. Though using paxos for every operation increases the necessary number of packets considerably, it provides consistency and high availability, which we feel is a beneficial tradeoff.
+
+Which would be $3N^2 + 3N + 3$ packets, not including ACKs. Though using paxos for every operation increases the necessary number of packets considerably, it provides consistency and high availability, which we feel is a beneficial tradeoff. It is also worth noting that even though the total number of packets sent is higher, the number of rounds it takes is only 7 for our operation, and 4 for the standard client-server architecture. 
 
 
 Code size and complexity
 
 This setup also eliminates the need for replication, if only because there is no persistent storage for files (i.e. there is nothing to replicate). Paxos ensures that the distributed log is consistent.
-
-
-\section{Packet and Persistent Store Formats}
 
 \section{Outstanding Issues}
 The file log currently is never being cleaned. That is, every operation since the paxos group's instantiation is stored in the file, even operations that are unnecessary (for example, if the file has been created, deleted, and then created again, there's no reason to keep track of the first create and delete). One might think of this as a feature - it would be trivial to implement versioning on top of this, where the log line k and all log lines k-1 correspond to version k of the file. 
