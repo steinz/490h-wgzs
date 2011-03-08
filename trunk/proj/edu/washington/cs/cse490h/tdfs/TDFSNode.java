@@ -5,8 +5,10 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import edu.washington.cs.cse490h.lib.Callback;
 import edu.washington.cs.cse490h.lib.Utility;
@@ -14,13 +16,7 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
 
-	/*
-	 * TODO: HIGH: Listen commands should probably just send requestToListens to
-	 * themselves even if the coordinator is the one doing the request for
-	 * simplicity
-	 * 
-	 * TODO: HIGH: Change -1 int special cases in Commands to null Integer cases
-	 * 
+	/* 
 	 * TODO: HIGH: Verify not proposing things on txing files
 	 * 
 	 * TODO: HIGH: Node count config commands
@@ -169,7 +165,7 @@ public class TDFSNode extends RIONode {
 	 * List of addresses this coordinator passes on changes to when it learns a
 	 * file changes
 	 */
-	Map<String, List<Integer>> fileListeners;
+	Map<String, Set<Integer>> fileListeners;
 
 	/**
 	 * Last proposal number prepared for a given file
@@ -217,7 +213,7 @@ public class TDFSNode extends RIONode {
 
 		// Paxos
 		this.acceptorsResponded = new HashMap<Tuple<String, Integer>, Integer>();
-		this.fileListeners = new HashMap<String, List<Integer>>();
+		this.fileListeners = new HashMap<String, Set<Integer>>();
 		this.lastProposalNumbersSent = new HashMap<Tuple<String, Integer>, Integer>();
 		this.paxosState = new PersistentPaxosState(this);
 		this.promisesReceived = new HashMap<Tuple<String, Integer>, Integer>();
@@ -343,7 +339,7 @@ public class TDFSNode extends RIONode {
 		checkListen(filename, new PutCommand(filename, contents, this.addr));
 	}
 
-	private void checkListen(String filename, FileCommand after) {
+	private List<Command> buildAbortCommands() {
 		List<Command> abortCommands = null;
 		if (transactingFiles != null) {
 			abortCommands = new ArrayList<Command>(transactingFiles.length);
@@ -351,19 +347,21 @@ public class TDFSNode extends RIONode {
 				abortCommands.add(new AbortCommand(transactingFiles, tf,
 						this.addr));
 			}
+
 		}
+		return abortCommands;
+	}
+
+	private void checkListen(String filename, FileCommand after) {
+		List<Command> abortCommands = buildAbortCommands();
 
 		if (!logFS.isListening(filename)) {
 			CommandNode l = commandGraph.addCommand(new ListenCommand(filename,
 					this.addr), false, abortCommands);
 			commandGraph.addCommand(after, false, abortCommands);
 			l.execute();
-			if (getCoordinators(filename).contains(this.addr)) {
-				// listen done
-				commandGraph.done(new CommandKey(filename, -1, -1));
-			}
 		} else {
-			commandGraph.addCommand(after).execute();
+			commandGraph.addCommand(after, false, abortCommands).execute();
 		}
 	}
 
@@ -419,16 +417,15 @@ public class TDFSNode extends RIONode {
 	 * non-FileCommand version used for transactions
 	 */
 	private void checkListen(String filename, Command after) {
+		List<Command> abortCommands = buildAbortCommands();
+
 		if (!logFS.isListening(filename)) {
-			CommandNode l = commandGraph
-					.addCommand(new ListenCommand(filename));
-			commandGraph.addCheckpoint(after);
+			CommandNode l = commandGraph.addCommand(new ListenCommand(filename,
+					this.addr), false, abortCommands);
+			commandGraph.addCommand(after, true, abortCommands);
 			l.execute();
-			if (getCoordinators(filename).contains(this.addr)) {
-				commandGraph.filenameDone(filename, -1, -1);
-			}
 		} else {
-			commandGraph.addCheckpoint(after).execute();
+			commandGraph.addCommand(after, true, abortCommands).execute();
 		}
 	}
 
@@ -583,7 +580,7 @@ public class TDFSNode extends RIONode {
 
 		if (responded > coordinators.size() / 2) {
 			// inform listeners iff coordinator for this file
-			List<Integer> listeners = fileListeners.get(p.filename);
+			Set<Integer> listeners = fileListeners.get(p.filename);
 			if (listeners != null) {
 				for (Integer i : listeners) {
 					RIOSend(i, MessageType.Learned, msg);
@@ -621,6 +618,17 @@ public class TDFSNode extends RIONode {
 	public void receiveCreateGroup(int from, String filename) {
 		if (!logFS.isListening(filename)) {
 			logFS.createGroup(filename);
+			ensureListening(filename);
+		}
+	}
+
+	private void ensureListening(String filename) {
+		Set<Integer> listeners = fileListeners.get(filename);
+		if (listeners == null) {
+			listeners = new HashSet<Integer>();
+			listeners.add(this.addr);
+			listeners.add(TDFSNode.twoPCCoordinatorAddress);
+			fileListeners.put(filename, listeners);
 		}
 	}
 
@@ -658,7 +666,7 @@ public class TDFSNode extends RIONode {
 					p.operationNumber);
 
 			while (p.proposalNumber < highestProposalNumber) {
-				// HACK HACK HACk
+				// suboptimal
 				p.proposalNumber += maxTotalNodeCount;
 			}
 
@@ -728,10 +736,20 @@ public class TDFSNode extends RIONode {
 	 *            The proposal, in packed form
 	 */
 	public void receiveRequestToListen(int from, String filename) {
-		if (!logFS.isListening(filename)) { // If the group doesn't exist
-			new ListenCommand(filename, this.addr).execute(this);
+		List<Integer> coordinators = getCoordinators(filename);
+		for (int next : coordinators) {
+			RIOSend(next, MessageType.CreateGroup,
+					Utility.stringToByteArray(filename));
 		}
-		fileListeners.get(filename).add(from);
+
+		Set<Integer> listeners = fileListeners.get(filename);
+		ensureListening(filename);
+		listeners.add(from);
+
+		// Create the log if it doesn't exist locally
+		if (!logFS.isListening(filename)) {
+			logFS.createGroup(filename);
+		}
 		RIOSend(from, MessageType.AddedListener,
 				Utility.stringToByteArray(filename));
 	}
