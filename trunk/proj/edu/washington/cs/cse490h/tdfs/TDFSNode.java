@@ -16,7 +16,7 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
 
-	/* 
+	/*
 	 * TODO: HIGH: Verify not proposing things on txing files
 	 * 
 	 * TODO: HIGH: Node count config commands
@@ -49,6 +49,9 @@ public class TDFSNode extends RIONode {
 	 * Promise -1> Accept -> AcceptDenial -1> (done) | Accepted -1> Learned ->
 	 * (done)
 	 * 
+	 * TODO: Support multiple 2PC coordinators for reliability - cold
+	 * replacements with leases should be fine
+	 * 
 	 * TODO: re-request to listen when notifying coordinator goes down: maybe
 	 * detect if we're getting Paxos messages from other coordinators except the
 	 * coordinator we expect to be notifying us of log changes
@@ -56,26 +59,21 @@ public class TDFSNode extends RIONode {
 	 * TODO: abortCommands for CommandNodes should propose TXTryAborts, not
 	 * TXAborts
 	 * 
-	 * TODO: support concurrent transactions
 	 * 
 	 * TODO: Test w/ handshakes
 	 * 
 	 * TODO: Logger config
 	 * 
-	 * TODO: txaborts and txcommits currently use commandGraph.addCheckpoint,
-	 * which means they don't happen parallel for no good reason. They should
-	 * depend on all tails, and everything added after them should depend on
-	 * them, but they shouldn't depend on each other.
+	 * TODO: support concurrent transactions
 	 * 
 	 * TODO: Support a StopListening command clients can use when they lose
 	 * interest in a file. This way they can also request to listen from a
 	 * second coordinator if one becomes unresponsive and clean up when the
 	 * first becomes responsive again
 	 * 
-	 * TODO: Support multiple 2PC coordinators for reliability - cold
-	 * replacements with leases should be fine
-	 * 
 	 * TODO: Contention friendly ops - coordinator declare lead proposer
+	 * 
+	 * TODO: Clean filenames
 	 * 
 	 * TODO: OPT: GC logs
 	 * 
@@ -750,11 +748,11 @@ public class TDFSNode extends RIONode {
 		if (!logFS.isListening(filename)) {
 			logFS.createGroup(filename);
 		}
-		RIOSend(from, MessageType.AddedListener,
-				Utility.stringToByteArray(filename));
+		RIOSend(from, MessageType.AddedListener, logFS.packLog(filename));
 	}
 
-	public void receiveAddedListener(int from, String filename) {
+	public void receiveAddedListener(int from, byte[] packedLog) {
+		String filename = logFS.listen(packedLog);
 		commandGraph.done(new CommandKey(filename, -1, -1));
 	}
 
@@ -776,6 +774,8 @@ public class TDFSNode extends RIONode {
 				printVerbose("finished: " + p.operation.toString());
 			}
 		} else {
+			// txTryCommands aren't picked up here because they use a different
+			// subkey
 			if (commandGraph.done(new CommandKey(p.filename, p.operationNumber,
 					p.proposalNumber))) {
 				printVerbose("finished: " + p.operation.toString());

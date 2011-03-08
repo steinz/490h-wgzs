@@ -1,6 +1,5 @@
 package edu.washington.cs.cse490h.tdfs;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import edu.washington.cs.cse490h.lib.Utility;

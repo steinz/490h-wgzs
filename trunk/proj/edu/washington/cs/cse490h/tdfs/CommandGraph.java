@@ -157,7 +157,8 @@ public class CommandGraph {
 	}
 
 	public boolean done(CommandKey key) {
-		if (checkpointHead != null && checkpointHead.second.equals(key)) {
+		if (checkpointHead != null
+				&& checkpointHead.second.command.getKey().reallyEquals(key)) {
 			if (checkpointTail == checkpointHead.second) {
 				checkpointTail = null;
 			}

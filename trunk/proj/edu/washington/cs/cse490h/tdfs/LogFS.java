@@ -2,6 +2,9 @@ package edu.washington.cs.cse490h.tdfs;
 
 public interface LogFS {
 
+	/**
+	 * null if unlocked, otherwise address of owner
+	 */
 	public Integer checkLocked(String filename) throws NotListeningException;
 
 	public void createGroup(String filename)
@@ -22,8 +25,11 @@ public interface LogFS {
 
 	public boolean isListening(String filename);
 
-	public void listen(String filename, byte[] packedLog)
-			throws AlreadyParticipatingException;
+	/**
+	 * Returns the filename in the packedLog and unpacks the log into memory
+	 * (overwriting any existing log)
+	 */
+	public String listen(byte[] packedLog);
 
 	public int nextLogNumber(String filename) throws NotListeningException;
 

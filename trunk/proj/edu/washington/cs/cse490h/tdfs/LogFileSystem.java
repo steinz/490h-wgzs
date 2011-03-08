@@ -13,10 +13,14 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.logging.Logger;
 
+import edu.washington.cs.cse490h.lib.Utility;
+
 public class LogFileSystem implements LogFS {
 
 	private static class FileLog {
 		// TODO: cache
+
+		public final String filename;
 
 		private SortedMap<Integer, LogEntry> operations;
 
@@ -25,13 +29,15 @@ public class LogFileSystem implements LogFS {
 		/**
 		 * New file is implicitly: unlocked/not in a tx, deleted
 		 */
-		public FileLog() {
+		public FileLog(String filename) {
+			this.filename = filename;
 			this.operations = new TreeMap<Integer, LogEntry>();
 			this.nextOperationNumber = 0;
 		}
 
-		public FileLog(SortedMap<Integer, LogEntry> operations,
-				int nextOperationNumber) {
+		public FileLog(String filename,
+				SortedMap<Integer, LogEntry> operations, int nextOperationNumber) {
+			this.filename = filename;
 			this.operations = operations;
 			this.nextOperationNumber = nextOperationNumber;
 		}
@@ -108,6 +114,10 @@ public class LogFileSystem implements LogFS {
 			DataOutputStream dataStream = new DataOutputStream(byteStream);
 
 			try {
+				byte[] filenameBytes = Utility.stringToByteArray(filename);
+				dataStream.writeInt(filenameBytes.length);
+				dataStream.write(filenameBytes);
+
 				dataStream.writeInt(nextOperationNumber);
 
 				for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
@@ -130,12 +140,23 @@ public class LogFileSystem implements LogFS {
 			DataInputStream stream = new DataInputStream(
 					new ByteArrayInputStream(packedLog));
 
+			String filename;
 			SortedMap<Integer, LogEntry> operations = new TreeMap<Integer, LogEntry>();
 			int nextOpNumber = 0;
 
 			try {
+				int len = stream.readInt();
+				byte[] filenameBytes = new byte[len];
+				if (stream.read(filenameBytes) != len) {
+					throw new EOFException("premature EOF detected in filename");
+				}
+				filename = Utility.byteArrayToString(filenameBytes);
 				nextOpNumber = stream.readInt();
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
 
+			try {
 				while (true) {
 					int opNumber = stream.readInt();
 					int opLength = stream.readInt();
@@ -149,7 +170,7 @@ public class LogFileSystem implements LogFS {
 				throw new RuntimeException(e);
 			}
 
-			return new FileLog(operations, nextOpNumber);
+			return new FileLog(filename, operations, nextOpNumber);
 		}
 	}
 
@@ -173,7 +194,10 @@ public class LogFileSystem implements LogFS {
 
 	public void createGroup(String filename)
 			throws AlreadyParticipatingException {
-		participate(filename, new FileLog());
+		if (logs.containsKey(filename)) {
+			throw new AlreadyParticipatingException();
+		}
+		logs.put(filename, new FileLog(filename));
 	}
 
 	public boolean fileExists(String filename) throws NotListeningException {
@@ -230,9 +254,10 @@ public class LogFileSystem implements LogFS {
 		return logs.containsKey(filename);
 	}
 
-	public void listen(String filename, byte[] packedLog)
-			throws AlreadyParticipatingException {
-		participate(filename, FileLog.unpack(packedLog));
+	public String listen(byte[] packedLog) {
+		FileLog l = FileLog.unpack(packedLog);
+		logs.put(l.filename, l);
+		return l.filename;
 	}
 
 	private void logAccess(String filename, String operation) {
@@ -243,14 +268,6 @@ public class LogFileSystem implements LogFS {
 	public byte[] packLog(String filename) throws NotListeningException {
 		FileLog l = getLog(filename);
 		return l.pack();
-	}
-
-	private void participate(String filename, FileLog log)
-			throws AlreadyParticipatingException {
-		if (logs.containsKey(filename)) {
-			throw new AlreadyParticipatingException();
-		}
-		logs.put(filename, log);
 	}
 
 	public void writeLogEntry(String filename, int logEntryNumber, LogEntry op)
