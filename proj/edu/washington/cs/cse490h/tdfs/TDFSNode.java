@@ -541,8 +541,8 @@ public class TDFSNode extends RIONode {
 				RIOSend(address, MessageType.Accepted, msg);
 			}
 		} else {
-			Logger.verbose(this, " not accepting proposal: " + p.proposalNumber);
-			Logger.verbose(this, "highest proposal number promised: " + paxosState.highestPromised(p.filename, p.operationNumber));
+			Logger.verbose(this, "Node: " + addr + " not accepting proposal: " + p.proposalNumber);
+			Logger.verbose(this, "Node: " + addr + " highest proposal number promised: " + paxosState.highestPromised(p.filename, p.operationNumber));
 			// send some denial, maybe an updated promise or just an abort?
 		}
 	}
@@ -851,14 +851,19 @@ public class TDFSNode extends RIONode {
 		}
 
 		else if (p.operation instanceof TXTryCommitLogEntry) {
-			// commit to each filename coordinator
-			String[] files = ((TXTryCommitLogEntry) p.operation).filenames;
+			// check for duplicate learns
+			TXTryCommitLogEntry txCommand = (TXTryCommitLogEntry) p.operation;
+			
+			// check for duplicate learns
+			if (txFiles == null)
+				return;
+			
+			String[] files = txCommand.filenames;
 			createProposal(new TXCommitLogEntry(files), files);
-			if (txFiles != null) {
-				for (String file : txFiles) {
-					fileTransactionMap.put(file, null);
-				}
+			for (String file : txFiles) {
+				fileTransactionMap.put(file, null);
 			}
+			
 		}
 
 		else if (p.operation instanceof TXTryAbortLogEntry) {
