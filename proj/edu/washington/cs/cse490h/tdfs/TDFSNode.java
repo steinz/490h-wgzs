@@ -189,6 +189,7 @@ public class TDFSNode extends RIONode {
 		this.fileListeners = new HashMap<String, Set<Integer>>();
 		this.lastProposalNumbersSent = new HashMap<Tuple<String, Integer>, Integer>();
 		this.paxosState = new PersistentPaxosState(this);
+		this.promiseDenialResends = new HashSet<Tuple<String, Tuple<Integer, Integer>>>();
 		this.promisesReceived = new HashMap<Tuple<String, Integer>, Integer>();
 		this.highestProposalReceived = new HashMap<Tuple<String, Integer>, Proposal>();
 
@@ -709,9 +710,24 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
+	/**
+	 * Set of (filename, (opNum, propNum)) tracking promisesDenial responses send
+	 * 
+	 * TODO: cleanup on learns
+	 */
+	private Set<Tuple<String, Tuple<Integer, Integer>>> promiseDenialResends;
+
 	public void receivePromiseDenial(int from, byte[] msg) {
-		// PACK, UNPACK!
-		prepare(new Proposal(msg));
+		Proposal p = new Proposal(msg);
+
+		Tuple<String, Tuple<Integer, Integer>> key = new Tuple<String, Tuple<Integer, Integer>>(
+				p.filename, new Tuple<Integer, Integer>(p.operationNumber,
+						p.proposalNumber));
+
+		if (!promiseDenialResends.contains(key)) {
+			promiseDenialResends.add(key);
+			prepare(p);
+		}
 	}
 
 	/**
