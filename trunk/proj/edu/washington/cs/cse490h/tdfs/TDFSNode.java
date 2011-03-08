@@ -290,28 +290,15 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void txabortParser(Tokenizer t) {
-		if (transactingFiles != null) {
-			txabort();
-		} else {
-			printError("not in transaction");
-		}
+		txabort();
 	}
 
 	public void txcommitParser(Tokenizer t) {
-		if (transactingFiles != null) {
-			txcommit();
-		} else {
-			printError("not in transaction");
-		}
+		txcommit();
 	}
 
 	public void txstartParser(Tokenizer t) {
-		if (transactingFiles == null) {
-			transactingFiles = t.rest().split(commandDelim);
-			txstart(transactingFiles);
-		} else {
-			printError("already in transaction");
-		}
+		txstart(t.rest().split(commandDelim));
 	}
 
 	public void append(String filename, String contents) {
