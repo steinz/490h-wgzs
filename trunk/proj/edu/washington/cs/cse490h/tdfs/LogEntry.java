@@ -29,6 +29,12 @@ abstract class LogEntry {
 			int address = Integer.parseInt(t.next());
 			String[] filenames = t.rest().split(entryDelimiter);
 			return new TXStartLogEntry(filenames, address);
+		} else if (cmd.equals("TXTryAbort")) {
+			String[] filenames = t.rest().split(entryDelimiter);
+			return new TXTryAbortLogEntry(filenames);
+		} else if (cmd.equals("TXTryCommit")) {
+			String[] filenames = t.rest().split(entryDelimiter);
+			return new TXTryCommitLogEntry(filenames);
 		} else if (cmd.equals("Write")) {
 			boolean append = Boolean.parseBoolean(t.next());
 			String content = t.rest();
