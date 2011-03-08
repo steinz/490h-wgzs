@@ -234,20 +234,85 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	private String username;
+	/**
+	 * Username of the logged in user (user state)
+	 */
+	private String currentUsername = null;
 
-	public void addFriendParser(Tokenizer t) {
+	public void acceptFriendParser(Tokenizer t) {
 		String friendName = t.next();
 
-		String[] filenames = { username, friendName };
+		String[] filenames = { currentUsername + ".friends",
+				friendName + ".friends" };
 		txstart(filenames);
-		try {
-			append(username + ".friends", friendName);
-			append(friendName + ".friends", username);
-			txcommit();
-		} catch (Exception e) {
-			txabort();
+		// TODO: check that there's a pending request
+		append(filenames[0], friendName);
+		append(filenames[1], currentUsername);
+		txcommit();
+	}
+
+	public void createUserParser(Tokenizer t) {
+		String username = t.next();
+		String password = t.next();
+
+		String[] filenames = { username, username + ".friends",
+				username + ".requests", username + ".messages" };
+		txstart(filenames);
+		for (String filename : filenames) {
+			create(filename);
 		}
+		put(filenames[0], password);
+		txcommit();
+	}
+
+	public void loginParser(Tokenizer t) {
+		String username = t.next();
+		String password = t.next();
+
+		if (get(username).equals(password))
+			this.currentUsername = username;
+	}
+
+	public void logoutParser(Tokenizer t) {
+		this.currentUsername = null;
+	}
+
+	public void postMessageParser(Tokenizer t) {
+		String content = t.rest();
+		content = currentUsername + commandDelim + content.length()
+				+ commandDelim + content;
+
+		String[] friends = get(currentUsername + ".friends").split();
+		String[] messageFiles = new String[friends.length];
+		for (int i = 0; i < friends.length; i++) {
+			messageFiles[i] = friends[i] + ".messages";
+		}
+		txstart(friends);
+		for (String messageFile : messageFiles) {
+			append(messageFile, content);
+		}
+		txcommit();
+	}
+
+	public void readMessagesParser(Tokenizer t) {
+		String messages = get(currentUsername + ".messages");
+		while (messages.length() > 0) {
+			Tokenizer m = new Tokenizer(messages, commandDelim);
+			String user = m.next();
+			int len = Integer.parseInt(m.next());
+			messages = m.rest();
+			String msg = messages.substring(0, len);
+			messages = messages.substring(len);
+			printVerbose(user + ": " + msg, true);
+		}
+	}
+
+	public void requestFriendParser(Tokenizer t) {
+		
+	}
+
+	public void showFriendsParser(Tokenizer t) {
+
 	}
 
 	public void coordinatorsParser(Tokenizer t) {
@@ -541,8 +606,14 @@ public class TDFSNode extends RIONode {
 				RIOSend(address, MessageType.Accepted, msg);
 			}
 		} else {
-			Logger.verbose(this, "Node: " + addr + " not accepting proposal: " + p.proposalNumber);
-			Logger.verbose(this, "Node: " + addr + " highest proposal number promised: " + paxosState.highestPromised(p.filename, p.operationNumber));
+			Logger.verbose(this, "Node: " + addr + " not accepting proposal: "
+					+ p.proposalNumber);
+			Logger
+					.verbose(this, "Node: "
+							+ addr
+							+ " highest proposal number promised: "
+							+ paxosState.highestPromised(p.filename,
+									p.operationNumber));
 			// send some denial, maybe an updated promise or just an abort?
 		}
 	}
@@ -852,17 +923,17 @@ public class TDFSNode extends RIONode {
 		else if (p.operation instanceof TXTryCommitLogEntry) {
 			// check for duplicate learns
 			TXTryCommitLogEntry txCommand = (TXTryCommitLogEntry) p.operation;
-			
+
 			// check for duplicate learns
 			if (txFiles == null)
 				return;
-			
+
 			String[] files = txCommand.filenames;
 			createProposal(new TXCommitLogEntry(files), files);
 			for (String file : txFiles) {
 				fileTransactionMap.put(file, null);
 			}
-			
+
 		}
 
 		else if (p.operation instanceof TXTryAbortLogEntry) {
@@ -926,9 +997,9 @@ public class TDFSNode extends RIONode {
 		for (String file : files) {
 			if (logFS.checkLocked(file) != null) {
 				List<Integer> coordinators = getCoordinators(file);
-				Proposal newProposal = new Proposal(operation, file,
-						logFS.nextLogNumber(file), nextProposalNumber(file,
-								logFS.nextLogNumber(file)));
+				Proposal newProposal = new Proposal(operation, file, logFS
+						.nextLogNumber(file), nextProposalNumber(file, logFS
+						.nextLogNumber(file)));
 
 				byte[] packed = newProposal.pack();
 				for (Integer addr : coordinators) {
