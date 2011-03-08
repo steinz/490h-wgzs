@@ -6,12 +6,12 @@ import java.util.List;
 import edu.washington.cs.cse490h.lib.Utility;
 
 abstract class Command {
-	String filename;
+	protected final String filename;
+	protected int nodeAddr, operationNumber, proposalNumber;
 
-	int operationNumber, proposalNumber;
-
-	public Command(String filename) {
+	public Command(String filename, int nodeAddr) {
 		this.filename = filename;
+		this.nodeAddr = nodeAddr;
 		this.operationNumber = -1;
 		this.proposalNumber = -1;
 	}
@@ -35,39 +35,49 @@ abstract class Command {
 
 	public abstract void execute(TDFSNode node) throws Exception;
 
-	public CommandKey getKey() {
-		return new CommandKey(this.filename, this.operationNumber, this.proposalNumber);
-	}
+	public abstract CommandKey getKey();
 }
 
 abstract class FileCommand extends Command {
 
-	public FileCommand(String filename) {
-		super(filename);
+	public FileCommand(String filename, int nodeAddr) {
+		super(filename, nodeAddr);
 	}
+
+	public CommandKey getKey() {
+		return new CommandKey(this.filename, this.operationNumber,
+				this.proposalNumber);
+	}
+
 }
 
 abstract class TXCommand extends Command {
 	String[] filenames;
 
-	public TXCommand(String[] filenames, String coordinatorFilename) {
-		super(coordinatorFilename);
+	public TXCommand(String[] filenames, String coordinatorFilename,
+			int nodeAddr) {
+		super(coordinatorFilename, nodeAddr);
 		this.filenames = filenames;
 	}
+
+	public CommandKey getKey() {
+		return new CommandKey(this.filename, this.nodeAddr);
+	}
+
 }
 
 abstract class WriteCommand extends FileCommand {
 	String contents;
 
-	public WriteCommand(String filename, String contents) {
-		super(filename);
+	public WriteCommand(String filename, String contents, int nodeAddr) {
+		super(filename, nodeAddr);
 		this.contents = contents;
 	}
 }
 
 class AppendCommand extends WriteCommand {
-	public AppendCommand(String filename, String contents) {
-		super(filename, contents);
+	public AppendCommand(String filename, String contents, int nodeAddr) {
+		super(filename, contents, nodeAddr);
 	}
 
 	@Override
@@ -81,8 +91,8 @@ class AppendCommand extends WriteCommand {
 }
 
 class CreateCommand extends FileCommand {
-	public CreateCommand(String filename) {
-		super(filename);
+	public CreateCommand(String filename, int nodeAddr) {
+		super(filename, nodeAddr);
 	}
 
 	@Override
@@ -95,8 +105,8 @@ class CreateCommand extends FileCommand {
 }
 
 class DeleteCommand extends FileCommand {
-	public DeleteCommand(String filename) {
-		super(filename);
+	public DeleteCommand(String filename, int nodeAddr) {
+		super(filename, nodeAddr);
 	}
 
 	@Override
@@ -109,8 +119,8 @@ class DeleteCommand extends FileCommand {
 }
 
 class GetCommand extends FileCommand {
-	public GetCommand(String filename) {
-		super(filename);
+	public GetCommand(String filename, int nodeAddr) {
+		super(filename, nodeAddr);
 	}
 
 	@Override
@@ -118,31 +128,38 @@ class GetCommand extends FileCommand {
 		if (node.logFS.fileExists(filename)) {
 			node.printInfo(node.logFS.getFile(filename));
 			// HACK HACK HACK
-			node.commandGraph.filenameDone(filename, -1, -1);
+			node.commandGraph.done(new CommandKey(filename, this.nodeAddr));
 		} else {
 			throw new FileDoesNotExistException();
 		}
 	}
+
+	@Override
+	public CommandKey getKey() {
+		return new CommandKey(this.filename, this.nodeAddr);
+	}
 }
 
 class ListenCommand extends FileCommand {
-	public ListenCommand(String filename) {
-		super(filename);
+	public ListenCommand(String filename, int nodeAddr) {
+		super(filename, nodeAddr);
 	}
 
 	@Override
 	public void execute(TDFSNode node) {
 		if (!node.logFS.isListening(filename)) {
+			/*
+			 * TODO: It would be better to create this when we get a response so
+			 * that we can create it non-empty
+			 */
 			node.logFS.createGroup(filename);
 		}
 
 		List<Integer> coordinators = node.getCoordinators(filename);
 		if (coordinators.contains(node.addr)) {
-
 			List<Integer> listeners = node.fileListeners.get(filename);
 			if (listeners == null) {
 				listeners = new ArrayList<Integer>();
-				listeners.add(node.addr);
 				listeners.add(TDFSNode.twoPCCoordinatorAddress);
 				node.fileListeners.put(filename, listeners);
 			}
@@ -153,17 +170,16 @@ class ListenCommand extends FileCommand {
 							Utility.stringToByteArray(filename));
 				}
 			}
-		} else {
-			node.RIOSend(node.getCoordinator(filename),
-					MessageType.RequestToListen,
-					Utility.stringToByteArray(filename));
 		}
+		node.RIOSend(node.getCoordinator(filename),
+				MessageType.RequestToListen,
+				Utility.stringToByteArray(filename));
 	}
 }
 
 class PutCommand extends WriteCommand {
-	public PutCommand(String filename, String contents) {
-		super(filename, contents);
+	public PutCommand(String filename, String contents, int nodeAddr) {
+		super(filename, contents, nodeAddr);
 	}
 
 	@Override
@@ -177,8 +193,9 @@ class PutCommand extends WriteCommand {
 }
 
 class AbortCommand extends TXCommand {
-	public AbortCommand(String[] filenames, String coordinatorFilename) {
-		super(filenames, coordinatorFilename);
+	public AbortCommand(String[] filenames, String coordinatorFilename,
+			int nodeAddr) {
+		super(filenames, coordinatorFilename, nodeAddr);
 	}
 
 	@Override
@@ -190,8 +207,9 @@ class AbortCommand extends TXCommand {
 }
 
 class CommitCommand extends TXCommand {
-	public CommitCommand(String[] filenames, String coordinatorFilename) {
-		super(filenames, coordinatorFilename);
+	public CommitCommand(String[] filenames, String coordinatorFilename,
+			int nodeAddr) {
+		super(filenames, coordinatorFilename, nodeAddr);
 	}
 
 	@Override
@@ -203,8 +221,9 @@ class CommitCommand extends TXCommand {
 }
 
 class StartCommand extends TXCommand {
-	public StartCommand(String[] filenames, String coordinatorFilename) {
-		super(filenames, coordinatorFilename);
+	public StartCommand(String[] filenames, String coordinatorFilename,
+			int nodeAddr) {
+		super(filenames, coordinatorFilename, nodeAddr);
 	}
 
 	@Override

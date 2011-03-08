@@ -8,10 +8,14 @@ import java.util.Map.Entry;
 
 import edu.washington.cs.cse490h.lib.Callback;
 
+/**
+ * A graph of dependent commands and factory of CommandNodes
+ */
 public class CommandGraph {
-	private static int commandRetryTimeout = 20;
-
-	private class CommandNode {
+	public class CommandNode {
+		/**
+		 * commands run if this command aborts - can be null
+		 */
 		private List<Command> abortCommands;
 		private Command command;
 		private int locks;
@@ -31,11 +35,13 @@ public class CommandGraph {
 
 		public void abort() {
 			start();
-			for (Command c : abortCommands) {
-				try {
-					c.execute(node);
-				} catch (Exception e) {
-					node.printError(e);
+			if (abortCommands != null) {
+				for (Command c : abortCommands) {
+					try {
+						c.execute(node);
+					} catch (Exception e) {
+						node.printError(e);
+					}
 				}
 			}
 			cancel();
@@ -79,7 +85,8 @@ public class CommandGraph {
 				}
 
 				if (checkpoint) {
-					checkpointHead = new Tuple<CommandKey, CommandNode>(command.getKey(), this);
+					checkpointHead = new Tuple<CommandKey, CommandNode>(
+							command.getKey(), this);
 				} else {
 					heads.put(command.getKey(), this);
 				}
@@ -98,6 +105,8 @@ public class CommandGraph {
 
 	}
 
+	private static int commandRetryTimeout = 20;
+
 	private TDFSNode node;
 	private Tuple<CommandKey, CommandNode> checkpointHead;
 	private CommandNode checkpointTail;
@@ -111,9 +120,12 @@ public class CommandGraph {
 		start();
 	}
 
-	public CommandNode addCommand(Command c, boolean checkpoint,
+	/**
+	 * Creates a new CommandNode and adds it to the graph
+	 */
+	protected CommandNode addCommand(Command c, boolean checkpoint,
 			List<Command> abortCommands) {
-		CommandNode n = new CommandNode(c, checkpoint, abortCommands);
+		CommandNode n = newCommand(c, checkpoint, abortCommands);
 		if (checkpoint) {
 			for (Entry<CommandKey, CommandNode> entry : tails.entrySet()) {
 				addDependency(entry.getValue(), n);
@@ -137,6 +149,13 @@ public class CommandGraph {
 		return n;
 	}
 
+	public void addDependency(CommandNode parent, CommandNode child) {
+		if (!parent.done) {
+			parent.children.add(child);
+			child.locks++;
+		}
+	}
+
 	public boolean done(CommandKey key) {
 		if (checkpointHead != null && checkpointHead.second.equals(key)) {
 			if (checkpointTail == checkpointHead.second) {
@@ -151,7 +170,7 @@ public class CommandGraph {
 				return false;
 			} else {
 				Command c = n.command;
-				if (c.getKey().equals(key)) {
+				if (c.getKey().reallyEquals(key)) {
 					CommandNode head = heads.remove(key);
 					CommandNode tail = tails.get(key);
 					if (tail == head) {
@@ -166,11 +185,12 @@ public class CommandGraph {
 		}
 	}
 
-	public void addDependency(CommandNode parent, CommandNode child) {
-		if (!parent.done) {
-			parent.children.add(child);
-			child.locks++;
-		}
+	/**
+	 * Creates a new CommandNode without adding it to the graph
+	 */
+	public CommandNode newCommand(Command c, boolean checkpoint,
+			List<Command> abortCommands) {
+		return new CommandNode(c, checkpoint, abortCommands);
 	}
 
 	private void start() {
