@@ -39,7 +39,8 @@ coordinators <count>, perfile <count>, nodes <count>
 Clients support the following commands:
 \begin{verbatim}
 FS Commands: create <filename>, delete <filename>, get <filename>, 
-             put <filename> <contents>, append <filename> <contents>
+             put <filename> <contents>, append <filename> <contents>,
+             listen <filename>
 TX Commands: txstart <filenames>, txcommit, txabort
 \end{verbatim}
 
@@ -49,8 +50,6 @@ Our file system maintains a consistent, distributed log of operations for each f
 The logs are currently only stored in memory, and not in persistent storage. This might appear dangerous, but logs can be recovered through paxos at any point in time (since paxos state is stored in persistent storage).  However, storing them persistently would be consistent and could speed up node reintegration after brief failure.
 
 Operations are appended to the log via Paxos, and operations can be appended to the log as long as a majority of coordinators assigned to each file is responsive, because the paxos group for each file consists of the coordinators.
-
-As compared to regular client-server architectures, appending operations to the log is fairly high latency (since 
 
 Since we use Paxos, appending operations to the log is somewhat high latency.
 However, reads from the log are serviced locally (and therefore very quickly) using the log entries learned so far.
