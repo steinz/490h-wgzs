@@ -16,22 +16,7 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class TDFSNode extends RIONode {
 
-	/*
-	 * TODO: HIGH: Verify not proposing things on txing files
-	 * 
-	 * TODO: HIGH: Node count config commands
-	 * 
-	 * TODO: HIGH: Is there any reason coordinators should auto-listen to all
-	 * files they coordinate? I don't think it's necessary.
-	 * 
-	 * TODO: HIGH: If a node prepares a txstart, but that txstart is not
-	 * accepted (possibly because another value has been accepted for that
-	 * proposal number), then the node will think it is in a tx even though it
-	 * is not, because the txstart was not accepted.
-	 * 
-	 * TODO: HIGH: When listener joins group, it needs the latest copy of the
-	 * log
-	 * 
+	/* 
 	 * TODO: HIGH: Coordinator rebuild active file list on restart
 	 * 
 	 * TODO: HIGH: Cleanup Paxos (filename, opNum) -> X data structures when we
@@ -58,7 +43,6 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * TODO: abortCommands for CommandNodes should propose TXTryAborts, not
 	 * TXAborts
-	 * 
 	 * 
 	 * TODO: Test w/ handshakes
 	 * 
@@ -101,7 +85,7 @@ public class TDFSNode extends RIONode {
 	 * The total, static number of coordinators with addresses
 	 * [0,coordinatorCount). Most of these should be alive at any given time.
 	 */
-	private static final int coordinatorCount = 4;
+	private static int coordinatorCount = 4;
 
 	/**
 	 * The static number of coordinators per file.
@@ -109,7 +93,7 @@ public class TDFSNode extends RIONode {
 	 * Progress can be made as long as floor(coordinatorsPerFile / 2) + 1
 	 * coordinators are alive
 	 */
-	private static final int coordinatorsPerFile = 3;
+	private static int coordinatorsPerFile = 3;
 
 	/**
 	 * The maximum number of nodes allowed in the system.
@@ -117,12 +101,12 @@ public class TDFSNode extends RIONode {
 	 * Node with addresses [twoPCCoordinatorAddress + 1, maxTotalNodeCount) are
 	 * proposers/clients but not coordinators.
 	 */
-	private static final int maxTotalNodeCount = 10;
+	private static int maxTotalNodeCount = 10;
 
 	/**
 	 * We currently only support a single 2PC coordinator with this address
 	 */
-	static final int twoPCCoordinatorAddress = coordinatorCount + 1;
+	static int twoPCCoordinatorAddress = coordinatorCount + 1;
 
 	/**
 	 * Time between when the 2PC Coordinator learns about a transaction starting
@@ -265,12 +249,24 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
+	public void coordinatorsParser(Tokenizer t) {
+		coordinatorCount = Integer.parseInt(t.next());
+	}
+	
+	public void perfileParser(Tokenizer t) {
+		coordinatorsPerFile = Integer.parseInt(t.next());
+	}
+	
+	public void nodesParser(Tokenizer t) {
+		maxTotalNodeCount = Integer.parseInt(t.next());
+	}
+	
 	public void appendParser(Tokenizer t) {
 		String filename = t.next();
 		String contents = t.rest();
 		append(filename, contents);
 	}
-
+	
 	public void createParser(Tokenizer t) {
 		String filename = t.next();
 		create(filename);
