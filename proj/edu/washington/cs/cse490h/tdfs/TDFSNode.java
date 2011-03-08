@@ -97,7 +97,7 @@ public class TDFSNode extends RIONode {
 	/**
 	 * We currently only support a single 2PC coordinator with this address
 	 */
-	static int twoPCCoordinatorAddress = coordinatorCount + 1;
+	static int twoPCCoordinatorAddress = coordinatorCount;
 
 	/**
 	 * Time between when the 2PC Coordinator learns about a transaction starting
@@ -242,14 +242,19 @@ public class TDFSNode extends RIONode {
 
 	public void coordinatorsParser(Tokenizer t) {
 		coordinatorCount = Integer.parseInt(t.next());
+		printInfo("coordinatorCount set to " + coordinatorCount);
 	}
 
 	public void perfileParser(Tokenizer t) {
 		coordinatorsPerFile = Integer.parseInt(t.next());
+		printInfo("coordinatorPerFile set to " + coordinatorsPerFile);
+
 	}
 
 	public void nodesParser(Tokenizer t) {
 		maxTotalNodeCount = Integer.parseInt(t.next());
+		printInfo("maxTotalNodeCount set to " + maxTotalNodeCount);
+
 	}
 
 	public void appendParser(Tokenizer t) {
@@ -732,13 +737,13 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receiveRequestToListen(int from, String filename) {
 		List<Integer> coordinators = getCoordinators(filename);
+		byte[] filenameBytes = Utility.stringToByteArray(filename);
 		for (int next : coordinators) {
-			RIOSend(next, MessageType.CreateGroup,
-					Utility.stringToByteArray(filename));
+			RIOSend(next, MessageType.CreateGroup, filenameBytes);
 		}
 
-		Set<Integer> listeners = fileListeners.get(filename);
 		ensureListening(filename);
+		Set<Integer> listeners = fileListeners.get(filename);
 		listeners.add(from);
 
 		// Create the log if it doesn't exist locally
