@@ -146,34 +146,16 @@ class ListenCommand extends FileCommand {
 	}
 
 	@Override
-	public void execute(TDFSNode node) {
-		if (!node.logFS.isListening(filename)) {
-			/*
-			 * TODO: It would be better to create this when we get a response so
-			 * that we can create it non-empty
-			 */
-			node.logFS.createGroup(filename);
-		}
-
+	public void execute(TDFSNode node) {		
 		List<Integer> coordinators = node.getCoordinators(filename);
 		if (coordinators.contains(node.addr)) {
-			List<Integer> listeners = node.fileListeners.get(filename);
-			if (listeners == null) {
-				listeners = new ArrayList<Integer>();
-				listeners.add(TDFSNode.twoPCCoordinatorAddress);
-				node.fileListeners.put(filename, listeners);
-			}
-
-			for (int next : coordinators) {
-				if (next != node.addr) {
-					node.RIOSend(next, MessageType.CreateGroup,
-							Utility.stringToByteArray(filename));
-				}
-			}
+			node.RIOSend(node.addr, MessageType.RequestToListen,
+					Utility.stringToByteArray(filename));
+		} else {
+			node.RIOSend(node.getCoordinator(filename),
+					MessageType.RequestToListen,
+					Utility.stringToByteArray(filename));
 		}
-		node.RIOSend(node.getCoordinator(filename),
-				MessageType.RequestToListen,
-				Utility.stringToByteArray(filename));
 	}
 }
 
