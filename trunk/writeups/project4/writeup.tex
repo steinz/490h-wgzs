@@ -45,6 +45,15 @@ FS Commands: create <filename>, delete <filename>, get <filename>,
 TX Commands: txstart <filenames>, txcommit, txabort
 \end{verbatim}
 
+The system can be run with:
+
+\begin{verbatim}
+./clean
+./execute.pl -s -f 0 -n edu.washington.cs.cse490h.tdfs.PerfectInitializedTDFSNode
+\end{verbatim}
+
+The uninitialized node class name is TDFSNode.
+
 \section{File System Semantics} 
 
 Our file system maintains a consistent, distributed log of operations for each file in the system using Paxos. File state is inferred by parsing the log.
@@ -193,8 +202,12 @@ This setup also eliminates the need for replication - in fact, there is no expli
 File state is only implicitly stored in the Paxos acceptors persistent state, which ensures that the distributed log is consistent.
 
 \section{Outstanding Issues}
+
 The persistent Paxos state log currently is never being purged.
 That is, every operation since the Paxos group's instantiation is stored in the file, even operations that are unnecessary (e.g. if the file has been created, deleted, and then created again, it is not necessary to keep track of the first create and delete).
 This could be considered a feature, as the persistent log provides versioning for free - but the log would need to be garbage collected periodically in a real system.
 
+Nodes occasionally get in inconsistent states when the 2PC coordinator fails to retry writing TXCommits or TXAborts to the log.
+
+We haven't tested non-initialized nodes much, so it is possible that dropped packets may cause unforeseen errors (most likely locks failing to be released on files during transactions).
 \end{document}
