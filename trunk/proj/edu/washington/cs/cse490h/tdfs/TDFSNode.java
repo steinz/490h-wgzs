@@ -17,6 +17,8 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
+	 * TODO: HIGH: Rebuild 2PC coordinator logs/state on reboot
+	 * 
 	 * TODO: HIGH: Coordinator rebuild active file list on restart
 	 * 
 	 * TODO: HIGH: Cleanup Paxos (filename, opNum) -> X data structures when we
@@ -777,6 +779,10 @@ public class TDFSNode extends RIONode {
 				|| p.operation instanceof TXStartLogEntry) {
 			if (commandGraph.done(new CommandKey(p.filename, this.addr))) {
 				printVerbose("finished: " + p.operation.toString());
+			} else {
+				printVerbose("abort injected, cancelling all pending operations");
+				commandGraph = new CommandGraph(this);
+				transactingFiles = null;
 			}
 		} else {
 			// txTryCommands aren't picked up here because they use a different
