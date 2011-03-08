@@ -66,7 +66,7 @@ Asynchronous command state is maintained in a DAG known as the Command Graph.
 The graph is responsible for queuing dependent commands, retrying failed commands, and canceling queued commands should one of the commands it depends on fail.
 
 \section{Transaction Semantics}
-We assume that clients will start transactions by calling txstart \<space-delimited files to be touched\>
+We assume that clients will start transactions by calling txstart $\langle$space-delimited list files to be touched$\rangle$ % hack hack hack
 
 For example, client 1 would perform a transaction on files f1, f2, and f3 like so:
 
@@ -160,6 +160,8 @@ This means that the 2PC coordinator is free to try and inject TXAborts into the 
 
 % Compare Paxos round packet round-trip counts to client server round-trip counts
 
+% Code size and complexity
+
 Using Paxos for every operation does increase the number of packets that need to be sent for every operation considerably.
 
 Using our old client-server architecture (without replication), a typical write would look like:
@@ -171,11 +173,10 @@ File Owner write data -> Server
 Server write data -> Client
 \end{verbatim}
 
-Which would be 4 packets, not including ACKs. That same write in our system would look like:
+Which would be 4 packets, not including ACKs.
+That same write in our system (assuming the client is already listening to the file) would look like:
 
 \begin{verbatim}
-Client Listen File -> Coordinator
-Coordinator Added Client as Listener -> Client
 Client Prepare  -> Coordinators (1..N)
 Coordinators (1..N) Promise -> Client
 Client Propose -> Coordinators (1..N)
@@ -183,14 +184,17 @@ Coordinators (1..N) Accept -> Coordinators (1..N)
 Coordinator Learned -> Client
 \end{verbatim}
 
-Which would be $3N^2 + 3N + 3$ packets, not including ACKs. Though using Paxos for every operation increases the necessary number of packets considerably, it provides consistency and high availability, which we feel is a beneficial tradeoff. It is also worth noting that even though the total number of packets sent is higher, the number of rounds it takes is only 7 for our operation, and 4 for the standard client-server architecture. 
+Which would be $O(N^2)$ packets in 5 phases, not including ACKs.
+Though using Paxos for every operation increases the total number of packets sent considerably, most of them are sent in parallel -
+the number of rounds required is only one higher, and ord old architecture would require additional rounds to perform synchronous replication! 
+The new architecture also provides consistency and high availability, which we feel is a beneficial tradeoff.
 
-
-Code size and complexity
-
-This setup also eliminates the need for replication, if only because there is no persistent storage for files (i.e. there is nothing to replicate). Paxos ensures that the distributed log is consistent.
+This setup also eliminates the need for replication - in fact, there is no explicit persistent storage of files at all. 
+File state is only implicitly stored in the Paxos acceptors persistent state, which ensures that the distributed log is consistent.
 
 \section{Outstanding Issues}
-The file log currently is never being cleaned. That is, every operation since the Paxos group's instantiation is stored in the file, even operations that are unnecessary (for example, if the file has been created, deleted, and then created again, there's no reason to keep track of the first create and delete). One might think of this as a feature - it would be trivial to implement versioning on top of this, where the log line k and all log lines k-1 correspond to version k of the file. 
+The persistent Paxos state log currently is never being purged.
+That is, every operation since the Paxos group's instantiation is stored in the file, even operations that are unnecessary (e.g. if the file has been created, deleted, and then created again, it is not necessary to keep track of the first create and delete).
+This could be considered a feature, as the persistent log provides versioning for free - but the log would need to be garbage collected periodically in a real system.
 
 \end{document}
