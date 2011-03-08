@@ -47,14 +47,14 @@ TX Commands: txstart <filenames>, txcommit, txabort
 
 \section{File System Semantics} 
 
-Our file system maintains a consistent, distributed log of operations for each file in the system using Paxos. The implied result of this is that the state of the file is created by parsing the log.
-The logs are currently only stored in memory, and not in persistent storage. This might appear dangerous, but logs can be recovered through paxos at any point in time (since paxos state is stored in persistent storage).  However, storing them persistently would be consistent and could speed up node reintegration after brief failure.
+Our file system maintains a consistent, distributed log of operations for each file in the system using Paxos. File state is inferred by parsing the log.
+The logs are currently only stored in memory, and not in persistent storage. This might appear dangerous, but logs can be recovered through Paxos at any point in time (since Paxos state is stored in persistent storage).  However, storing them persistently would be consistent and could speed up node reintegration after brief failure.
 
-Operations are appended to the log via Paxos, and operations can be appended to the log as long as a majority of coordinators assigned to each file is responsive, because the paxos group for each file consists of the coordinators.
+Operations are appended to the log via Paxos. Operations can be appended to the log as long as a majority of coordinators assigned to each file is responsive (the coordinators for each file are the Paxos acceptors for that file).
 
 Since we use Paxos, appending operations to the log is somewhat high latency.
 However, reads from the log are serviced locally (and therefore very quickly) using the log entries learned so far.
-If a consistent read is desired, it should be wrapped in a transaction.
+If a consistent read is desired, it can be wrapped in a transaction.
 
 Commands executed on different files are handled asynchronously.
 Clients are required to verify the validity of commands they attempt to append to the log. 
@@ -62,12 +62,13 @@ Because of this, multiple operations on the same file are handled synchronously,
 following the first command in the chain depends on the state of the log after the first command is successfully appended.
 Transaction commands are also handled synchronously and consistently using two phase commit.
 
-The Command Graph
+Asynchronous command state is maintained in a DAG known as the Command Graph.
+The graph is responsible for queuing dependent commands, retrying failed commands, and canceling queued commands should one of the commands it depends on fail.
 
 \section{Transaction Semantics}
-We assume that clients will start transactions by calling txstart <files to be touched delimited by space>
+We assume that clients will start transactions by calling txstart \<space-delimited files to be touched\>
 
-So, for example, client 1 looking to perform a transaction on files f1, f2, and f3 would call the transaction like so:
+For example, client 1 would perform a transaction on files f1, f2, and f3 like so:
 
 \begin{verbatim}
 1 txstart f1 f2 f3
@@ -75,11 +76,12 @@ So, for example, client 1 looking to perform a transaction on files f1, f2, and 
 1 txcommit
 \end{verbatim}
 
-The txstart would be added to the file log via paxos, and the 2PC coordinator would learn about the txstart and store this information.
+If any of the commands inside the transaction timeout, all queued asynchronous commands are canceled and the transaction is aborted.
 
-It is worth noting that since we force the client to list all files they wish to transact on, any commands on files outside of that file list, but within the transaction, is not guaranteed to be consistent.
+Since we force the client to list all files they wish to transact on when the call txstart, any commands on files outside of that file list called before the transaction is aborted or committed are not guaranteed to be consistent.
 
-So, for example, if client 1's transaction looked like:
+For example, if client 1's transaction looked like:
+
 \begin{verbatim}
 1 txstart f1 f2 f3
 1 create f1
@@ -88,22 +90,28 @@ So, for example, if client 1's transaction looked like:
 1 create f4
 1 txcommit
 \end{verbatim}
-We do not guarantee that the create of f4 executes, even if the transaction is successfully committed. We consider this to be an error on the client's part if they attempt to access a file within a transaction that they did not explicitly put as part of their transaction file list. 
+
+Our implementation guarantees that f1, f2, and f3 are created atomically.
+However, if the create of f4 is invalid, fails, or times out the transaction will be aborted instead of committed.
+If any other create fails the transaction will also be aborted, but f4 may or may not be created.
 
 \section{Paxos}
 
-Clients are all proposers. By not using a lead proposer, we eliminate the need to go through leader election, which reduces the complexity considerably. We expect the load to be distributed roughly evenly across the different files in the system, which may or may not be a safe assumption to make.
+Clients are all proposers. By not using a lead proposer, we eliminate the need to go through leader election, which reduces implementation complexity. We expect the load to be distributed roughly evenly across the different files in the system.
 
-Coordinators could easily detect contention on a specific file and then switch on lead-proposer-mode via a log entry to ensure Paxos liveliness, however at this time we do not support that feature.
+Coordinators could easily detect contention on a specific file and then use leader election to elect a lead proposer with a lease to ensure the liveliness of Paxos.
+The selection could be propagated to all nodes listening to the file via a log entry.
+However, we do not support this feature at this time.
 The coordinators assigned to each file act as the acceptors and learners for that file. This means that clients do not learn about operations directly, but rather via a coordinator who treats the client as a "listener", and simply tells the client about all values it learns.
 
-If a client has not heard anything from a coordinator in awhile about a particular file and is not sure whether a coordinator has gone down or if simply no operations have been performed, a client can explicitly request to listen to a file by typing the "listen" command, like so:
+If a client has not heard anything from a coordinator in awhile about a particular file and is not sure whether a coordinator has gone down or if simply no operations have been performed, a client can explicitly request to listen to a file using the "listen" command like so:
 
 \begin{verbatim}
 1 listen f1
 \end{verbatim}
 
 The client could be added to the listener list twice, but this allows the client to discover whether the coordinator has gone down or not.
+It would be simple to support a stopListening command to correct the case where a listener gets added to two lists.
 
 Coordinators are assigned to files using a simple hash function.
 The filename's hash code and following integers are used as the addresses of the coordinators.
@@ -112,26 +120,33 @@ Alternatively, decreased latency could be achieved by assigning addresses sequen
 
 \section{Two Phase Commit}
 
-Clients write TXStart (which include the list of filenames used in the transaction), TryTXCommit, and TryTXAbort messages to the log.
-TXStart entries implicity lock the log and are required to be written in order to avoid deadlock.
+Clients can write TXStart (which include the list of filenames used in the transaction), TryTXCommit, and TryTXAbort entries to the log.
+TXStart entries implicitly lock the log and are required to be written in lexicographic filename order to avoid deadlock.
 
-When any paxos group is instantiated, the coordinators automatically add the 2PC coordinator as a listener. The 2PC coordinator then monitors the state of transactions through messages sent by the coordinators when a new operation is learned.
+When any Paxos group is instantiated, the coordinators automatically add the 2PC coordinator as a listener.
+The 2PC coordinator then monitors the state of transactions through messages sent by the coordinators when a new operation is learned.
 
-The 2PC coordinator tracks transactions by assuming that at any given point, a file can only be involved in one transaction. That is, if client 1 writes:
+The 2PC coordinator tracks transactions by assuming that at any given point, a file can only be involved in one transaction.
+That is, if client 1 writes:
 \begin{verbatim}
 1 txstart f1 f2 f3
 \end{verbatim}
 
-Then client 2 is unable to start a transaction including f1, f2, or f3. This ensures that at any given point in time, a file is involved in at most one transaction. This also allows the 2PC coordinator to map each individual file to a list of files involved in that transaction. So, in the above example, the 2PC coordinator's file map would look like:
+Then client 2 is unable to start a transaction including f1, f2, or f3.
+This ensures that at any given point in time, a file is involved in at most one transaction.
+This also allows the 2PC coordinator to map each individual file to a list of files involved in that transaction.
+So, in the above example, the 2PC coordinator's file map would look like:
 
 \begin{verbatim}
 f1 -> {f1, f2, f3}
 f2 -> {f1, f2, f3}
 f3 -> {f1, f2, f3}
 \end{verbatim}
-This allows the 2PC coordinator to draw inferences about the entire transaction based on learning something about a single file.
 
-If a TryTXCommit or TryTXAbort is learned about, the 2PC coordinator prepares a TXCommit or TXAbort (depending on the message type learned about) to the logs for each of the files listed in the transaction. The 2PC coordinator will indefinitely try to resolve the transaction, and the client will learn whether their transaction was aborted or committed via Paxos. 
+This allows the 2PC coordinator to draw inferences about the state of the entire transaction based on learning log entries for a single file.
+
+If a TryTXCommit or TryTXAbort is learned about, the 2PC coordinator injects a TXCommit or TXAbort (depending on the message type learned about) to the logs for each of the files listed in the transaction.
+The 2PC coordinator will indefinitely try to resolve the transaction, and the client will ultimately learn whether their transaction was aborted or committed via Paxos. 
 
 If the 2PC coordinator goes down while performing a transaction, it can recover its state by reading the logs when it comes back online.
 
@@ -141,12 +156,14 @@ This means that the 2PC coordinator is free to try and inject TXAborts into the 
 
 \section{Comparison to Client Server Architecture}
 
-Compare guarantees, node usage
+% Compare guarantees, node usage
 
-Compare Paxos round packet round-trip counts to client server round-trip counts
-Using paxos for every operation does increase the number of packets that need to be sent for every operation considerably.
+% Compare Paxos round packet round-trip counts to client server round-trip counts
 
-Under a standard client-server architecture, a typical write would look like:
+Using Paxos for every operation does increase the number of packets that need to be sent for every operation considerably.
+
+Using our old client-server architecture (without replication), a typical write would look like:
+
 \begin{verbatim}
 Client Write File -> Server
 Server Write Forward -> File owner
@@ -155,17 +172,18 @@ Server write data -> Client
 \end{verbatim}
 
 Which would be 4 packets, not including ACKs. That same write in our system would look like:
+
 \begin{verbatim}
 Client Listen File -> Coordinator
 Coordinator Added Client as Listener -> Client
 Client Prepare  -> Coordinators (1..N)
 Coordinators (1..N) Promise -> Client
-Client Accept -> Coordinators (1..N)
-Coordinators (1..N) Learn -> Coordinators (1..N)
+Client Propose -> Coordinators (1..N)
+Coordinators (1..N) Accept -> Coordinators (1..N)
 Coordinator Learned -> Client
 \end{verbatim}
 
-Which would be $3N^2 + 3N + 3$ packets, not including ACKs. Though using paxos for every operation increases the necessary number of packets considerably, it provides consistency and high availability, which we feel is a beneficial tradeoff. It is also worth noting that even though the total number of packets sent is higher, the number of rounds it takes is only 7 for our operation, and 4 for the standard client-server architecture. 
+Which would be $3N^2 + 3N + 3$ packets, not including ACKs. Though using Paxos for every operation increases the necessary number of packets considerably, it provides consistency and high availability, which we feel is a beneficial tradeoff. It is also worth noting that even though the total number of packets sent is higher, the number of rounds it takes is only 7 for our operation, and 4 for the standard client-server architecture. 
 
 
 Code size and complexity
@@ -173,6 +191,6 @@ Code size and complexity
 This setup also eliminates the need for replication, if only because there is no persistent storage for files (i.e. there is nothing to replicate). Paxos ensures that the distributed log is consistent.
 
 \section{Outstanding Issues}
-The file log currently is never being cleaned. That is, every operation since the paxos group's instantiation is stored in the file, even operations that are unnecessary (for example, if the file has been created, deleted, and then created again, there's no reason to keep track of the first create and delete). One might think of this as a feature - it would be trivial to implement versioning on top of this, where the log line k and all log lines k-1 correspond to version k of the file. 
+The file log currently is never being cleaned. That is, every operation since the Paxos group's instantiation is stored in the file, even operations that are unnecessary (for example, if the file has been created, deleted, and then created again, there's no reason to keep track of the first create and delete). One might think of this as a feature - it would be trivial to implement versioning on top of this, where the log line k and all log lines k-1 correspond to version k of the file. 
 
 \end{document}

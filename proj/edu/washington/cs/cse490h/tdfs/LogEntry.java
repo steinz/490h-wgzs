@@ -19,8 +19,9 @@ abstract class LogEntry {
 		} else if (cmd.equals("Delete")) {
 			return new DeleteLogEntry();
 		} else if (cmd.equals("TXAbort")) {
+			int address = Integer.parseInt(t.next());
 			String[] filenames = t.rest().split(entryDelimiter);
-			return new TXAbortLogEntry(filenames);
+			return new TXAbortLogEntry(filenames, address);
 		} else if (cmd.equals("TXCommit")) {
 			String[] filenames = t.rest().split(entryDelimiter);
 			return new TXCommitLogEntry(filenames);
@@ -85,13 +86,16 @@ class DeleteLogEntry extends LogEntry {
 // shouldn't need Get - doesn't mutate
 
 class TXAbortLogEntry extends TXLogEntry {
-	public TXAbortLogEntry(String[] filenames) {
+	int address;
+	
+	public TXAbortLogEntry(String[] filenames, int address) {
 		super(filenames);
+		this.address = address;
 	}
 
 	@Override
 	public String toString() {
-		return "TXAbort" + joinFilenames();
+		return "TXAbort " + address + joinFilenames();
 	}
 }
 
