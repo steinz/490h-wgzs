@@ -87,4 +87,35 @@ public class CommandKey extends Tuple<String, SubKey> {
 	public int hashCode() {
 		return super.first.hashCode();
 	}
+
+	/**
+	 * equals only depends on filename for the command graph's hash tables to
+	 * chain commands correctly
+	 * 
+	 * CommandKeys are equal iff refer to the same filename
+	 * 
+	 * CommandKeys are reallyEqual iff they also refer to the same SubKey
+	 * 
+	 * use reallyEquals to check if the subkeys match too
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (obj instanceof CommandKey) {
+			CommandKey other = (CommandKey) obj;
+			return this.first.equals(other.first);
+		} else {
+			return false;
+		}
+	}
+
+	/**
+	 * checks that the (filename, subkey) tuples are equal
+	 * 
+	 * CommandKeys are equal iff refer to the same filename
+	 * 
+	 * CommandKeys are reallyEqual iff they also refer to the same SubKey
+	 */
+	public boolean reallyEquals(CommandKey other) {
+		return super.equals(other);
+	}
 }

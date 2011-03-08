@@ -15,6 +15,10 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
+	 * TODO: HIGH: Listen commands should probably just send requestToListens to
+	 * themselves even if the coordinator is the one doing the request for
+	 * simplicity
+	 * 
 	 * TODO: HIGH: Change -1 int special cases in Commands to null Integer cases
 	 * 
 	 * TODO: HIGH: Verify not proposing things on txing files
@@ -53,7 +57,10 @@ public class TDFSNode extends RIONode {
 	 * detect if we're getting Paxos messages from other coordinators except the
 	 * coordinator we expect to be notifying us of log changes
 	 * 
-	 * TODO: abortCommands for CommandNodes should propose TXTryAborts, not TXAborts
+	 * TODO: abortCommands for CommandNodes should propose TXTryAborts, not
+	 * TXAborts
+	 * 
+	 * TODO: support concurrent transactions
 	 * 
 	 * TODO: Test w/ handshakes
 	 * 
@@ -145,7 +152,10 @@ public class TDFSNode extends RIONode {
 	private PersistentPaxosState paxosState;
 
 	/**
-	 * List of transacting files used only by the parsers (client to library)
+	 * Array of transacting filenames used by the library to aggressively fail
+	 * 
+	 * Used by the client right now, but wouldn't be visible in a real
+	 * implementation.
 	 */
 	private String[] transactingFiles;
 
@@ -255,9 +265,9 @@ public class TDFSNode extends RIONode {
 		try {
 			append(username + ".friends", friendName);
 			append(friendName + ".friends", username);
-			txcommit(filenames);
+			txcommit();
 		} catch (Exception e) {
-			txabort(filenames);
+			txabort();
 		}
 	}
 
@@ -289,56 +299,79 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void txabortParser(Tokenizer t) {
-		txabort(transactingFiles);
+		if (transactingFiles != null) {
+			txabort();
+		} else {
+			printError("not in transaction");
+		}
 	}
 
 	public void txcommitParser(Tokenizer t) {
-		txcommit(transactingFiles);
+		if (transactingFiles != null) {
+			txcommit();
+		} else {
+			printError("not in transaction");
+		}
 	}
 
 	public void txstartParser(Tokenizer t) {
-		String[] filenames = t.rest().split(commandDelim);
-		txstart(filenames);
+		if (transactingFiles == null) {
+			transactingFiles = t.rest().split(commandDelim);
+			txstart(transactingFiles);
+		} else {
+			printError("already in transaction");
+		}
 	}
 
 	public void append(String filename, String contents) {
-		checkListen(filename, new AppendCommand(filename, contents));
+		checkListen(filename, new AppendCommand(filename, contents, this.addr));
 	}
 
 	public void create(String filename) {
-		checkListen(filename, new CreateCommand(filename));
+		checkListen(filename, new CreateCommand(filename, this.addr));
 	}
 
 	public void delete(String filename) {
-		checkListen(filename, new DeleteCommand(filename));
+		checkListen(filename, new DeleteCommand(filename, this.addr));
 	}
 
 	public void get(String filename) {
-		checkListen(filename, new GetCommand(filename));
+		checkListen(filename, new GetCommand(filename, this.addr));
 	}
 
 	public void put(String filename, String contents) {
-		checkListen(filename, new PutCommand(filename, contents));
+		checkListen(filename, new PutCommand(filename, contents, this.addr));
 	}
 
 	private void checkListen(String filename, FileCommand after) {
+		List<Command> abortCommands = null;
+		if (transactingFiles != null) {
+			abortCommands = new ArrayList<Command>(transactingFiles.length);
+			for (String tf : transactingFiles) {
+				abortCommands.add(new AbortCommand(transactingFiles, tf,
+						this.addr));
+			}
+		}
+
 		if (!logFS.isListening(filename)) {
-			CommandNode l = commandGraph
-					.addCommand(new ListenCommand(filename));
-			commandGraph.addCommand(after);
+			CommandNode l = commandGraph.addCommand(new ListenCommand(filename,
+					this.addr), false, abortCommands);
+			commandGraph.addCommand(after, false, abortCommands);
 			l.execute();
 			if (getCoordinators(filename).contains(this.addr)) {
-				commandGraph.filenameDone(filename, -1, -1);
+				// listen done
+				commandGraph.done(new CommandKey(filename, -1, -1));
 			}
 		} else {
 			commandGraph.addCommand(after).execute();
 		}
 	}
 
-	public void txabort(String[] filenames) {
+	public void txabort() {
 		if (transactingFiles != null) {
-			for (String filename : filenames) {
-				checkListen(filename, new AbortCommand(filenames, filename));
+			for (String filename : transactingFiles) {
+				checkListen(filename, new AbortCommand(transactingFiles,
+						filename, this.addr));
 			}
 			transactingFiles = null;
 		} else {
@@ -346,10 +379,11 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	public void txcommit(String[] filenames) {
+	public void txcommit() {
 		if (transactingFiles != null) {
-			for (String filename : filenames) {
-				checkListen(filename, new CommitCommand(filenames, filename));
+			for (String filename : transactingFiles) {
+				checkListen(filename, new CommitCommand(transactingFiles,
+						filename, this.addr));
 			}
 			transactingFiles = null;
 		} else {
@@ -359,22 +393,23 @@ public class TDFSNode extends RIONode {
 
 	public void txstart(String[] filenames) {
 		if (transactingFiles == null) {
+			transactingFiles = filenames;
 			// sort filenames
-			List<String> sorted = new ArrayList<String>(filenames.length);
-			for (String filename : filenames) {
+			List<String> sorted = new ArrayList<String>(transactingFiles.length);
+			for (String filename : transactingFiles) {
 				sorted.add(filename);
 			}
 			Collections.sort(sorted);
-			filenames = sorted.toArray(filenames);
+			transactingFiles = sorted.toArray(transactingFiles);
 
-			for (String filename : filenames) {
+			for (String filename : transactingFiles) {
 				/*
 				 * uses addCheckpoint, so each listen/start depends on the
 				 * previous txstart and they get executed and finish in order
 				 */
-				checkListen(filename, new StartCommand(filenames, filename));
+				checkListen(filename, new StartCommand(transactingFiles,
+						filename, this.addr));
 			}
-			transactingFiles = filenames;
 		} else {
 			printError("already in transaction");
 		}
@@ -584,23 +619,8 @@ public class TDFSNode extends RIONode {
 	 *            The filename
 	 */
 	public void receiveCreateGroup(int from, String filename) {
-		try {
+		if (!logFS.isListening(filename)) {
 			logFS.createGroup(filename);
-			List<Integer> listeners = fileListeners.get(filename);
-			if (listeners == null) {
-				listeners = new ArrayList<Integer>();
-				fileListeners.put(filename, listeners);
-				listeners.add(this.addr);
-				listeners.add(twoPCCoordinatorAddress);
-			}
-		} catch (AlreadyParticipatingException e) {
-			Logger.error(this, e);
-			// TODO: High:
-			// This could happen if a coordinator goes down, and receives a join
-			// request from someone when it comes back up.
-			// It will assume the group doesn't exist and try to instantiate it,
-			// but instead the other coordinators should
-			// Try to bring it up to speed
 		}
 	}
 
@@ -709,7 +729,7 @@ public class TDFSNode extends RIONode {
 	 */
 	public void receiveRequestToListen(int from, String filename) {
 		if (!logFS.isListening(filename)) { // If the group doesn't exist
-			new ListenCommand(filename).execute(this);
+			new ListenCommand(filename, this.addr).execute(this);
 		}
 		fileListeners.get(filename).add(from);
 		RIOSend(from, MessageType.AddedListener,
@@ -717,7 +737,7 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void receiveAddedListener(int from, String filename) {
-		commandGraph.filenameDone(filename, -1, -1);
+		commandGraph.done(new CommandKey(filename, -1, -1));
 	}
 
 	/**
@@ -734,11 +754,14 @@ public class TDFSNode extends RIONode {
 		if (p.operation instanceof TXAbortLogEntry
 				|| p.operation instanceof TXCommitLogEntry
 				|| p.operation instanceof TXStartLogEntry) {
-			commandGraph.checkpointDone(p.filename);
-		} else if (!(p.operation instanceof TXTryAbortLogEntry)
-				&& !(p.operation instanceof TXTryCommitLogEntry)) {
-			commandGraph.filenameDone(p.filename, p.operationNumber,
-					p.proposalNumber);
+			if (commandGraph.done(new CommandKey(p.filename, this.addr))) {
+				printVerbose("finished: " + p.operation.toString());
+			}
+		} else {
+			if (commandGraph.done(new CommandKey(p.filename, p.operationNumber,
+					p.proposalNumber))) {
+				printVerbose("finished: " + p.operation.toString());
+			}
 		}
 	}
 
