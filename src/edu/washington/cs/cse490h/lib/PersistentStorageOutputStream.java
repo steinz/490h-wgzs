@@ -21,7 +21,7 @@ public class PersistentStorageOutputStream extends FileOutputStream {
 	private final File f;
 	private final Node n;
 
-	PersistentStorageOutputStream(Node n, File f, boolean append)
+	public PersistentStorageOutputStream(Node n, File f, boolean append)
 			throws IOException {
 		super(f, append);
 		this.n = n;

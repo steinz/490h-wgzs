@@ -255,7 +255,7 @@ public abstract class Node {
 	 * @param synDescription
 	 *            Synoptic string to use for this event
 	 */
-	void handleDiskWriteEvent(String description, String synDescription) {
+	public void handleDiskWriteEvent(String description, String synDescription) {
 		// Ask the manager to check whether we should crash or not.
 		manager.checkWriteCrash(this, description);
 		// Since we didn't crash, notify manager of this write event.

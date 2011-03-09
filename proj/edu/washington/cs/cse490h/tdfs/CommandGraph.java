@@ -2,14 +2,20 @@ package edu.washington.cs.cse490h.tdfs;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Map.Entry;
 
 import edu.washington.cs.cse490h.lib.Callback;
 
 /**
- * A graph of dependent commands and factory of CommandNodes
+ * A graph of dependent commands and factory of CommandNodes.
+ * 
+ * TODO: Keep track of orphaned nodes somehow - it would be nice if all of this
+ * graph's nodes were either executing in heads, refernced along some path from
+ * heads to tails (or refernced as a tail), or on some orphaned list
  */
 public class CommandGraph {
 	public class CommandNode {
@@ -85,8 +91,8 @@ public class CommandGraph {
 				}
 
 				if (checkpoint) {
-					checkpointHead = new Tuple<CommandKey, CommandNode>(
-							command.getKey(), this);
+					checkpointHead = new Tuple<CommandKey, CommandNode>(command
+							.getKey(), this);
 				} else {
 					heads.put(command.getKey(), this);
 				}
@@ -103,6 +109,53 @@ public class CommandGraph {
 			}
 		}
 
+		/**
+		 * mutates args
+		 */
+		public void toDot(Set<String> vertices, Set<String> edges) {
+			vertices.add("  " + this.toDotName() + ";");
+			for (CommandNode child : this.children) {
+				edges
+						.add("  " + toDotName() + " -> " + child.toDotName()
+								+ ";");
+				child.toDot(vertices, edges);
+			}
+		}
+
+		private String toDotName() {
+			return command.getClass().getSimpleName() + "_" + hashCode();
+		}
+
+		@Override
+		public String toString() {
+			return "CommandNode " + hashCode() + " [command=" + command
+					+ ", done=" + done + ", checkpoint=" + checkpoint
+					+ ", locks=" + locks + ", abortCommands=" + abortCommands
+					+ "]";
+		}
+
+		/**
+		 * Appends toString to indent and recursively calls on children with
+		 * increased indent.
+		 * 
+		 * If the node has already been printed during this traversal, just
+		 * prints the node's hashCode as a reference.
+		 * 
+		 * Note: pass sb through?
+		 */
+		public String toString(String indent, Set<CommandNode> alreadyPrinted) {
+			StringBuilder sb = new StringBuilder();
+			if (alreadyPrinted.contains(this)) {
+				sb.append(indent + "CommandNode " + hashCode() + "\n");
+			} else {
+				sb.append(indent + this.toString() + "\n");
+				alreadyPrinted.add(this);
+			}
+			for (CommandNode child : this.children) {
+				sb.append(child.toString(indent + "  ", alreadyPrinted));
+			}
+			return sb.toString();
+		}
 	}
 
 	private static int commandRetryTimeout = 20;
@@ -199,5 +252,50 @@ public class CommandGraph {
 		checkpointTail = null;
 		heads.clear();
 		tails.clear();
+	}
+
+	public String toDot() {
+		Set<String> edges = new HashSet<String>();
+		Set<String> vertices = new HashSet<String>();
+		if (checkpointHead != null) {
+			checkpointHead.second.toDot(vertices, edges);
+		}
+		for (Entry<CommandKey, CommandNode> e : heads.entrySet()) {
+			e.getValue().toDot(vertices, edges);
+		}
+
+		StringBuilder sb = new StringBuilder();
+		sb.append("digraph commands {\n");
+		for (String vertex : vertices) {
+			sb.append(vertex + "\n");
+		}
+		for (String edge : edges) {
+			sb.append(edge + "\n");
+		}
+		sb.append("}\n");
+		return sb.toString();
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		Set<CommandNode> alreadyPrinted = new HashSet<CommandNode>();
+		if (checkpointHead != null) {
+			sb.append(checkpointHead.second.toString("", alreadyPrinted));
+		} else {
+			for (Entry<CommandKey, CommandNode> e : heads.entrySet()) {
+				sb.append(e.getValue().toString("", alreadyPrinted));
+			}
+		}
+		if (checkpointTail != null) {
+			sb.append("checkpointTail: " + checkpointTail.toString() + "\n");
+		}
+		if (tails.size() > 0) {
+			sb.append("\ntails: ");
+			for (Entry<CommandKey, CommandNode> e : tails.entrySet()) {
+				sb.append(e.getValue().toString() + ", ");
+			}
+		}
+		return sb.toString();
 	}
 }
