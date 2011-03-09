@@ -1,0 +1,15 @@
+digraph commands {
+  ListenCommand_28349544;
+  ListenCommand_11707096;
+  StartCommand_31538514;
+  StartCommand_31414927;
+  StartCommand_32961174;
+  ListenCommand_13086732;
+  ListenCommand_11707096 -> StartCommand_31538514;
+  StartCommand_31414927 -> ListenCommand_11707096;
+  StartCommand_32961174 -> StartCommand_31414927;
+  ListenCommand_28349544 -> StartCommand_31414927;
+  StartCommand_32961174 -> ListenCommand_28349544;
+  StartCommand_31414927 -> StartCommand_31538514;
+  ListenCommand_13086732 -> StartCommand_32961174;
+}
