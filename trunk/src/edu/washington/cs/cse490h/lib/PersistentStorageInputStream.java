@@ -12,16 +12,17 @@ import java.io.IOException;
 public class PersistentStorageInputStream extends FileInputStream {
 	private final Node n;
 
-	PersistentStorageInputStream(Node n, String filename)
+	public PersistentStorageInputStream(Node n, String filename)
 			throws FileNotFoundException {
-		super(Utility.realFilename(n.addr, filename));
+		//super(Utility.realFilename(n.addr, filename));
+		super(filename);
 		this.n = n;
 	}
 
 	@Override
 	public int read() throws IOException {
 		int ret = super.read();
-		byte[] bytes = new byte[] { (byte) ret };
+		byte[] bytes = new byte[] { (byte) ret }; 
 		n.handleDiskReadEvent("b:" + n.storageBytesToString(bytes));
 		return ret;
 	}

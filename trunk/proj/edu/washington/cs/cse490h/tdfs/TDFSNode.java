@@ -17,7 +17,12 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
-	 * TODO: HIGH: Rebuild 2PC coordinator logs/state on reboot
+	 * TODO: HIGH: Multiple unecesssary listen commands can be added to the
+	 * commandGraph right now when running some commands such as:
+	 * 
+	 * txstart f1 f2 f3; create f1, create f2, create f3;
+	 * 
+	 * Shouldn't add a listen for a file if there is already one in the graph...
 	 * 
 	 * TODO: HIGH: Coordinator rebuild active file list on restart
 	 * 
@@ -178,13 +183,13 @@ public class TDFSNode extends RIONode {
 	private Map<String, Integer> transactionAddressMap;
 
 	/**
-	 * A set used strictly for starting up the two PC coordinator. Should not be used anywhere
-	 * except in receiveKnownFilenames()
+	 * A set used strictly for starting up the two PC coordinator. Should not be
+	 * used anywhere except in receiveKnownFilenames()
 	 */
 	private Set<String> twoPCKnownFiles;
-	
+
 	private String currentUsername;
-	
+
 	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
 	 */
@@ -212,8 +217,8 @@ public class TDFSNode extends RIONode {
 		// 2PC
 		fileTransactionMap = new HashMap<String, String[]>();
 		transactionAddressMap = new HashMap<String, Integer>();
-		if (addr == twoPCCoordinatorAddress){
-			for (int i = 0; i < coordinatorCount; i++){
+		if (addr == twoPCCoordinatorAddress) {
+			for (int i = 0; i < coordinatorCount; i++) {
 				RIOSend(i, MessageType.RequestAllFilenames);
 			}
 		}
@@ -248,8 +253,6 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	private String username;
-
 	public void acceptFriendParser(Tokenizer t) {
 		String friendName = t.next();
 
@@ -280,8 +283,9 @@ public class TDFSNode extends RIONode {
 		String username = t.next();
 		String password = t.next();
 
-		/*if (get(username).equals(password))
-			this.currentUsername = username;*/
+		/*
+		 * if (get(username).equals(password)) this.currentUsername = username;
+		 */
 	}
 
 	public void logoutParser(Tokenizer t) {
@@ -293,21 +297,17 @@ public class TDFSNode extends RIONode {
 		content = currentUsername + commandDelim + content.length()
 				+ commandDelim + content;
 
-		/*String[] friends = get(currentUsername + ".friends").split();
-		String[] messageFiles = new String[friends.length];
-		for (int i = 0; i < friends.length; i++) {
-			messageFiles[i] = friends[i] + ".messages";
-		}
-		txstart(friends);
-		for (String messageFile : messageFiles) {
-			append(messageFile, content);
-		}
-		txcommit();
-		*/
+		/*
+		 * String[] friends = get(currentUsername + ".friends").split();
+		 * String[] messageFiles = new String[friends.length]; for (int i = 0; i
+		 * < friends.length; i++) { messageFiles[i] = friends[i] + ".messages";
+		 * } txstart(friends); for (String messageFile : messageFiles) {
+		 * append(messageFile, content); } txcommit();
+		 */
 	}
 
 	public void readMessagesParser(Tokenizer t) {
-		//String messages = get(currentUsername + ".messages");
+		// String messages = get(currentUsername + ".messages");
 		String messages = "";
 		while (messages.length() > 0) {
 			Tokenizer m = new Tokenizer(messages, commandDelim);
@@ -321,7 +321,7 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void requestFriendParser(Tokenizer t) {
-		
+
 	}
 
 	public void showFriendsParser(Tokenizer t) {
@@ -331,6 +331,11 @@ public class TDFSNode extends RIONode {
 	public void coordinatorsParser(Tokenizer t) {
 		coordinatorCount = Integer.parseInt(t.next());
 		printInfo("coordinatorCount set to " + coordinatorCount);
+	}
+
+	public void graphParser(Tokenizer t) {
+		printInfo("\n" + commandGraph.toString());
+		printInfo("\n" + commandGraph.toDot());
 	}
 
 	public void perfileParser(Tokenizer t) {
@@ -619,8 +624,14 @@ public class TDFSNode extends RIONode {
 				RIOSend(address, MessageType.Accepted, msg);
 			}
 		} else {
-			Logger.verbose(this, "Node " + addr + ": not accepting proposal: " + p.proposalNumber);
-			Logger.verbose(this, "Node " + addr + ": highest proposal number promised: " + paxosState.highestPromised(p.filename, p.operationNumber));
+			Logger.verbose(this, "Node " + addr + ": not accepting proposal: "
+					+ p.proposalNumber);
+			Logger
+					.verbose(this, "Node "
+							+ addr
+							+ ": highest proposal number promised: "
+							+ paxosState.highestPromised(p.filename,
+									p.operationNumber));
 			Logger.verbose(this, "Node: " + addr + " not accepting proposal: "
 					+ p.proposalNumber);
 			Logger
@@ -848,36 +859,42 @@ public class TDFSNode extends RIONode {
 		}
 		RIOSend(from, MessageType.AddedListener, logFS.packLog(filename));
 	}
-	
+
 	/**
-	 * Request for all filenames this node knows about. Assumes that this node is a coordinator.
-	 * @param from The address who sent the request
-	 * @param filename Should be blank
+	 * Request for all filenames this node knows about. Assumes that this node
+	 * is a coordinator.
+	 * 
+	 * @param from
+	 *            The address who sent the request
+	 * @param filename
+	 *            Should be blank
 	 */
-	public void receiveRequestAllFilenames(int from, String filename){
+	public void receiveRequestAllFilenames(int from, String filename) {
 		StringBuilder sb = new StringBuilder();
 		String filenames = "";
-		
-		for (String file : fileListeners.keySet()){
+
+		for (String file : fileListeners.keySet()) {
 			sb.append(file + Proposal.packetDelimiter);
 		}
-		if (sb.length() > 0){
-			filenames = sb.toString().substring(0, sb.length() - Proposal.packetDelimiter.length());
-		} 
+		if (sb.length() > 0) {
+			filenames = sb.toString().substring(0,
+					sb.length() - Proposal.packetDelimiter.length());
+		}
 		byte[] packed = Utility.stringToByteArray(filenames);
 		RIOSend(from, MessageType.KnownFilenames, packed);
 	}
-	
+
 	/**
-	 * Parses a list of known filenames, and if the 2PC coordinator does not know about any
-	 * file in this list, it requests to listen to it
+	 * Parses a list of known filenames, and if the 2PC coordinator does not
+	 * know about any file in this list, it requests to listen to it
+	 * 
 	 * @param from
 	 * @param filenames
 	 */
-	public void receiveKnownFilenames(int from, String filenames){
+	public void receiveKnownFilenames(int from, String filenames) {
 		String[] files = filenames.split(Proposal.packetDelimiter);
-		for (String file : files){
-			if (!twoPCKnownFiles.contains(file) && !file.equals("")){
+		for (String file : files) {
+			if (!twoPCKnownFiles.contains(file) && !file.equals("")) {
 				byte[] packed = Utility.stringToByteArray(file);
 				RIOSend(from, MessageType.RequestToListen, packed);
 			}
@@ -887,10 +904,10 @@ public class TDFSNode extends RIONode {
 	public void receiveAddedListener(int from, byte[] packedLog) {
 		String filename = logFS.listen(packedLog);
 		commandGraph.done(new CommandKey(filename, -1, -1));
-		
-		if (addr == twoPCCoordinatorAddress){
+
+		if (addr == twoPCCoordinatorAddress) {
 			Integer client = logFS.checkLocked(filename);
-			if (client != null){
+			if (client != null) {
 				abortClientTx(filename, client);
 			}
 		}
@@ -980,17 +997,17 @@ public class TDFSNode extends RIONode {
 		else if (p.operation instanceof TXTryCommitLogEntry) {
 			// check for duplicate learns
 			TXTryCommitLogEntry txCommand = (TXTryCommitLogEntry) p.operation;
-			
+
 			// check for duplicate learns
 			if (txFiles == null)
 				return;
-			
+
 			String[] files = txCommand.filenames;
 			createProposal(new TXCommitLogEntry(files), files);
 			for (String file : txFiles) {
 				fileTransactionMap.put(file, null);
 			}
-			
+
 		}
 
 		else if (p.operation instanceof TXTryAbortLogEntry) {
@@ -1054,9 +1071,9 @@ public class TDFSNode extends RIONode {
 		for (String file : files) {
 			if (logFS.checkLocked(file) != null) {
 				List<Integer> coordinators = getCoordinators(file);
-				Proposal newProposal = new Proposal(operation, file,
-						logFS.nextLogNumber(file), nextProposalNumber(file,
-								logFS.nextLogNumber(file)));
+				Proposal newProposal = new Proposal(operation, file, logFS
+						.nextLogNumber(file), nextProposalNumber(file, logFS
+						.nextLogNumber(file)));
 
 				byte[] packed = newProposal.pack();
 				for (Integer addr : coordinators) {
@@ -1065,5 +1082,5 @@ public class TDFSNode extends RIONode {
 			}
 		}
 	}
-	
+
 }

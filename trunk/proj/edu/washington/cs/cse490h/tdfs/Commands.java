@@ -1,5 +1,6 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.util.Arrays;
 import java.util.List;
 
 import edu.washington.cs.cse490h.lib.Utility;
@@ -25,8 +26,8 @@ abstract class Command {
 	 */
 	public void createProposal(TDFSNode node, String filename, LogEntry op) {
 		this.operationNumber = node.logFS.nextLogNumber(filename);
-		this.proposalNumber = node.nextProposalNumber(filename,
-				node.logFS.nextLogNumber(filename));
+		this.proposalNumber = node.nextProposalNumber(filename, node.logFS
+				.nextLogNumber(filename));
 		Proposal proposal = new Proposal(op, filename, this.operationNumber,
 				this.proposalNumber);
 		node.prepare(proposal);
@@ -35,6 +36,17 @@ abstract class Command {
 	public abstract void execute(TDFSNode node) throws Exception;
 
 	public abstract CommandKey getKey();
+
+	protected String toStringBase() {
+		return this.getClass().getSimpleName() + " [filename=" + filename
+				+ ", nodeAddr=" + nodeAddr + ", opNum=" + operationNumber
+				+ ", propNum=" + proposalNumber;
+	}
+
+	@Override
+	public String toString() {
+		return toStringBase() + "]";
+	}
 }
 
 abstract class FileCommand extends Command {
@@ -63,6 +75,10 @@ abstract class TXCommand extends Command {
 		return new CommandKey(this.filename, this.nodeAddr);
 	}
 
+	@Override
+	public String toString() {
+		return super.toStringBase() + ", filenames=" + Arrays.toString(filenames) + "]";
+	}
 }
 
 abstract class WriteCommand extends FileCommand {
@@ -71,6 +87,11 @@ abstract class WriteCommand extends FileCommand {
 	public WriteCommand(String filename, String contents, int nodeAddr) {
 		super(filename, nodeAddr);
 		this.contents = contents;
+	}
+
+	@Override
+	public String toString() {
+		return super.toStringBase() + ", contents=" + contents;
 	}
 }
 
@@ -145,15 +166,15 @@ class ListenCommand extends FileCommand {
 	}
 
 	@Override
-	public void execute(TDFSNode node) {		
+	public void execute(TDFSNode node) {
 		List<Integer> coordinators = node.getCoordinators(filename);
 		if (coordinators.contains(node.addr)) {
-			node.RIOSend(node.addr, MessageType.RequestToListen,
-					Utility.stringToByteArray(filename));
+			node.RIOSend(node.addr, MessageType.RequestToListen, Utility
+					.stringToByteArray(filename));
 		} else {
 			node.RIOSend(node.getCoordinator(filename),
-					MessageType.RequestToListen,
-					Utility.stringToByteArray(filename));
+					MessageType.RequestToListen, Utility
+							.stringToByteArray(filename));
 		}
 	}
 }
