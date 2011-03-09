@@ -207,7 +207,5 @@ The persistent Paxos state log currently is never being purged.
 That is, every operation since the Paxos group's instantiation is stored in the file, even operations that are unnecessary (e.g. if the file has been created, deleted, and then created again, it is not necessary to keep track of the first create and delete).
 This could be considered a feature, as the persistent log provides versioning for free - but the log would need to be garbage collected periodically in a real system.
 
-Promise denials are being handled strangely, and in our experience if the persistent storage state is not cleared between program executions, some commands may be delayed indefinitely.
-
 We haven't tested non-initialized nodes much, so it is possible that dropped packets may cause unforeseen errors (most likely locks failing to be released on files during transactions).
 \end{document}

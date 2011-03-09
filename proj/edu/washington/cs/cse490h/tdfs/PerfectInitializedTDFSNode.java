@@ -21,7 +21,6 @@ public class PerfectInitializedTDFSNode extends PerfectTDFSNode {
 	protected final int MAX_CLIENT_COUNT = 10;
 
 	public void start() {
-		super.start();
 
 		// Setup UUID mappings
 		this.ID = UUID.fromString("0000000-0000-0000-0000-00000000000"
@@ -32,5 +31,7 @@ public class PerfectInitializedTDFSNode extends PerfectTDFSNode {
 		}
 
 		printInfo("initialized " + addr + " with session id: " + this.ID);
+
+		super.start();
 	}
 }
