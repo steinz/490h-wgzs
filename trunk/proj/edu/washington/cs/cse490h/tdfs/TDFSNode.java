@@ -381,35 +381,37 @@ public class TDFSNode extends RIONode {
 		printInfo("coordinatorCount set to " + coordinatorCount);
 	}
 
-	public void graphParser(Tokenizer t) throws IOException, InterruptedException {
+	public void graphParser(Tokenizer t) throws IOException,
+			InterruptedException {
 		// printVerbose("\n" + commandGraph.toString());
 		// printVerbose("\n" + commandGraph.toDot());
 
+		// TODO: close IO objects on failures...
+
+		// write .dot
+		FileWriter w = new FileWriter(realFilename(this.addr,
+				"commandGraph.dot"));
+		w.write(commandGraph.toDot());
+		w.close();
+
+		// run dot
+		Process p = Runtime.getRuntime().exec(
+				"dot -Tpng " + realFilename(this.addr, "commandGraph.dot"));
+		p.waitFor();
+		BufferedInputStream in = new BufferedInputStream(p.getInputStream());
 		FileOutputStream out = new FileOutputStream(realFilename(this.addr,
 				"commandGraph.png"));
-		try {
-			// write .dot
-			FileWriter w = new FileWriter(realFilename(this.addr,
-					"commandGraph.dot"));
-			w.write(commandGraph.toDot());
-			
-			// run dot
-			Process p = Runtime.getRuntime().exec("dot -Tpng commandGraph.dot");
-			BufferedInputStream in = new BufferedInputStream(p.getInputStream());
-			p.waitFor();
-			if (p.exitValue() == 0) {
-				// TODO: buffer
-				// write .png
-				while (in.available() > 0) {
-					out.write(in.read());
-				}
-				printInfo("command graph written to "
-						+ realFilename(this.addr, "commandGraph.png"));
-			} else {
-				printInfo("dot failed with exit value " + p.exitValue());
+
+		if (p.exitValue() == 0) {
+			// TODO: buffer
+			// write .png
+			while (in.available() > 0) {
+				out.write(in.read());
 			}
-		} finally {
-			out.close();
+			printInfo("command graph written to "
+					+ realFilename(this.addr, "commandGraph.png"));
+		} else {
+			printInfo("dot failed with exit value " + p.exitValue());
 		}
 	}
 
