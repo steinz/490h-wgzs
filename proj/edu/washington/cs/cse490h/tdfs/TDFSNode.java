@@ -1,5 +1,9 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.io.BufferedInputStream;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -17,13 +21,6 @@ import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 public class TDFSNode extends RIONode {
 
 	/*
-	 * TODO: HIGH: Multiple unecesssary listen commands can be added to the
-	 * commandGraph right now when running some commands such as:
-	 * 
-	 * txstart f1 f2 f3; create f1, create f2, create f3;
-	 * 
-	 * Shouldn't add a listen for a file if there is already one in the graph...
-	 * 
 	 * TODO: HIGH: Coordinator rebuild active file list on restart
 	 * 
 	 * TODO: HIGH: Cleanup Paxos (filename, opNum) -> X data structures when we
@@ -40,6 +37,8 @@ public class TDFSNode extends RIONode {
 	 * (Req -1>) Prepare -> OldOp -1> (done) | PromiseDenial -1> (done) |
 	 * Promise -1> Accept -> AcceptDenial -1> (done) | Accepted -1> Learned ->
 	 * (done)
+	 * 
+	 * TODO: Our TXs implement synchronized (filenameList) { }, document
 	 * 
 	 * TODO: Support multiple 2PC coordinators for reliability - cold
 	 * replacements with leases should be fine
@@ -123,12 +122,28 @@ public class TDFSNode extends RIONode {
 	protected LogFS logFS;
 
 	/**
-	 * Encapsulates persistent paxos data structures
+	 * Username of the logged in user (user state)
 	 */
-	private PersistentPaxosState paxosState;
+	private String currentUsername = null;
 
 	/**
-	 * Array of transacting filenames used by the library to aggressively fail
+	 * Client only: Map from filenames to most recent contents (populated by
+	 * gets)
+	 */
+	protected Map<String, String> filestateCache;
+
+	/**
+	 * Client only: Set of filenames we think we might not be receiving updates
+	 * on anymore, even though we are listening on that file.
+	 * 
+	 * TODO: HIGH: add filenames to relisten on command retry
+	 */
+	protected Set<String> relisten;
+
+	/**
+	 * Library only: Array of transacting filenames used by the library to
+	 * aggressively fail tx commands. Null if not transacting. Should never be
+	 * [].
 	 * 
 	 * Used by the client right now, but wouldn't be visible in a real
 	 * implementation.
@@ -137,58 +152,62 @@ public class TDFSNode extends RIONode {
 
 	/**
 	 * Learner only: Number of acceptors that have contacted the learner about
-	 * accepting a particular N,V pair
+	 * accepting a particular ((filename, opNum), value) pair
 	 */
 	private Map<Tuple<String, Integer>, Integer> acceptorsResponded;
 
 	/**
-	 * List of addresses this coordinator passes on changes to when it learns a
-	 * file changes
+	 * Learner only: List of addresses this coordinator passes on changes to
+	 * when it learns about file changes
 	 */
 	Map<String, Set<Integer>> fileListeners;
 
 	/**
-	 * Last proposal number prepared for a given file
+	 * Proposer only: (filename, opNum) -> last propNumber prepared
 	 */
 	private Map<Tuple<String, Integer>, Integer> lastProposalNumbersSent;
 
 	/**
-	 * Proposer only: Number of acceptors that have responded with a promise
+	 * Acceptors only: encapsulates persistent paxos data structures
+	 */
+	private PersistentPaxosState paxosState;
+
+	/**
+	 * Proposer only: (filename, opNum) -> number of acceptors that have
+	 * responded with a promise
 	 */
 	private Map<Tuple<String, Integer>, Integer> promisesReceived;
 
 	/**
-	 * Proposer only: Highest proposal value accepted from received promises
+	 * Proposer only: (filename, opNum) -> proposal w/ highest highest propNum
+	 * promised
 	 */
 	private Map<Tuple<String, Integer>, Proposal> highestProposalReceived;
 
 	/**
-	 * 2PC
+	 * 2PC coordinator: Maps filenames to transaction file lists, so for
+	 * example, if a client is doing a transaction on files f1 and f2 the map
+	 * would contain:
 	 * 
-	 * Ties individual files to transactions, so for example, if a client is
-	 * doing a transaction on files f1, f2, f3, the map would look like:
+	 * f1 -> f1, f2
 	 * 
-	 * f1 -> f1, f2, f3
-	 * 
-	 * f2 -> f1, f2, f3
-	 * 
-	 * etc.
+	 * f2 -> f1, f2
 	 */
 	private Map<String, String[]> fileTransactionMap;
 
 	/**
-	 * A map from filenames in a transaction to the client transacting on these
-	 * files.
+	 * 2PC coordinator: A map from filenames in a transaction to the client
+	 * transacting on these files.
 	 */
 	private Map<String, Integer> transactionAddressMap;
 
 	/**
-	 * A set used strictly for starting up the two PC coordinator. Should not be
-	 * used anywhere except in receiveKnownFilenames()
+	 * 2PC coordinator: A set when starting up the 2PC coordinator. Should not
+	 * be used anywhere except in receiveKnownFilenames().
+	 * 
+	 * TODO: what used for
 	 */
 	private Set<String> twoPCKnownFiles;
-
-	private String currentUsername;
 
 	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
@@ -201,6 +220,8 @@ public class TDFSNode extends RIONode {
 	public void start() {
 		// Client
 		this.commandGraph = new CommandGraph(this);
+		this.filestateCache = new HashMap<String, String>();
+		this.relisten = new HashSet<String>();
 		this.getCoordinatorOffset = new HashMap<String, Integer>();
 		this.logFS = new LogFileSystem();
 		this.transactingFiles = null;
@@ -253,89 +274,150 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	public void acceptFriendParser(Tokenizer t) {
-		String friendName = t.next();
-
-		String[] filenames = { currentUsername + ".friends",
-				friendName + ".friends" };
-		txstart(filenames);
-		// TODO: check that there's a pending request
-		append(filenames[0], friendName);
-		append(filenames[1], currentUsername);
-		txcommit();
-	}
-
-	public void createUserParser(Tokenizer t) {
-		String username = t.next();
-		String password = t.next();
-
-		String[] filenames = { username, username + ".friends",
-				username + ".requests", username + ".messages" };
-		txstart(filenames);
-		for (String filename : filenames) {
-			create(filename);
-		}
-		put(filenames[0], password);
-		txcommit();
-	}
-
-	public void loginParser(Tokenizer t) {
-		String username = t.next();
-		String password = t.next();
-
-		/*
-		 * if (get(username).equals(password)) this.currentUsername = username;
-		 */
-	}
-
-	public void logoutParser(Tokenizer t) {
-		this.currentUsername = null;
-	}
-
-	public void postMessageParser(Tokenizer t) {
-		String content = t.rest();
-		content = currentUsername + commandDelim + content.length()
-				+ commandDelim + content;
-
-		/*
-		 * String[] friends = get(currentUsername + ".friends").split();
-		 * String[] messageFiles = new String[friends.length]; for (int i = 0; i
-		 * < friends.length; i++) { messageFiles[i] = friends[i] + ".messages";
-		 * } txstart(friends); for (String messageFile : messageFiles) {
-		 * append(messageFile, content); } txcommit();
-		 */
-	}
-
-	public void readMessagesParser(Tokenizer t) {
-		// String messages = get(currentUsername + ".messages");
-		String messages = "";
-		while (messages.length() > 0) {
-			Tokenizer m = new Tokenizer(messages, commandDelim);
-			String user = m.next();
-			int len = Integer.parseInt(m.next());
-			messages = m.rest();
-			String msg = messages.substring(0, len);
-			messages = messages.substring(len);
-			printVerbose(user + ": " + msg, true);
-		}
-	}
-
-	public void requestFriendParser(Tokenizer t) {
-
-	}
-
-	public void showFriendsParser(Tokenizer t) {
-
-	}
+	// public void acceptFriendParser(Tokenizer t) {
+	// String friendName = t.next();
+	//
+	// String[] filenames = { currentUsername + ".friends",
+	// friendName + ".friends" };
+	// txstart(filenames);
+	// // TODO: check that there's a pending request
+	// append(filenames[0], friendName + commandDelim);
+	// append(filenames[1], currentUsername + commandDelim);
+	// txcommit();
+	// }
+	//
+	// public void createUserParser(Tokenizer t) {
+	// String username = t.next();
+	// String password = t.next();
+	//
+	// String[] filenames = { username, username + ".friends",
+	// username + ".requests", username + ".messages" };
+	// txstart(filenames);
+	// for (String filename : filenames) {
+	// create(filename);
+	// }
+	// put(filenames[0], password);
+	// txcommit();
+	// }
+	//
+	// public void loginParser(Tokenizer t) {
+	// String username = t.next();
+	// String password = t.next();
+	//
+	// if (get(username).equals(password))
+	// this.currentUsername = username;
+	// }
+	//
+	// public void logoutParser(Tokenizer t) {
+	// this.currentUsername = null;
+	// }
+	//
+	// public void postMessageParser(Tokenizer t) {
+	// String content = t.rest();
+	// content = currentUsername + commandDelim + content.length()
+	// + commandDelim + content;
+	//
+	// String filename = currentUsername + ".friends";
+	// listen(filename);
+	// /*
+	// * TODO: HIGH: either get doesn't need to check listen or we don't need
+	// * to check explicitly above
+	// */
+	// get(filename);
+	// CommandNode get = commandGraph.addCommand(new GetCommand(filename,
+	// this.addr), true, null);
+	// CommandNode loaded = commandGraph.addCommand(new Command(filename,
+	// this.addr) {
+	// @Override
+	// public CommandKey getKey() {
+	// return new CommandKey(filename, addr);
+	// }
+	//
+	// @Override
+	// public void execute(TDFSNode node) throws Exception {
+	// String[] friends = filestateCache.get(filename).split(
+	// commandDelim);
+	// }
+	// }, false, null);
+	//
+	//
+	//
+	// // TODO: HIGH: how to delay this...
+	// String[] friends = get(currentUsername + ".friends").split();
+	// String[] messageFiles = new String[friends.length];
+	// for (int i = 0; i < friends.length; i++) {
+	// messageFiles[i] = friends[i] + ".messages";
+	// }
+	// txstart(friends);
+	// for (String messageFile : messageFiles) {
+	// append(messageFile, content);
+	// }
+	// txcommit();
+	// }
+	//
+	// public void readMessagesParser(Tokenizer t) {
+	// String messages = get(currentUsername + ".messages");
+	// while (messages.length() > 0) {
+	// Tokenizer m = new Tokenizer(messages, commandDelim);
+	// String user = m.next();
+	// int len = Integer.parseInt(m.next());
+	// messages = m.rest();
+	// String msg = messages.substring(0, len);
+	// messages = messages.substring(len);
+	// printVerbose(user + ": " + msg, true);
+	// }
+	// }
+	//
+	// public void requestFriendParser(Tokenizer t) {
+	//
+	// }
+	//
+	// public void showFriendsParser(Tokenizer t) {
+	//
+	// }
 
 	public void coordinatorsParser(Tokenizer t) {
 		coordinatorCount = Integer.parseInt(t.next());
 		printInfo("coordinatorCount set to " + coordinatorCount);
 	}
 
-	public void graphParser(Tokenizer t) {
-		printInfo("\n" + commandGraph.toString());
-		printInfo("\n" + commandGraph.toDot());
+	public void graphParser(Tokenizer t) throws IOException, InterruptedException {
+		// printVerbose("\n" + commandGraph.toString());
+		// printVerbose("\n" + commandGraph.toDot());
+
+		FileOutputStream out = new FileOutputStream(realFilename(this.addr,
+				"commandGraph.png"));
+		try {
+			// write .dot
+			FileWriter w = new FileWriter(realFilename(this.addr,
+					"commandGraph.dot"));
+			w.write(commandGraph.toDot());
+			
+			// run dot
+			Process p = Runtime.getRuntime().exec("dot -Tpng commandGraph.dot");
+			BufferedInputStream in = new BufferedInputStream(p.getInputStream());
+			p.waitFor();
+			if (p.exitValue() == 0) {
+				// TODO: buffer
+				// write .png
+				while (in.available() > 0) {
+					out.write(in.read());
+				}
+				printInfo("command graph written to "
+						+ realFilename(this.addr, "commandGraph.png"));
+			} else {
+				printInfo("dot failed with exit value " + p.exitValue());
+			}
+		} finally {
+			out.close();
+		}
+	}
+
+	/**
+	 * framework...
+	 */
+	private static String realFilename(int nodeAddr, String filename) {
+		return "storage/" + nodeAddr + "/" + filename;
 	}
 
 	public void perfileParser(Tokenizer t) {
@@ -353,125 +435,250 @@ public class TDFSNode extends RIONode {
 	public void appendParser(Tokenizer t) {
 		String filename = t.next();
 		String contents = t.rest();
-		append(filename, contents);
+		append(filename, contents, buildAbortCommands()).execute();
 	}
 
 	public void createParser(Tokenizer t) {
 		String filename = t.next();
-		create(filename);
+		create(filename, buildAbortCommands()).execute();
 	}
 
 	public void deleteParser(Tokenizer t) {
 		String filename = t.next();
-		delete(filename);
+		delete(filename, buildAbortCommands()).execute();
 	}
 
 	public void getParser(Tokenizer t) {
 		String filename = t.next();
-		get(filename);
+		get(filename, buildAbortCommands()).execute();
 	}
 
 	public void listenParser(Tokenizer t) {
 		String filename = t.next();
-		listen(filename);
+		listen(filename).execute();
 	}
 
 	public void putParser(Tokenizer t) {
 		String filename = t.next();
 		String contents = t.rest();
-		put(filename, contents);
+		put(filename, contents, buildAbortCommands()).execute();
 	}
 
-	public void txabortParser(Tokenizer t) {
-		txabort();
+	public void txabortParser(Tokenizer t) throws TransactionException {
+		txabort().execute();
 	}
 
-	public void txcommitParser(Tokenizer t) {
-		txcommit();
+	public void txcommitParser(Tokenizer t) throws TransactionException {
+		txcommit().execute();
 	}
 
-	public void txstartParser(Tokenizer t) {
-		txstart(t.rest().split(commandDelim));
+	public void txstartParser(Tokenizer t) throws TransactionException {
+		txstart(t.rest().split(commandDelim)).execute();
 	}
 
-	public void append(String filename, String contents) {
-		checkListen(filename, new AppendCommand(filename, contents, this.addr));
-	}
-
-	public void create(String filename) {
-		checkListen(filename, new CreateCommand(filename, this.addr));
-	}
-
-	public void delete(String filename) {
-		checkListen(filename, new DeleteCommand(filename, this.addr));
-	}
-
-	public void get(String filename) {
-		checkListen(filename, new GetCommand(filename, this.addr));
-	}
-
-	public void listen(String filename) {
-		commandGraph.addCommand(new ListenCommand(filename, this.addr), false,
-				null).execute();
-	}
-
-	public void put(String filename, String contents) {
-		checkListen(filename, new PutCommand(filename, contents, this.addr));
-	}
-
+	/**
+	 * Returns null if not transacting (transactingFiles == null).
+	 * 
+	 * Throws a RuntimeException if transactingFiles == []
+	 */
 	private List<Command> buildAbortCommands() {
 		List<Command> abortCommands = null;
 		if (transactingFiles != null) {
+			if (transactingFiles.length == 0) {
+				throw new RuntimeException("transactingFiles = []");
+			}
 			abortCommands = new ArrayList<Command>(transactingFiles.length);
 			for (String tf : transactingFiles) {
 				abortCommands.add(new AbortCommand(transactingFiles, tf,
 						this.addr));
 			}
-
 		}
 		return abortCommands;
 	}
 
-	private void checkListen(String filename, FileCommand after) {
-		List<Command> abortCommands = buildAbortCommands();
+	public CommandNode append(String filename, String contents,
+			List<Command> abortCommands) {
+		CommandNode listen = listen(filename);
+		commandGraph.addCommand(
+				new WriteCommand(filename, contents, this.addr) {
+					@Override
+					public void execute(TDFSNode node) throws Exception {
+						if (node.logFS.fileExists(filename)) {
+							createProposal(node, filename, new WriteLogEntry(
+									contents, true));
+						} else {
+							throw new FileDoesNotExistException(filename);
+						}
+					}
 
-		if (!logFS.isListening(filename)) {
-			CommandNode l = commandGraph.addCommand(new ListenCommand(filename,
-					this.addr), false, abortCommands);
-			commandGraph.addCommand(after, false, abortCommands);
-			l.execute();
-		} else {
-			commandGraph.addCommand(after, false, abortCommands).execute();
-		}
+					@Override
+					public String getName() {
+						return "Write";
+					}
+				}, false, abortCommands);
+		return listen;
 	}
 
-	public void txabort() {
+	public CommandNode create(String filename, List<Command> abortCommands) {
+		CommandNode listen = listen(filename);
+		commandGraph.addCommand(new FileCommand(filename, this.addr) {
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				if (!node.logFS.fileExists(filename)) {
+					createProposal(node, filename, new CreateLogEntry());
+				} else {
+					throw new FileAlreadyExistsException(filename);
+				}
+			}
+
+			@Override
+			public String getName() {
+				return "Create";
+			}
+		}, false, abortCommands);
+		return listen;
+	}
+
+	public CommandNode delete(String filename, List<Command> abortCommands) {
+		CommandNode listen = listen(filename);
+		commandGraph.addCommand(new FileCommand(filename, this.addr) {
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				if (node.logFS.fileExists(filename)) {
+					createProposal(node, filename, new DeleteLogEntry());
+				} else {
+					throw new FileDoesNotExistException(filename);
+				}
+			}
+
+			@Override
+			public String getName() {
+				return "Delete";
+			}
+		}, false, abortCommands);
+		return listen;
+	}
+
+	public CommandNode get(String filename, List<Command> abortCommands) {
+		CommandNode listen = listen(filename);
+		commandGraph.addCommand(new FileCommand(filename, this.addr) {
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				if (node.logFS.fileExists(filename)) {
+					String content = node.logFS.getFile(filename);
+					node.filestateCache.put(filename, content);
+					node.commandGraph.done(new CommandKey(filename, -1, -1));
+				} else {
+					throw new FileDoesNotExistException(filename);
+				}
+			}
+
+			@Override
+			public String getName() {
+				return "Get";
+			}
+			// TODO: HIGH: change getKey to return (filename, nodeAddr)?
+		}, false, abortCommands);
+		return listen;
+	}
+
+	public CommandNode listen(String filename) {
+		return commandGraph.addCommand(new ListenCommand(filename, this.addr),
+				false, null);
+	}
+
+	public CommandNode put(String filename, String contents,
+			List<Command> abortCommands) {
+		CommandNode listen = listen(filename);
+		commandGraph.addCommand(
+				new WriteCommand(filename, contents, this.addr) {
+					@Override
+					public void execute(TDFSNode node) throws Exception {
+						if (node.logFS.fileExists(filename)) {
+							createProposal(node, filename, new WriteLogEntry(
+									contents, false));
+						} else {
+							throw new FileDoesNotExistException(filename);
+						}
+					}
+
+					@Override
+					public String getName() {
+						return "Put";
+					}
+				}, false, abortCommands);
+		return listen;
+	}
+
+	/**
+	 * Assumes transactingFiles is not [].
+	 */
+	public CommandNode txabort() throws TransactionException {
 		if (transactingFiles != null) {
+			CommandNode root = null;
 			for (String filename : transactingFiles) {
-				checkListen(filename, new AbortCommand(transactingFiles,
-						filename, this.addr));
+				CommandNode listen = listen(filename);
+				if (root == null) {
+					root = listen;
+				}
+				commandGraph.addCommand(new AbortCommand(transactingFiles,
+						filename, this.addr), true, null);
 			}
 			transactingFiles = null;
+			return root;
 		} else {
-			printError("not in a transaction");
+			throw new TransactionException("not in a transaction");
 		}
 	}
 
-	public void txcommit() {
+	/**
+	 * Assumes transactingFiles is not [].
+	 * 
+	 * Assumes all operations inside the commit are complete at time of
+	 * execution.
+	 */
+	public CommandNode txcommit() throws TransactionException {
 		if (transactingFiles != null) {
+			CommandNode root = null;
 			for (String filename : transactingFiles) {
-				checkListen(filename, new CommitCommand(transactingFiles,
-						filename, this.addr));
+				CommandNode listen = listen(filename);
+				if (root == null) {
+					root = listen;
+				}
+				commandGraph.addCommand(new TXCommand(transactingFiles,
+						filename, this.addr) {
+					@Override
+					public void execute(TDFSNode node) throws Exception {
+						if (node.logFS.checkLocked(filename) == node.addr) {
+							createProposal(node, filename,
+									new TXTryCommitLogEntry(filenames));
+						} else {
+							throw new TransactionException("lock not owned on "
+									+ filename);
+						}
+					}
+
+					@Override
+					public String getName() {
+						return "TXCommit";
+					}
+				}, true, null);
 			}
 			transactingFiles = null;
+			return root;
 		} else {
-			printError("not in transaction");
+			throw new TransactionException("not in a transaction");
 		}
 	}
 
-	public void txstart(String[] filenames) {
+	public CommandNode txstart(String[] filenames) throws TransactionException {
 		if (transactingFiles == null) {
+			if (filenames.length == 0) {
+				throw new TransactionException("empty filename list");
+			}
+
 			transactingFiles = filenames;
+
 			// sort filenames
 			List<String> sorted = new ArrayList<String>(transactingFiles.length);
 			for (String filename : transactingFiles) {
@@ -480,32 +687,32 @@ public class TDFSNode extends RIONode {
 			Collections.sort(sorted);
 			transactingFiles = sorted.toArray(transactingFiles);
 
+			List<Command> abortCommands = buildAbortCommands();
+			CommandNode root = null;
 			for (String filename : transactingFiles) {
-				/*
-				 * uses addCheckpoint, so each listen/start depends on the
-				 * previous txstart and they get executed and finish in order
-				 */
-				checkListen(filename, new StartCommand(transactingFiles,
-						filename, this.addr));
+				CommandNode listen = listen(filename);
+				if (root == null) {
+					root = listen;
+				}
+				commandGraph.addCommand(new TXCommand(transactingFiles,
+						filename, this.addr) {
+					@Override
+					public void execute(TDFSNode node) throws Exception {
+						if (node.logFS.checkLocked(filename) == null) {
+							createProposal(node, filename, new TXStartLogEntry(
+									filenames, node.addr));
+						}
+					}
+
+					@Override
+					public String getName() {
+						return "TXStart";
+					}
+				}, true, abortCommands);
 			}
+			return root;
 		} else {
-			printError("already in transaction");
-		}
-	}
-
-	/**
-	 * non-FileCommand version used for transactions
-	 */
-	private void checkListen(String filename, Command after) {
-		List<Command> abortCommands = buildAbortCommands();
-
-		if (!logFS.isListening(filename)) {
-			CommandNode l = commandGraph.addCommand(new ListenCommand(filename,
-					this.addr), false, abortCommands);
-			commandGraph.addCommand(after, true, abortCommands);
-			l.execute();
-		} else {
-			commandGraph.addCommand(after, true, abortCommands).execute();
+			throw new TransactionException("already in transaction");
 		}
 	}
 
@@ -626,16 +833,18 @@ public class TDFSNode extends RIONode {
 		} else {
 			Logger.verbose(this, "Node " + addr + ": not accepting proposal: "
 					+ p.proposalNumber);
-			Logger
-					.verbose(this, "Node "
+			Logger.verbose(
+					this,
+					"Node "
 							+ addr
 							+ ": highest proposal number promised: "
 							+ paxosState.highestPromised(p.filename,
 									p.operationNumber));
 			Logger.verbose(this, "Node: " + addr + " not accepting proposal: "
 					+ p.proposalNumber);
-			Logger
-					.verbose(this, "Node: "
+			Logger.verbose(
+					this,
+					"Node: "
 							+ addr
 							+ " highest proposal number promised: "
 							+ paxosState.highestPromised(p.filename,
@@ -904,6 +1113,7 @@ public class TDFSNode extends RIONode {
 	public void receiveAddedListener(int from, byte[] packedLog) {
 		String filename = logFS.listen(packedLog);
 		commandGraph.done(new CommandKey(filename, -1, -1));
+		relisten.remove(filename);
 
 		if (addr == twoPCCoordinatorAddress) {
 			Integer client = logFS.checkLocked(filename);
@@ -1071,9 +1281,9 @@ public class TDFSNode extends RIONode {
 		for (String file : files) {
 			if (logFS.checkLocked(file) != null) {
 				List<Integer> coordinators = getCoordinators(file);
-				Proposal newProposal = new Proposal(operation, file, logFS
-						.nextLogNumber(file), nextProposalNumber(file, logFS
-						.nextLogNumber(file)));
+				Proposal newProposal = new Proposal(operation, file,
+						logFS.nextLogNumber(file), nextProposalNumber(file,
+								logFS.nextLogNumber(file)));
 
 				byte[] packed = newProposal.pack();
 				for (Integer addr : coordinators) {
@@ -1082,5 +1292,4 @@ public class TDFSNode extends RIONode {
 			}
 		}
 	}
-
 }

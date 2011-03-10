@@ -1,46 +1,84 @@
 package edu.washington.cs.cse490h.tdfs;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import edu.washington.cs.cse490h.lib.Callback;
 
 /**
- * A graph of dependent commands and factory of CommandNodes.
+ * A graph of dependent commands (and factory of CommandNodes?)
  * 
  * TODO: Keep track of orphaned nodes somehow - it would be nice if all of this
- * graph's nodes were either executing in heads, refernced along some path from
- * heads to tails (or refernced as a tail), or on some orphaned list
+ * graph's nodes were either executing in heads, referenced along some path from
+ * heads to tails (or referenced as a tail), or on some orphaned list
  */
 public class CommandGraph {
+	/**
+	 * Wraps a command waiting to be executed, keeping track of commands that
+	 * depend on it (children), what to do if it aborts, etc.
+	 */
 	public class CommandNode {
 		/**
-		 * commands run if this command aborts - can be null
+		 * Commands run if this command aborts - can be null.
+		 * 
+		 * Commands run on aborts are not retried if they fail.
 		 */
 		private List<Command> abortCommands;
+		/**
+		 * The command to run once all parents are done.
+		 */
 		private Command command;
+		/**
+		 * Number of parents not yet done.
+		 */
 		private int locks;
-		private List<CommandNode> children;
+		/**
+		 * List of nodes depending on this command's completion.
+		 */
+		private Set<CommandNode> children;
+		/**
+		 * Whether this node is a checkpoint - all commands added after a
+		 * checkpoint depend on that checkpoint.
+		 */
 		private boolean checkpoint;
+		/**
+		 * Whether or not this node has successfully executed, been canceled, or
+		 * been aborted.
+		 */
 		private boolean done;
 
-		public CommandNode(Command c, boolean checkpoint,
+		/**
+		 * Creates a new CommandNode. CommandNodes created this way should be
+		 * explicitly added to a CommandGraph using
+		 * CommandGraph.addCommand(CommandNode).
+		 * 
+		 * Creates nodes with CommandGraph.addCommand(Command, boolean,
+		 * List<Command>) if you don't care when they get added to the graph
+		 * (this will add them immediately).
+		 * 
+		 * Takes the command to be executed, whether or not this node is a
+		 * checkpoint, and a list of commands to attempt to execute once if the
+		 * command aborts.
+		 */
+		private CommandNode(Command c, boolean checkpoint,
 				List<Command> abortCommands) {
 			this.abortCommands = abortCommands;
 			this.command = c;
 			this.locks = 0;
-			this.children = new ArrayList<CommandNode>();
+			this.children = new HashSet<CommandNode>();
 			this.checkpoint = checkpoint;
 			this.done = false;
 		}
 
+		/**
+		 * Tries to execute the command in this node's abortCommands list once
+		 * and then cancels this node and all of it's children.
+		 */
 		public void abort() {
-			start();
 			if (abortCommands != null) {
 				for (Command c : abortCommands) {
 					try {
@@ -53,33 +91,76 @@ public class CommandGraph {
 			cancel();
 		}
 
-		private void cancel() {
+		/**
+		 * Add a dependency from this node to child if this node isn't done.
+		 */
+		public void addChild(CommandNode child) {
+			if (!done) {
+				child.locks++;
+				children.add(child);
+			}
+		}
+
+		/**
+		 * Add a dependency from parent to this node if parent isn't done.
+		 */
+		public void addParent(CommandNode parent) {
+			if (!parent.done) {
+				this.locks++;
+				parent.children.add(this);
+			}
+		}
+
+		/**
+		 * Sets this node's done flag and recursively calls cancel on all of
+		 * it's children. Call abort if you want this client's abortCommands
+		 * list to be executed first.
+		 */
+		public void cancel() {
 			this.done = true;
 			for (CommandNode node : children) {
 				node.cancel();
 			}
 		}
 
+		/**
+		 * Sets this node's done flag, decrements the lock count on each of it's
+		 * children and executes them if their lock count is 0 (they have no
+		 * dependencies left).
+		 * 
+		 * This should only be called once.
+		 */
 		public void done() {
-			this.done = true;
-			for (CommandNode node : children) {
-				node.parentFinished();
+			if (!this.done) {
+				this.done = true;
+				for (CommandNode node : children) {
+					node.locks--;
+					if (node.locks == 0) {
+						node.execute();
+					}
+				}
 			}
 		}
 
-		public void parentFinished() {
-			locks--;
-			execute();
-		}
-
 		/**
-		 * returns true if the command has already been marked done or is
-		 * executed
+		 * Should be called externally after adding the CommandNode to the graph
+		 * with CommandGraph.addCommand (or constructing dependencies
+		 * externally, although this is not recommended).
+		 * 
+		 * Returns true if the command has already been marked done or is
+		 * successfully executed (at which point it should be marked as done by
+		 * an external call to done or cancel).
+		 * 
+		 * This command will retry every commandRetryTimeout rounds until it is
+		 * marked done.
+		 * 
+		 * Calls abort if command.execute throws an exception.
 		 */
 		public boolean execute() {
 			if (this.done) {
 				return true;
 			} else if (this.locks == 0) {
+				// register retry
 				try {
 					String[] params = {};
 					Object[] args = {};
@@ -90,13 +171,14 @@ public class CommandGraph {
 					node.printError(e);
 				}
 
+				// update CommandGraph maps of executing nodes
 				if (checkpoint) {
-					checkpointHead = new Tuple<CommandKey, CommandNode>(command
-							.getKey(), this);
+					checkpointHead = this;
 				} else {
 					heads.put(command.getKey(), this);
 				}
 
+				// try and execute the command, abort if it throws an exception
 				try {
 					command.execute(node);
 				} catch (Exception e) {
@@ -115,15 +197,13 @@ public class CommandGraph {
 		public void toDot(Set<String> vertices, Set<String> edges) {
 			vertices.add("  " + this.toDotName() + ";");
 			for (CommandNode child : this.children) {
-				edges
-						.add("  " + toDotName() + " -> " + child.toDotName()
-								+ ";");
+				edges.add("  " + toDotName() + " -> " + child.toDotName() + ";");
 				child.toDot(vertices, edges);
 			}
 		}
 
 		private String toDotName() {
-			return command.getClass().getSimpleName() + "_" + hashCode();
+			return command.getName() + "_" + hashCode();
 		}
 
 		@Override
@@ -158,28 +238,52 @@ public class CommandGraph {
 		}
 	}
 
+	/**
+	 * Number of rounds to wait before retrying executed commands.
+	 */
 	private static int commandRetryTimeout = 20;
 
+	/**
+	 * A reference to the underlying node used for logging and callback
+	 * registration.
+	 */
 	private TDFSNode node;
-	private Tuple<CommandKey, CommandNode> checkpointHead;
+	/**
+	 * The currently executing checkpoint command or null.
+	 */
+	private CommandNode checkpointHead;
+	/**
+	 * The last checkpoint command added but not yet executed.
+	 */
 	private CommandNode checkpointTail;
+	/**
+	 * Currently executing commands.
+	 */
 	private Map<CommandKey, CommandNode> heads;
+	/**
+	 * Commands added but not yet executed.
+	 */
 	private Map<CommandKey, CommandNode> tails;
 
+	/**
+	 * Constructs a new commandGraph referencing node.
+	 */
 	public CommandGraph(TDFSNode node) {
+		this.checkpointHead = null;
+		this.checkpointTail = null;
 		this.node = node;
 		this.heads = new HashMap<CommandKey, CommandNode>();
 		this.tails = new HashMap<CommandKey, CommandNode>();
-		start();
 	}
 
 	/**
-	 * Creates a new CommandNode and adds it to the graph
+	 * Adds CommandNode n to the graph and returns it.
+	 * 
+	 * Checkpoint commands depend on everything added before them and are
+	 * parents to everything added after them. Non-checkpoint commands 
 	 */
-	protected CommandNode addCommand(Command c, boolean checkpoint,
-			List<Command> abortCommands) {
-		CommandNode n = newCommand(c, checkpoint, abortCommands);
-		if (checkpoint) {
+	public CommandNode addCommand(CommandNode n) {
+		if (n.checkpoint) {
 			for (Entry<CommandKey, CommandNode> entry : tails.entrySet()) {
 				addDependency(entry.getValue(), n);
 			}
@@ -189,7 +293,7 @@ public class CommandGraph {
 			tails.clear();
 			checkpointTail = n;
 		} else {
-			CommandKey key = c.getKey();
+			CommandKey key = n.command.getKey();
 			CommandNode p = tails.get(key);
 			if (p == null) {
 				p = checkpointTail;
@@ -202,20 +306,34 @@ public class CommandGraph {
 		return n;
 	}
 
-	public void addDependency(CommandNode parent, CommandNode child) {
-		if (!parent.done) {
-			parent.children.add(child);
-			child.locks++;
-		}
+	/**
+	 * Constructs a new CommandNode, adds it to the graph, and returns it.
+	 */
+	public CommandNode addCommand(Command command, boolean checkpoint,
+			List<Command> abortCommands) {
+		return addCommand(new CommandNode(command, checkpoint, abortCommands));
 	}
 
+	/**
+	 * Add child to parent's list of dependent children.
+	 */
+	public void addDependency(CommandNode parent, CommandNode child) {
+		parent.addChild(child);
+	}
+
+	/**
+	 * Looks for executing commands reallyEquals to this key and calls their
+	 * done method.
+	 * 
+	 * Returns whether or not such a command was found.
+	 */
 	public boolean done(CommandKey key) {
 		if (checkpointHead != null
-				&& checkpointHead.second.command.getKey().reallyEquals(key)) {
-			if (checkpointTail == checkpointHead.second) {
+				&& checkpointHead.command.getKey().reallyEquals(key)) {
+			if (checkpointTail == checkpointHead) {
 				checkpointTail = null;
 			}
-			checkpointHead.second.done();
+			checkpointHead.done();
 			checkpointHead = null;
 			return true;
 		} else {
@@ -239,26 +357,11 @@ public class CommandGraph {
 		}
 	}
 
-	/**
-	 * Creates a new CommandNode without adding it to the graph
-	 */
-	public CommandNode newCommand(Command c, boolean checkpoint,
-			List<Command> abortCommands) {
-		return new CommandNode(c, checkpoint, abortCommands);
-	}
-
-	private void start() {
-		checkpointHead = null;
-		checkpointTail = null;
-		heads.clear();
-		tails.clear();
-	}
-
 	public String toDot() {
 		Set<String> edges = new HashSet<String>();
 		Set<String> vertices = new HashSet<String>();
 		if (checkpointHead != null) {
-			checkpointHead.second.toDot(vertices, edges);
+			checkpointHead.toDot(vertices, edges);
 		}
 		for (Entry<CommandKey, CommandNode> e : heads.entrySet()) {
 			e.getValue().toDot(vertices, edges);
@@ -281,7 +384,7 @@ public class CommandGraph {
 		StringBuilder sb = new StringBuilder();
 		Set<CommandNode> alreadyPrinted = new HashSet<CommandNode>();
 		if (checkpointHead != null) {
-			sb.append(checkpointHead.second.toString("", alreadyPrinted));
+			sb.append(checkpointHead.toString("", alreadyPrinted));
 		} else {
 			for (Entry<CommandKey, CommandNode> e : heads.entrySet()) {
 				sb.append(e.getValue().toString("", alreadyPrinted));
