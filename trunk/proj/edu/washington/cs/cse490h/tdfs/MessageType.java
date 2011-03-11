@@ -18,8 +18,9 @@ public enum MessageType {
 	Ack(HandlingClass.RIOLayer), Handshake(HandlingClass.RIOLayer),
 
 	Request(HandlingClass.TDFSNode), RequestToListen(HandlingClass.TDFSNode), AddedListener(
-			HandlingClass.TDFSNode), CreateGroup(HandlingClass.TDFSNode), RequestAllFilenames(
-			HandlingClass.TDFSNode), KnownFilenames(HandlingClass.TDFSNode),
+			HandlingClass.TDFSNode), RequestToLeave(HandlingClass.TDFSNode),  CreateGroup(
+			HandlingClass.TDFSNode), RequestAllFilenames(HandlingClass.TDFSNode), KnownFilenames(
+			HandlingClass.TDFSNode),
 
 	// Paxos Messages
 	Prepare(HandlingClass.TDFSNode), PromiseDenial(HandlingClass.TDFSNode), Promise(

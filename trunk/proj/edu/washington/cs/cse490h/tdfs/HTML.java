@@ -22,6 +22,14 @@ public class HTML {
 		return new HTML("<p> refresh test</p>").toString();
 	}
 
+    public String generateFriendList(String friendListFile){
+    	String friendList = "<h2> Your friendlist: </h2>" 
+    		+ friendListFile;
+    	return friendList;
+    }
+    
+    
+
 	@Override
 	public String toString() {
 		return head + "\n" + body + "\n" + tail;
