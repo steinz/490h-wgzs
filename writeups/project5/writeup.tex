@@ -1,0 +1,61 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath, amssymb, amsthm}    	% need for subequations
+\usepackage{fullpage} 	% without this, will have wide math-article-paper margins
+\usepackage{graphicx}	% use to include graphics
+\usepackage{verbatim}
+
+
+%%%% Beginning of the Document %%%%
+\begin{document}
+
+\begin{center}
+{\large CSE 490h -- Project 5: Application Writeup} \\
+\textbf{Wayne Gerard - wayger} \\
+\textbf{Zachary Stein - steinz} \\
+March 14, 2011
+\end{center}
+
+\section{File setup}
+
+For our application, we decided to partition files according to user names. Each username has the following three files associated with them:
+
+1. A friendlist, named user.friends
+2. A message file (containing messages for the user), named user.messages
+3. A list of pending friend requests for this user, named user.requests
+
+\section{Accessing Files}
+
+Using our distributed application from project 4, we decided to keep much of the same semantics. When a user logs in, the client simply requests to listen on the files that belong to that username. 
+
+\section{Logging in/out}
+
+When a user logs in, they request to listen to all files associated with their user name. For example, if a user logged in as ``vincent'', then the node would request to listen to ``vincent.friends'', ``vincent.requests'', and ``vincent.messages''. Upon listening, the user will get the latest version of the log, and so any changes the user made previously should be reflected when they log in. 
+
+When a user logs out, they simply request to stop listening to the files associated with their username. 
+
+We chose this approach because it meshed well with our previous project, and because it makes sense logically: there should be a separate file for friends, and for messages. The only file that might possibly be redundant is the requests file, which displays pending friend requests. However, doing this allows users to deal with friend requests at a convenient time without worrying about affecting other file states.
+
+\section{Application command Semantics}
+
+Users can perform the following commands:
+\begin{verbatim}
+User Administrative commands: create <username>, login <username>, logout
+User commands:  addfriend <friend>, post <message>, read, acceptfriend <friend>, rejectfriend <friend>,
+\end{verbatim}
+
+All of the commands users could previously perform exist as well, although for the purposes of this project users should not call them directly.
+
+\section{HTML interface}
+
+Our HTML "interface" is really just a wrapper around the file logs. The site is forcibly refreshed every few seconds via javascript, and the following information is displayed to the user:
+
+\begin{verbatim}
+-Friend list
+-Pending friend requests
+-Messages
+\end{verbatim}
+
+We decided to make this interface just to make the information more easily accessible. Rather than forcing the user to scroll up to discover their friend list, it is much easier to just view all the information in one page. 
+
+\end{document}

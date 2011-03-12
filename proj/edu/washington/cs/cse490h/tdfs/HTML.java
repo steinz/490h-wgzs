@@ -22,13 +22,34 @@ public class HTML {
 		return new HTML("<p> refresh test</p>").toString();
 	}
 
-    public String generateFriendList(String friendListFile){
-    	String friendList = "<h2> Your friendlist: </h2>" 
-    		+ friendListFile;
-    	return friendList;
-    }
-    
-    
+	public String generateFriendList(String friendListFileContents) {
+		String friendList = "<h2> Your friendlist: </h2>"
+				+ friendListFileContents + "<br><br>";
+		return friendList;
+	}
+
+	public String generateFriendRequests(String requestList) {
+		String friendRequests = "<h2> Your pending friend requests: </h2>"
+				+ requestList + "<br><br>";
+		return friendRequests;
+	}
+
+	public String generateUserData(String username) {
+		String userData = "<h2> Logged in as: " + username + " </h2><br><br>";
+		return userData;
+	}
+
+	public String generateMessages(String messages) {
+		String msgData = "<h2> Your messages: </h2>" + messages + "<br><br>";
+		return msgData;
+	}
+
+	public void generateBody(String friendData, String requestData,
+			String username, String messageData) {
+		this.body = generateUserData(username) + generateMessages(messageData)
+				+ generateFriendList(friendData)
+				+ generateFriendRequests(requestData);
+	}
 
 	@Override
 	public String toString() {

@@ -122,11 +122,6 @@ public class TDFSNode extends RIONode {
 	protected LogFS logFS;
 
 	/**
-	 * Username of the logged in user (user state)
-	 */
-	private String currentUsername = null;
-
-	/**
 	 * Client only: Map from filenames to most recent contents (populated by
 	 * gets)
 	 */
@@ -210,6 +205,10 @@ public class TDFSNode extends RIONode {
 	private Set<String> twoPCKnownFiles;
 
 	/**
+	 * Application data structures
+	 */
+	private FBCommands fbCommands;
+	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
 	 */
 	private static int hashFilename(String filename) {
@@ -245,6 +244,9 @@ public class TDFSNode extends RIONode {
 		}
 		twoPCKnownFiles = new HashSet<String>();
 
+		// Application
+		fbCommands = new FBCommands(this);
+		
 	}
 
 	/**
@@ -1078,7 +1080,18 @@ public class TDFSNode extends RIONode {
 		if (!logFS.isListening(filename)) {
 			logFS.createGroup(filename);
 		}
+		
 		RIOSend(from, MessageType.AddedListener, logFS.packLog(filename));
+	}
+	
+	/**
+	 * Removes the requester from the list of file listeners
+	 * @param from Who sent the request
+	 * @param filename The filename
+	 */
+	public void receiveRequestToLeave(int from, String filename){
+		if (fileListeners.containsKey(filename))
+			fileListeners.get(filename).remove(from);
 	}
 
 	/**
