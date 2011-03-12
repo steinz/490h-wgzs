@@ -192,15 +192,23 @@ public class CommandGraph {
 		 * mutates args
 		 */
 		public void toDot(Set<String> vertices, Set<String> edges) {
-			vertices.add("  " + this.toDotName() + ";");
+			String file;
+			String[] fileSplit = this.command.filename.split("\\.");
+			if (fileSplit.length > 1)
+				file = fileSplit[0] + "_" + fileSplit[1];
+			else
+				file = this.command.filename;
+				                
+			vertices.add("  " + this.toDotName() + "_" + file + ";");
 			for (CommandNode child : this.children) {
-				edges.add("  " + toDotName() + " -> " + child.toDotName() + ";");
+				edges.add("  " + toDotName() + "_" + file + " -> " + child.toDotName() + "_" + file + ";");
 				child.toDot(vertices, edges);
 			}
 		}
 
 		private String toDotName() {
-			return command.getName() + "_" + hashCode();
+			return command.getName();
+			//+ "_" + hashCode();
 		}
 
 		@Override
