@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -205,6 +206,9 @@ public class TDFSNode extends RIONode {
 	 */
 	private Set<String> twoPCKnownFiles;
 
+	// 2PC
+	private HashSet<String> pendingTries;
+	
 	/**
 	 * Application data structures
 	 */
@@ -245,7 +249,7 @@ public class TDFSNode extends RIONode {
 			}
 		}
 		twoPCKnownFiles = new HashSet<String>();
-
+		pendingTries = new HashSet<String>();
 		// Application
 		fbCommands = new FBCommands(this);
 
@@ -602,7 +606,8 @@ public class TDFSNode extends RIONode {
 						filename, this.addr) {
 					@Override
 					public void execute(TDFSNode node) throws Exception {
-						if (node.logFS.checkLocked(filename) == node.addr) {
+						Integer locked = node.logFS.checkLocked(filename);
+						if ((locked != null) && locked != node.addr) {
 							createProposal(node, filename,
 									new TXTryCommitLogEntry(filenames));
 						} else {
@@ -1183,10 +1188,21 @@ public class TDFSNode extends RIONode {
 			if (txFiles == null)
 				return;
 
-			String[] files = txCommand.filenames;
-			createProposal(new TXCommitLogEntry(files), files);
-			for (String file : txFiles) {
-				fileTransactionMap.put(file, null);
+			pendingTries.add(p.filename);
+			
+			boolean allContained = true;
+			
+			for (String file : txCommand.filenames){
+				if (!pendingTries.contains(file))
+					allContained = false;
+			}
+			
+			if (allContained){
+				createProposal(new TXCommitLogEntry(txCommand.filenames), txCommand.filenames);
+				fileTransactionMap.put(p.filename, null);
+				for (String file : txCommand.filenames){
+					pendingTries.remove(file);
+				}
 			}
 
 		}
@@ -1217,7 +1233,7 @@ public class TDFSNode extends RIONode {
 			fileTransactionMap.put(file, null);
 		}
 	}
-
+	
 	/**
 	 * Adds a transaction timeout for the given client. If the client hasn't
 	 * committed their transaction by the time the lease expires, then
