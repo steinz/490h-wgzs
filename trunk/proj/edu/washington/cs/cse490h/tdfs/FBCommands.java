@@ -71,7 +71,7 @@ public class FBCommands {
 			return node.commandGraph.noop();
 		}
 
-		String filename = getPasswordFilename(currentUsername);
+		String filename = getPasswordFilename(username);
 		CommandNode root = node.get(filename, null);
 		CommandNode loaded = node.commandGraph.addCommand(new Command(filename,
 				node.addr) {
