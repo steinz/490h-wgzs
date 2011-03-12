@@ -214,7 +214,7 @@ public class TDFSNode extends RIONode {
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
 	 */
 	private static int hashFilename(String filename) {
-		return filename.hashCode() % coordinatorCount;
+		return Math.abs(filename.hashCode()) % coordinatorCount;
 	}
 
 	@Override
@@ -285,13 +285,13 @@ public class TDFSNode extends RIONode {
 
 	public void createuserParser(Tokenizer t) throws TransactionException {
 		String username = t.next();
-		String password = t.next();
+		// String password = t.next();
 		fbCommands.createUser(username).execute();
 	}
 
 	public void loginParser(Tokenizer t) {
 		String username = t.next();
-		String password = t.next();
+		// String password = t.next();
 		fbCommands.login(username).execute();
 	}
 
@@ -321,6 +321,17 @@ public class TDFSNode extends RIONode {
 	public void coordinatorsParser(Tokenizer t) {
 		coordinatorCount = Integer.parseInt(t.next());
 		printInfo("coordinatorCount set to " + coordinatorCount);
+	}
+
+	public void getlocalParser(Tokenizer t) {
+		String filename = t.next();
+		boolean exists = logFS.fileExists(filename);
+		if (exists) {
+			printInfo(filename + " has local content: "
+					+ logFS.getFile(filename));
+		} else {
+			printInfo(filename + " does not exist locally");
+		}
 	}
 
 	public void graphParser(Tokenizer t) throws IOException {
@@ -458,29 +469,30 @@ public class TDFSNode extends RIONode {
 	public CommandNode append(String filename, String contents,
 			List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		listen.addChild(commandGraph.addCommand(
-				new WriteCommand(filename, contents, this.addr) {
-					@Override
-					public void execute(TDFSNode node) throws Exception {
-						if (node.logFS.fileExists(filename)) {
-							createProposal(node, filename, new WriteLogEntry(
-									contents, true));
-						} else {
-							throw new FileDoesNotExistException(filename);
-						}
-					}
+		listen.addChild(commandGraph.addCommand(new WriteCommand(filename,
+				contents, this.addr) {
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				if (node.logFS.fileExists(filename)) {
+					createProposal(node, filename, new WriteLogEntry(contents,
+							true));
+				} else {
+					throw new FileDoesNotExistException(filename);
+				}
+			}
 
-					@Override
-					public String getName() {
-						return "Write";
-					}
-				}, false, abortCommands));
+			@Override
+			public String getName() {
+				return "Write";
+			}
+		}, false, abortCommands));
 		return listen;
 	}
 
 	public CommandNode create(String filename, List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		listen.addChild(commandGraph.addCommand(new FileCommand(filename, this.addr) {
+		listen.addChild(commandGraph.addCommand(new FileCommand(filename,
+				this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
 				if (!node.logFS.fileExists(filename)) {
@@ -500,7 +512,8 @@ public class TDFSNode extends RIONode {
 
 	public CommandNode delete(String filename, List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		listen.addChild(commandGraph.addCommand(new FileCommand(filename, this.addr) {
+		listen.addChild(commandGraph.addCommand(new FileCommand(filename,
+				this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
 				if (node.logFS.fileExists(filename)) {
@@ -530,23 +543,23 @@ public class TDFSNode extends RIONode {
 	public CommandNode put(String filename, String contents,
 			List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		listen.addChild(commandGraph.addCommand(
-				new WriteCommand(filename, contents, this.addr) {
-					@Override
-					public void execute(TDFSNode node) throws Exception {
-						if (node.logFS.fileExists(filename)) {
-							createProposal(node, filename, new WriteLogEntry(
-									contents, false));
-						} else {
-							throw new FileDoesNotExistException(filename);
-						}
-					}
+		listen.addChild(commandGraph.addCommand(new WriteCommand(filename,
+				contents, this.addr) {
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				if (node.logFS.fileExists(filename)) {
+					createProposal(node, filename, new WriteLogEntry(contents,
+							false));
+				} else {
+					throw new FileDoesNotExistException(filename);
+				}
+			}
 
-					@Override
-					public String getName() {
-						return "Put";
-					}
-				}, false, abortCommands));
+			@Override
+			public String getName() {
+				return "Put";
+			}
+		}, false, abortCommands));
 		return listen;
 	}
 
@@ -1113,7 +1126,7 @@ public class TDFSNode extends RIONode {
 				printVerbose("finished: " + p.operation.toString());
 			}
 		}
-		if (filestateCache.containsKey(p.filename)){
+		if (filestateCache.containsKey(p.filename)) {
 			String content = logFS.getFile(p.filename);
 			filestateCache.put(p.filename, content);
 		}
