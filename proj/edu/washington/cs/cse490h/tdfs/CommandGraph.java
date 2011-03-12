@@ -95,7 +95,7 @@ public class CommandGraph {
 		 * Add a dependency from this node to child if this node isn't done.
 		 */
 		public void addChild(CommandNode child) {
-			if (!done) {
+			if (!done && !children.contains(child)) {
 				child.locks++;
 				children.add(child);
 			}
@@ -105,10 +105,7 @@ public class CommandGraph {
 		 * Add a dependency from parent to this node if parent isn't done.
 		 */
 		public void addParent(CommandNode parent) {
-			if (!parent.done) {
-				this.locks++;
-				parent.children.add(this);
-			}
+			parent.addChild(this);
 		}
 
 		/**
