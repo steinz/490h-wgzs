@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -111,7 +110,7 @@ public class TDFSNode extends RIONode {
 	 * Time between when the 2PC Coordinator learns about a transaction starting
 	 * and will abort it
 	 */
-	private static final int txTimeout = 50;
+	private static final int txTimeout = 100;
 
 	/**
 	 * Graph of commands used by clients for concurrency control
@@ -604,6 +603,7 @@ public class TDFSNode extends RIONode {
 				if (root == null) {
 					root = listen;
 				}
+
 				commandGraph.addCommand(new TXCommand(transactingFiles,
 						filename, this.addr) {
 					@Override
