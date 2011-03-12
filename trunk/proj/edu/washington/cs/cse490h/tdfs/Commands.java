@@ -182,6 +182,7 @@ class AbortCommand extends TXCommand {
 			createProposal(node, filename,
 					new TXTryAbortLogEntry(filenames));
 		} else {
+			// can happen if 2pc coordinator aborts you
 			throw new TransactionException("lock not owned on "
 					+ filename);
 		}

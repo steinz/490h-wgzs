@@ -206,7 +206,9 @@ public class TDFSNode extends RIONode {
 	 */
 	private Set<String> twoPCKnownFiles;
 
-	// 2PC
+	/**
+     * 2PC
+     */
 	private HashSet<String> pendingTries;
 	
 	/**
@@ -607,10 +609,11 @@ public class TDFSNode extends RIONode {
 					@Override
 					public void execute(TDFSNode node) throws Exception {
 						Integer locked = node.logFS.checkLocked(filename);
-						if ((locked != null) && locked != node.addr) {
+						if (locked != null && locked == node.addr) {
 							createProposal(node, filename,
 									new TXTryCommitLogEntry(filenames));
 						} else {
+							// 2PC coordinator committed me
 							throw new TransactionException("lock not owned on "
 									+ filename);
 						}
@@ -1233,7 +1236,7 @@ public class TDFSNode extends RIONode {
 			fileTransactionMap.put(file, null);
 		}
 	}
-	
+
 	/**
 	 * Adds a transaction timeout for the given client. If the client hasn't
 	 * committed their transaction by the time the lease expires, then

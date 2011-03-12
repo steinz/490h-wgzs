@@ -86,7 +86,6 @@ public class FBCommands {
 				node.commandGraph.done(new CommandKey(filename, node.addr));
 			}
 		}, true, null);
-		root.addChild(loaded);
 
 		loaded.addChild(node.listen(getFriendsFilename(currentUsername)));
 		loaded.addChild(node.listen(getRequestsFilename(currentUsername)));
