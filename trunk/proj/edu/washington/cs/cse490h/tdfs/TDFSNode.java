@@ -355,11 +355,11 @@ public class TDFSNode extends RIONode {
 					printInfo("dot failed with exit value " + p.exitValue());
 				}
 				done = true;
-				out.flush();
 			} catch (IllegalThreadStateException e) {
 				bufferedWrite(in, out);
 			}
 		}
+		out.close();
 	}
 
 	private void bufferedWrite(BufferedInputStream in, BufferedOutputStream out)
@@ -458,7 +458,7 @@ public class TDFSNode extends RIONode {
 	public CommandNode append(String filename, String contents,
 			List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		commandGraph.addCommand(
+		listen.addChild(commandGraph.addCommand(
 				new WriteCommand(filename, contents, this.addr) {
 					@Override
 					public void execute(TDFSNode node) throws Exception {
@@ -474,13 +474,13 @@ public class TDFSNode extends RIONode {
 					public String getName() {
 						return "Write";
 					}
-				}, false, abortCommands);
+				}, false, abortCommands));
 		return listen;
 	}
 
 	public CommandNode create(String filename, List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		commandGraph.addCommand(new FileCommand(filename, this.addr) {
+		listen.addChild(commandGraph.addCommand(new FileCommand(filename, this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
 				if (!node.logFS.fileExists(filename)) {
@@ -494,13 +494,13 @@ public class TDFSNode extends RIONode {
 			public String getName() {
 				return "Create";
 			}
-		}, false, abortCommands);
+		}, false, abortCommands));
 		return listen;
 	}
 
 	public CommandNode delete(String filename, List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		commandGraph.addCommand(new FileCommand(filename, this.addr) {
+		listen.addChild(commandGraph.addCommand(new FileCommand(filename, this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
 				if (node.logFS.fileExists(filename)) {
@@ -514,7 +514,7 @@ public class TDFSNode extends RIONode {
 			public String getName() {
 				return "Delete";
 			}
-		}, false, abortCommands);
+		}, false, abortCommands));
 		return listen;
 	}
 
@@ -530,7 +530,7 @@ public class TDFSNode extends RIONode {
 	public CommandNode put(String filename, String contents,
 			List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		commandGraph.addCommand(
+		listen.addChild(commandGraph.addCommand(
 				new WriteCommand(filename, contents, this.addr) {
 					@Override
 					public void execute(TDFSNode node) throws Exception {
@@ -546,7 +546,7 @@ public class TDFSNode extends RIONode {
 					public String getName() {
 						return "Put";
 					}
-				}, false, abortCommands);
+				}, false, abortCommands));
 		return listen;
 	}
 
@@ -1066,7 +1066,7 @@ public class TDFSNode extends RIONode {
 
 	public void receiveAddedListener(int from, byte[] packedLog) {
 		String filename = logFS.listen(packedLog);
-		commandGraph.done(new CommandKey(filename, -1, -1));
+		commandGraph.done(new CommandKey(filename, this.addr));
 		relisten.remove(filename);
 
 		if (addr == twoPCCoordinatorAddress) {
@@ -1112,6 +1112,10 @@ public class TDFSNode extends RIONode {
 					p.proposalNumber))) {
 				printVerbose("finished: " + p.operation.toString());
 			}
+		}
+		if (filestateCache.containsKey(p.filename)){
+			String content = logFS.getFile(p.filename);
+			filestateCache.put(p.filename, content);
 		}
 	}
 
