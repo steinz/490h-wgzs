@@ -397,21 +397,31 @@ public class TDFSNode extends RIONode {
 		// run dot
 		Process p = Runtime.getRuntime().exec(
 				"dot -Tpng " + realFilename(this.addr, "commandGraph.dot"));
-		p.waitFor();
+		
 		BufferedInputStream in = new BufferedInputStream(p.getInputStream());
 		FileOutputStream out = new FileOutputStream(realFilename(this.addr,
 				"commandGraph.png"));
 
-		if (p.exitValue() == 0) {
-			// TODO: buffer
-			// write .png
-			while (in.available() > 0) {
-				out.write(in.read());
-			}
-			printInfo("command graph written to "
-					+ realFilename(this.addr, "commandGraph.png"));
-		} else {
-			printInfo("dot failed with exit value " + p.exitValue());
+		boolean done = false;
+		while (!done) {
+			try {
+				if (p.exitValue() == 0) {
+					// TODO: buffer
+					// write .png
+					while (in.available() > 0) {
+						out.write(in.read());
+					}
+					printInfo("command graph written to "
+							+ realFilename(this.addr, "commandGraph.png"));
+				} else {
+					printInfo("dot failed with exit value " + p.exitValue());
+				}
+				done = true;
+			} catch (IllegalThreadStateException e) {
+				while (in.available() > 0) {
+					out.write(in.read());
+				}
+			} 
 		}
 	}
 
