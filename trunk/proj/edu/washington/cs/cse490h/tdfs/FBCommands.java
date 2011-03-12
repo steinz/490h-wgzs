@@ -10,7 +10,7 @@ public class FBCommands {
 	/**
 	 * UserName of currently logged in user or null if not logged in
 	 */
-	private String currentUserName;
+	String currentUserName;
 	private TDFSNode node;
 
 	public static String getFriendsFilename(String username) {

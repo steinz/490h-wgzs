@@ -351,7 +351,7 @@ public class TDFSNode extends RIONode {
 	}
 
 	public void readMessagesParser(Tokenizer t) {
-		String messages = get(currentUsername + ".messages");
+		String messages = get(fbCommands.currentUserName + ".messages", null);
 		while (messages.length() > 0) {
 			Tokenizer m = new Tokenizer(messages, commandDelim);
 			String user = m.next();
@@ -408,8 +408,9 @@ public class TDFSNode extends RIONode {
 					printInfo("dot failed with exit value " + p.exitValue());
 				}
 				done = true;
+				out.flush();
 			} catch (IllegalThreadStateException e) {
-				bufferedWrite(in, out);
+				bufferedWrite(in, out); 
 			}
 		}
 	}
