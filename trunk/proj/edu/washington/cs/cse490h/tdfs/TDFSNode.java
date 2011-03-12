@@ -1,6 +1,7 @@
 package edu.washington.cs.cse490h.tdfs;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -208,6 +209,7 @@ public class TDFSNode extends RIONode {
 	 * Application data structures
 	 */
 	private FBCommands fbCommands;
+	
 	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
 	 */
@@ -276,115 +278,105 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	// public void acceptFriendParser(Tokenizer t) {
-	// String friendName = t.next();
-	//
-	// String[] filenames = { currentUsername + ".friends",
-	// friendName + ".friends" };
-	// txstart(filenames);
-	// // TODO: check that there's a pending request
-	// append(filenames[0], friendName + commandDelim);
-	// append(filenames[1], currentUsername + commandDelim);
-	// txcommit();
-	// }
-	//
-	// public void createUserParser(Tokenizer t) {
-	// String username = t.next();
-	// String password = t.next();
-	//
-	// String[] filenames = { username, username + ".friends",
-	// username + ".requests", username + ".messages" };
-	// txstart(filenames);
-	// for (String filename : filenames) {
-	// create(filename);
-	// }
-	// put(filenames[0], password);
-	// txcommit();
-	// }
-	//
-	// public void loginParser(Tokenizer t) {
-	// String username = t.next();
-	// String password = t.next();
-	//
-	// if (get(username).equals(password))
-	// this.currentUsername = username;
-	// }
-	//
-	// public void logoutParser(Tokenizer t) {
-	// this.currentUsername = null;
-	// }
-	//
-	// public void postMessageParser(Tokenizer t) {
-	// String content = t.rest();
-	// content = currentUsername + commandDelim + content.length()
-	// + commandDelim + content;
-	//
-	// String filename = currentUsername + ".friends";
-	// listen(filename);
-	// /*
-	// * TODO: HIGH: either get doesn't need to check listen or we don't need
-	// * to check explicitly above
-	// */
-	// get(filename);
-	// CommandNode get = commandGraph.addCommand(new GetCommand(filename,
-	// this.addr), true, null);
-	// CommandNode loaded = commandGraph.addCommand(new Command(filename,
-	// this.addr) {
-	// @Override
-	// public CommandKey getKey() {
-	// return new CommandKey(filename, addr);
-	// }
-	//
-	// @Override
-	// public void execute(TDFSNode node) throws Exception {
-	// String[] friends = filestateCache.get(filename).split(
-	// commandDelim);
-	// }
-	// }, false, null);
-	//
-	//
-	//
-	// // TODO: HIGH: how to delay this...
-	// String[] friends = get(currentUsername + ".friends").split();
-	// String[] messageFiles = new String[friends.length];
-	// for (int i = 0; i < friends.length; i++) {
-	// messageFiles[i] = friends[i] + ".messages";
-	// }
-	// txstart(friends);
-	// for (String messageFile : messageFiles) {
-	// append(messageFile, content);
-	// }
-	// txcommit();
-	// }
-	//
-	// public void readMessagesParser(Tokenizer t) {
-	// String messages = get(currentUsername + ".messages");
-	// while (messages.length() > 0) {
-	// Tokenizer m = new Tokenizer(messages, commandDelim);
-	// String user = m.next();
-	// int len = Integer.parseInt(m.next());
-	// messages = m.rest();
-	// String msg = messages.substring(0, len);
-	// messages = messages.substring(len);
-	// printVerbose(user + ": " + msg, true);
-	// }
-	// }
-	//
-	// public void requestFriendParser(Tokenizer t) {
-	//
-	// }
-	//
-	// public void showFriendsParser(Tokenizer t) {
-	//
-	// }
+	public void acceptFriendParser(Tokenizer t) throws TransactionException {
+		String friendName = t.next();
+		fbCommands.acceptFriend(friendName).execute();
+	}
+
+	public void createUserParser(Tokenizer t) {
+		String username = t.next();
+		String password = t.next();
+
+		String[] filenames = { username, username + ".friends",
+				username + ".requests", username + ".messages" };
+		txstart(filenames);
+		for (String filename : filenames) {
+			create(filename);
+		}
+		put(filenames[0], password);
+		txcommit();
+	}
+
+	public void loginParser(Tokenizer t) {
+		String username = t.next();
+		String password = t.next();
+
+		if (get(username).equals(password))
+			this.currentUsername = username;
+	}
+
+	public void logoutParser(Tokenizer t) {
+		this.currentUsername = null;
+	}
+
+	public void postMessageParser(Tokenizer t) {
+		String content = t.rest();
+		content = currentUsername + commandDelim + content.length()
+				+ commandDelim + content;
+
+		String filename = currentUsername + ".friends";
+		listen(filename);
+		/*
+		 * TODO: HIGH: either get doesn't need to check listen or we don't need
+		 * to check explicitly above
+		 */
+		get(filename);
+		CommandNode get = commandGraph.addCommand(new GetCommand(filename,
+				this.addr), true, null);
+		CommandNode loaded = commandGraph.addCommand(new Command(filename,
+				this.addr) {
+			@Override
+			public CommandKey getKey() {
+				return new CommandKey(filename, addr);
+			}
+
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				String[] friends = filestateCache.get(filename).split(
+						commandDelim);
+			}
+		}, false, null);
+
+		// TODO: HIGH: how to delay this...
+		String[] friends = get(currentUsername + ".friends").split();
+		String[] messageFiles = new String[friends.length];
+		for (int i = 0; i < friends.length; i++) {
+			messageFiles[i] = friends[i] + ".messages";
+		}
+		txstart(friends);
+		for (String messageFile : messageFiles) {
+			append(messageFile, content);
+		}
+		txcommit();
+	}
+
+	public void readMessagesParser(Tokenizer t) {
+		String messages = get(currentUsername + ".messages");
+		while (messages.length() > 0) {
+			Tokenizer m = new Tokenizer(messages, commandDelim);
+			String user = m.next();
+			int len = Integer.parseInt(m.next());
+			messages = m.rest();
+			String msg = messages.substring(0, len);
+			messages = messages.substring(len);
+			printVerbose(user + ": " + msg, true);
+		}
+	}
+
+	public void requestFriendParser(Tokenizer t) {
+
+	}
+
+	public void showFriendsParser(Tokenizer t) {
+
+	}
 
 	public void coordinatorsParser(Tokenizer t) {
 		coordinatorCount = Integer.parseInt(t.next());
 		printInfo("coordinatorCount set to " + coordinatorCount);
 	}
 
-	public void graphParser(Tokenizer t) throws IOException,
-			InterruptedException {
+	public void graphParser(Tokenizer t) throws IOException {
 		// printVerbose("\n" + commandGraph.toString());
 		// printVerbose("\n" + commandGraph.toDot());
 
@@ -399,20 +391,17 @@ public class TDFSNode extends RIONode {
 		// run dot
 		Process p = Runtime.getRuntime().exec(
 				"dot -Tpng " + realFilename(this.addr, "commandGraph.dot"));
-		
+
 		BufferedInputStream in = new BufferedInputStream(p.getInputStream());
-		FileOutputStream out = new FileOutputStream(realFilename(this.addr,
-				"commandGraph.png"));
+		BufferedOutputStream out = new BufferedOutputStream(
+				new FileOutputStream(
+						realFilename(this.addr, "commandGraph.png")));
 
 		boolean done = false;
 		while (!done) {
 			try {
 				if (p.exitValue() == 0) {
-					// TODO: buffer
-					// write .png
-					while (in.available() > 0) {
-						out.write(in.read());
-					}
+					bufferedWrite(in, out);
 					printInfo("command graph written to "
 							+ realFilename(this.addr, "commandGraph.png"));
 				} else {
@@ -420,10 +409,18 @@ public class TDFSNode extends RIONode {
 				}
 				done = true;
 			} catch (IllegalThreadStateException e) {
-				while (in.available() > 0) {
-					out.write(in.read());
-				}
-			} 
+				bufferedWrite(in, out);
+			}
+		}
+	}
+
+	private void bufferedWrite(BufferedInputStream in, BufferedOutputStream out)
+			throws IOException {
+		int avail = in.available();
+		if (avail > 0) {
+			byte[] buffer = new byte[avail];
+			int read = in.read(buffer);
+			out.write(buffer, 0, read);
 		}
 	}
 
@@ -495,7 +492,7 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * Throws a RuntimeException if transactingFiles == []
 	 */
-	private List<Command> buildAbortCommands() {
+	protected List<Command> buildAbortCommands() {
 		List<Command> abortCommands = null;
 		if (transactingFiles != null) {
 			if (transactingFiles.length == 0) {
