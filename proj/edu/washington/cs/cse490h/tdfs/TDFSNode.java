@@ -209,7 +209,7 @@ public class TDFSNode extends RIONode {
 	 * Application data structures
 	 */
 	private FBCommands fbCommands;
-	
+
 	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
 	 */
@@ -248,7 +248,7 @@ public class TDFSNode extends RIONode {
 
 		// Application
 		fbCommands = new FBCommands(this);
-		
+
 	}
 
 	/**
@@ -278,97 +278,44 @@ public class TDFSNode extends RIONode {
 		}
 	}
 
-	public void acceptFriendParser(Tokenizer t) throws TransactionException {
+	public void acceptfriendParser(Tokenizer t) throws TransactionException {
 		String friendName = t.next();
 		fbCommands.acceptFriend(friendName).execute();
 	}
 
-	public void createUserParser(Tokenizer t) {
+	public void createuserParser(Tokenizer t) throws TransactionException {
 		String username = t.next();
 		String password = t.next();
-
-		String[] filenames = { username, username + ".friends",
-				username + ".requests", username + ".messages" };
-		txstart(filenames);
-		for (String filename : filenames) {
-			create(filename);
-		}
-		put(filenames[0], password);
-		txcommit();
+		fbCommands.createUser(username).execute();
 	}
 
 	public void loginParser(Tokenizer t) {
 		String username = t.next();
 		String password = t.next();
-
-		if (get(username).equals(password))
-			this.currentUsername = username;
+		fbCommands.login(username).execute();
 	}
 
 	public void logoutParser(Tokenizer t) {
-		this.currentUsername = null;
+		fbCommands.logout().execute();
 	}
 
-	public void postMessageParser(Tokenizer t) {
+	public void postParser(Tokenizer t) throws TransactionException {
 		String content = t.rest();
-		content = currentUsername + commandDelim + content.length()
-				+ commandDelim + content;
-
-		String filename = currentUsername + ".friends";
-		listen(filename);
-		/*
-		 * TODO: HIGH: either get doesn't need to check listen or we don't need
-		 * to check explicitly above
-		 */
-		get(filename);
-		CommandNode get = commandGraph.addCommand(new GetCommand(filename,
-				this.addr), true, null);
-		CommandNode loaded = commandGraph.addCommand(new Command(filename,
-				this.addr) {
-			@Override
-			public CommandKey getKey() {
-				return new CommandKey(filename, addr);
-			}
-
-			@Override
-			public void execute(TDFSNode node) throws Exception {
-				String[] friends = filestateCache.get(filename).split(
-						commandDelim);
-			}
-		}, false, null);
-
-		// TODO: HIGH: how to delay this...
-		String[] friends = get(currentUsername + ".friends").split();
-		String[] messageFiles = new String[friends.length];
-		for (int i = 0; i < friends.length; i++) {
-			messageFiles[i] = friends[i] + ".messages";
-		}
-		txstart(friends);
-		for (String messageFile : messageFiles) {
-			append(messageFile, content);
-		}
-		txcommit();
+		fbCommands.postMessage(content).execute();
 	}
 
-	public void readMessagesParser(Tokenizer t) {
-		String messages = get(fbCommands.currentUserName + ".messages", null);
-		while (messages.length() > 0) {
-			Tokenizer m = new Tokenizer(messages, commandDelim);
-			String user = m.next();
-			int len = Integer.parseInt(m.next());
-			messages = m.rest();
-			String msg = messages.substring(0, len);
-			messages = messages.substring(len);
-			printVerbose(user + ": " + msg, true);
-		}
+	public void updateParser(Tokenizer t) {
+		fbCommands.readMessages().execute();
 	}
 
-	public void requestFriendParser(Tokenizer t) {
-
+	public void rejectParser(Tokenizer t) {
+		String friendName = t.next();
+		fbCommands.rejectFriend(friendName).execute();
 	}
 
-	public void showFriendsParser(Tokenizer t) {
-
+	public void requestfriendParser(Tokenizer t) {
+		String friendName = t.next();
+		fbCommands.requestFriend(friendName).execute();
 	}
 
 	public void coordinatorsParser(Tokenizer t) {
@@ -410,7 +357,7 @@ public class TDFSNode extends RIONode {
 				done = true;
 				out.flush();
 			} catch (IllegalThreadStateException e) {
-				bufferedWrite(in, out); 
+				bufferedWrite(in, out);
 			}
 		}
 	}
@@ -572,26 +519,7 @@ public class TDFSNode extends RIONode {
 	}
 
 	public CommandNode get(String filename, List<Command> abortCommands) {
-		CommandNode listen = listen(filename);
-		commandGraph.addCommand(new FileCommand(filename, this.addr) {
-			@Override
-			public void execute(TDFSNode node) throws Exception {
-				if (node.logFS.fileExists(filename)) {
-					String content = node.logFS.getFile(filename);
-					node.filestateCache.put(filename, content);
-					node.commandGraph.done(new CommandKey(filename, -1, -1));
-				} else {
-					throw new FileDoesNotExistException(filename);
-				}
-			}
-
-			@Override
-			public String getName() {
-				return "Get";
-			}
-			// TODO: HIGH: change getKey to return (filename, nodeAddr)?
-		}, false, abortCommands);
-		return listen;
+		return append(filename, "", abortCommands);
 	}
 
 	public CommandNode listen(String filename) {
@@ -1078,16 +1006,19 @@ public class TDFSNode extends RIONode {
 		if (!logFS.isListening(filename)) {
 			logFS.createGroup(filename);
 		}
-		
+
 		RIOSend(from, MessageType.AddedListener, logFS.packLog(filename));
 	}
-	
+
 	/**
 	 * Removes the requester from the list of file listeners
-	 * @param from Who sent the request
-	 * @param filename The filename
+	 * 
+	 * @param from
+	 *            Who sent the request
+	 * @param filename
+	 *            The filename
 	 */
-	public void receiveRequestToLeave(int from, String filename){
+	public void receiveRequestToLeave(int from, String filename) {
 		if (fileListeners.containsKey(filename))
 			fileListeners.get(filename).remove(from);
 	}

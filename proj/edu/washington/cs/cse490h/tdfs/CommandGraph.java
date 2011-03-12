@@ -280,7 +280,7 @@ public class CommandGraph {
 	 * Adds CommandNode n to the graph and returns it.
 	 * 
 	 * Checkpoint commands depend on everything added before them and are
-	 * parents to everything added after them. Non-checkpoint commands 
+	 * parents to everything added after them. Non-checkpoint commands
 	 */
 	public CommandNode addCommand(CommandNode n) {
 		if (n.checkpoint) {
@@ -355,6 +355,19 @@ public class CommandGraph {
 				}
 			}
 		}
+	}
+
+	public CommandNode noop() {
+		return new CommandNode(new Command("", -1) {
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				node.commandGraph.done(new CommandKey("", -1));
+			}
+			@Override
+			public CommandKey getKey() {
+				return new CommandKey("", -1);
+			}
+		}, false, null);
 	}
 
 	public String toDot() {
