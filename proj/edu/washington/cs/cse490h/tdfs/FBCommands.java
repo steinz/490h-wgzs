@@ -1,90 +1,131 @@
 package edu.washington.cs.cse490h.tdfs;
 
+import java.util.List;
+
+import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
+
 public class FBCommands {
-	
+	private static String fileDelim = "\n";
+
+	/**
+	 * UserName of currently logged in user or null if not logged in
+	 */
+	private String currentUserName;
 	private TDFSNode node;
-	private String currentUserName; 
-	private String friendList; 
-	private String messageFile;
-	private String requestList; 
+
+	public static String getFriendsFilename(String username) {
+		return username + ".friends";
+	}
+
+	public static String getMessagesFilename(String username) {
+		return username + ".messages";
+	}
+
+	public static String getPasswordFilename(String username) {
+		return username + ".password";
+	}
 	
-	
-	public FBCommands(TDFSNode node){
+	public static String getRequestsFilename(String username) {
+		return username + ".requests";
+	}
+
+	public FBCommands(TDFSNode node) {
 		this.node = node;
-		this.friendList = null;
-		this.messageFile = null;
-		this.requestList = null;
+		this.currentUserName = null;
 	}
-	
-	public void login(String username){
-		this.currentUserName = username;
-		this.friendList = username + "_friendlist";
-		this.messageFile = username + "_messageFile";
-		this.requestList = username + "_requestList";
-	}
-	
-	public boolean loggedIn(){
-		return (this.currentUserName.equals(""));
-	}
-	
-	public void logout(){
-		if (this.currentUserName.equals("")){
-			// Error? Or just warn user
+
+	public boolean checkLoggedIn() {
+		if (this.currentUserName != null) {
+			node.printError("already logged in as: " + this.currentUserName);
 		}
-		this.currentUserName = "";		
-		this.friendList = "";
-		this.messageFile = "";
-		this.requestList = "";
+		return this.currentUserName != null;
+	}
+
+	public boolean checkNotLoggedIn() {
+		if (this.currentUserName == null) {
+			node.printError("not logged in");
+		}
+		return this.currentUserName == null;
+	}
+
+	public CommandNode login(String username) {
+		if (checkLoggedIn()) {
+			return null;
+		}
+
+		node.get(getPasswordFilename(currentUserName), null);
+		
+		// TODO: HIGH: passwords
+		this.currentUserName = username;
+
+		// TODO: HIGH: get stuff
+	}
+
+	public CommandNode logout() {
+		if (checkNotLoggedIn()) {
+			return null;
+		}
+
+		this.currentUserName = null;
 		// TODO: High: Stop listening to all files associated with username
 	}
-	
-	public void sendFriendRequest(String friendName){
-		if (!loggedIn())
-			return;
-		String msg = "REQUEST" + Proposal.packetDelimiter + this.currentUserName;
-		
-		node.append(this.requestList, msg, null); // TODO: High: AbortCommands?
+
+	public CommandNode requestFriend(String friendName) {
+		if (checkNotLoggedIn()) {
+			return null;
+		}
+
+		node.append(getRequestsFilename(friendName), currentUserName + fileDelim, null);
 	}
-	
-	public void checkFriendRequests(String username){
-		if (!loggedIn())
-			return;
-		node.get(this.friendList, null);
+
+	public CommandNode acceptFriend(String friendName) throws TransactionException {
+		if (checkNotLoggedIn()) {
+			return null;
+		}
 		
-		// TODO: Parse friend list, return as set of pending requests?
+		String[] filenames = { getFriendsFilename(currentUserName),
+				getFriendsFilename(friendName) };
+		List<Command> abortCommands = node.buildAbortCommands();
+
+		node.txstart(filenames);
+		node.get(getRequestsFilename(currentUserName), abortCommands);
+		// TODO: HIGH: check request exists
+		node.append(getFriendsFilename(currentUserName), friendName + fileDelim,
+				abortCommands);
+		node.append(getFriendsFilename(friendName), currentUserName + fileDelim,
+				abortCommands);
+		node.txcommit();
 	}
-	
-	public void acceptFriend(String friendName){
+
+	public CommandNode rejectFriend(String friendName) {
+		if (checkNotLoggedIn()) {
+			return null;
+		}
 		
-		// Split file, remove friend, put file
-		String msg = "ACCEPT" + Proposal.packetDelimiter + friendName;
-		
-		node.append(this.requestList, msg, null);
-		node.append(this.friendList, friendName, null);
+		node.get(getRequestsFilename(currentUserName), null);
+		// TODO: HIGH: remove friendName from .requests file
+
 	}
-	
-	public void rejectFriend(String friendName){
-		String msg = "REJECT" + Proposal.packetDelimiter + friendName;
-		node.append(this.requestList, msg, null);
+
+	/**
+	 * Doesn't support newlines in messages
+	 */
+	public CommandNode postMessage(String message) {
+		if (checkNotLoggedIn()) {
+			return null;
+		}
+
+		node.get(getFriendsFilename(currentUserName), null);
+		// TODO: HIGH: post msg to friend's .message files
+		node.append(getMessagesFilename(currentUserName), currentUserName + ": "
+				+ message, null);
 	}
-	
-	public void postMessage(String message){
-		if (!loggedIn())
-			return;
-		// post to every friend delimited by newline\
-		node.append(this.messageFile, message, null);
+
+	public CommandNode readMessages() {
+		if (checkNotLoggedIn()) {
+			return null;
+		}
+
+		node.get(getMessagesFilename(currentUserName), null);
 	}
-	
-	public String readMessages(){
-		String messages = "";
-		
-		if (!loggedIn())
-			return "";
-		
-		node.get(this.messageFile, null);
-		
-		return messages;
-	}
-	
-	
 }
