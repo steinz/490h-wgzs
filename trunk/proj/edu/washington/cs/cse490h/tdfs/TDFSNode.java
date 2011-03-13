@@ -1186,7 +1186,7 @@ public class TDFSNode extends RIONode {
 			// check for duplicate learns
 			if (txFiles == null)
 				return;
-
+			
 			pendingTries.add(p.filename);
 
 			boolean allContained = true;
@@ -1199,11 +1199,12 @@ public class TDFSNode extends RIONode {
 			if (allContained) {
 				createProposal(new TXCommitLogEntry(txCommand.filenames),
 						txCommand.filenames);
-				fileTransactionMap.put(p.filename, null);
 				for (String file : txCommand.filenames) {
 					pendingTries.remove(file);
+					fileTransactionMap.put(file, null);
 				}
 			}
+			
 
 		}
 

@@ -24,9 +24,18 @@ For our application, we decided to partition files according to user names. Each
 2. A message file (containing messages for the user), named user.messages
 3. A list of pending friend requests for this user, named user.requests
 
-\section{Accessing Files}
+We presume that users will not need any more state than this. In a real system, it might be nice to separate messages based upon who sent them (so each user would have a user.friendname.messages file), and our system could easily support that with a few modifications. However, doing this would also introduce significant delays in both creating users and retrieving messages. In our system, which probably won't have a significant amount of traffic, the delays due to the necessary file creations would impact users to a greater extent than dealing with a single large file for all messages.
 
-Using our distributed application from project 4, we decided to keep much of the same semantics. When a user logs in, the client simply requests to listen on the files that belong to that username. 
+\section{File Access}
+
+Using our distributed application from project 4, we decided to keep much of the same semantics. When a user logs in, the client simply requests to listen on the files that belong to that username. Due to the coordinator groups using paxos and paxos having persistent state, the files should exist forever as long as one coordinator comes online at some point.
+
+
+\section{Privacy}
+
+There's very little sense of privacy in our application. Any node can log in as any user and request any file they wish, including usernames that they did not create. This is obviously a privacy concern, and users should not expect any of their data to be private. Even if we did implement a password system, the very nature of our distributed system would mean that at the very least, coordinators would all have copies of files they're coordinating (which would include user information). 
+
+We could implement both a password system and some method of file encryption, where only the user would have the appropriate key to decrypt the file contents. However, since privacy is not the focus of this assignment we decided that privacy was not a feature worth implementing. 
 
 \section{Logging in/out}
 
@@ -44,7 +53,7 @@ User Administrative commands: create <username>, login <username>, logout
 User commands:  addfriend <friend>, post <message>, read, acceptfriend <friend>, rejectfriend <friend>,
 \end{verbatim}
 
-All of the commands users could previously perform exist as well, although for the purposes of this project users should not call them directly.
+All of the commands users could previously perform exist as well, although for the purposes of this project users should not call them directly. To encourage that, we are not listing those commands explicitly in this writeup.
 
 \section{HTML interface}
 
@@ -57,5 +66,8 @@ Our HTML "interface" is really just a wrapper around the file logs. The site is 
 \end{verbatim}
 
 We decided to make this interface just to make the information more easily accessible. Rather than forcing the user to scroll up to discover their friend list, it is much easier to just view all the information in one page. 
+
+\section{Outstanding Issues}
+
 
 \end{document}
