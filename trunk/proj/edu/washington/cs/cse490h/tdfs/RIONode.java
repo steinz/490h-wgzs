@@ -26,6 +26,18 @@ public abstract class RIONode extends Node {
 	 */
 	protected static final byte[] emptyPayload = new byte[0];
 
+	/**
+	 * Packets sent by all RIONodes in simulator.
+	 * 
+	 * Identical to packetsSent in emulator.
+	 */
+	protected static int totalPacketsSent = 0;
+	
+	/**
+	 * Packets sent by this instance.
+	 */
+	protected int packetsSent;
+	
 	protected ReliableInOrderMsgLayer RIOLayer;
 
 	/**
@@ -76,6 +88,8 @@ public abstract class RIONode extends Node {
 	@Override
 	@Deprecated
 	public void send(int destAddr, int protocol, byte[] payload) {
+		this.packetsSent++;
+		RIONode.totalPacketsSent++;
 		super.send(destAddr, protocol, payload);
 	}
 

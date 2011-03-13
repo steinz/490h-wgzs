@@ -408,6 +408,11 @@ public class TDFSNode extends RIONode {
 		return "storage/" + nodeAddr + "/" + filename;
 	}
 
+	public void packetsParser(Tokenizer t) {
+		printInfo(this.packetsSent + " packets sent by this node");
+		printInfo(TDFSNode.totalPacketsSent + " packets sent by all TDFSNodes");
+	}
+
 	public void perfileParser(Tokenizer t) {
 		coordinatorsPerFile = Integer.parseInt(t.next());
 		printInfo("coordinatorPerFile set to " + coordinatorsPerFile);
@@ -451,7 +456,6 @@ public class TDFSNode extends RIONode {
 		String contents = t.rest();
 		put(filename, contents, buildAbortCommands()).execute();
 	}
-
 
 	public void txcommitParser(Tokenizer t) throws TransactionException {
 		txcommit().execute();
@@ -575,7 +579,6 @@ public class TDFSNode extends RIONode {
 				}, false, abortCommands);
 		return listen;
 	}
-
 
 	/**
 	 * Assumes transactingFiles is not [].
@@ -1121,7 +1124,8 @@ public class TDFSNode extends RIONode {
 		} else if (p.operation instanceof TXAbortLogEntry
 				|| p.operation instanceof TXCommitLogEntry) {
 			resolvedTransactionFiles.remove(p.filename);
-			if (resolvedTransactionFiles.size() == 0 && resolvedTransactionKey != null) {
+			if (resolvedTransactionFiles.size() == 0
+					&& resolvedTransactionKey != null) {
 				if (commandGraph.done(new CommandKey(resolvedTransactionKey,
 						this.addr))) {
 					this.resolvedTransactionKey = null;
