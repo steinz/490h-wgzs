@@ -59,6 +59,11 @@ public class CommandDAG<K> {
 			dangling.put(key, this);
 		}
 
+		private void addChild(CommandNode<RK, RV, ?, ?> child) {
+			children.add(child);
+			child.locks++;
+		}
+
 		/**
 		 * Notify children of results.
 		 */
@@ -73,8 +78,13 @@ public class CommandDAG<K> {
 		 * Execute this Command.
 		 */
 		private void execute() {
-			executing.put(key, this);
-			command.execute(this.args);
+			CommandNode<?, ?, AK, AV> p = (CommandNode<?, ?, AK, AV>) executing.get(key);
+			if (p == null) {
+				executing.put(key, this);
+				command.execute(this.args);
+			} else {
+				p.addChild(this);
+			}
 		}
 
 		/**
@@ -99,17 +109,13 @@ public class CommandDAG<K> {
 
 	private Map<K, CommandNode<?, ?, ?, ?>> dangling;
 	private Map<K, CommandNode<?, ?, ?, ?>> executing;
+	private Map<K, CommandNode<?, ?, ?, ?>> execTails;
 
 	public CommandDAG() {
 		this.dangling = new HashMap<K, CommandNode<?, ?, ?, ?>>();
 		this.executing = new HashMap<K, CommandNode<?, ?, ?, ?>>();
+		this.execTails = new HashMap<K, CommandNode<?, ?, ?, ?>>();
 	}
-
-//	// TODO: cont?
-//	public void cont(K key, Map<?, ?> results) {
-//		CommandNode n = executing.get(key);
-//		n.cont(results);
-//	}
 
 	public void done(K key) {
 		executing.get(key).done(null);
