@@ -12,6 +12,9 @@ import edu.washington.cs.cse490h.lib.Callback;
 /**
  * A graph of dependent commands (and factory of CommandNodes?)
  * 
+ * TODO: HIGH: Formalize: Queues commands on Keys with the same hashCode - done
+ * called on commands that are reallyEquals
+ * 
  * TODO: Keep track of orphaned nodes somehow - it would be nice if all of this
  * graph's nodes were either executing in heads, referenced along some path from
  * heads to tails (or referenced as a tail), or on some orphaned list
@@ -94,7 +97,7 @@ public class CommandGraph {
 		/**
 		 * Add a dependency from this node to child if this node isn't done.
 		 */
-		public void addChild(CommandNode child) {
+		private void addChild(CommandNode child) {
 			if (!done && !children.contains(child)) {
 				child.locks++;
 				children.add(child);
@@ -104,7 +107,7 @@ public class CommandGraph {
 		/**
 		 * Add a dependency from parent to this node if parent isn't done.
 		 */
-		public void addParent(CommandNode parent) {
+		private void addParent(CommandNode parent) {
 			parent.addChild(this);
 		}
 
@@ -192,23 +195,15 @@ public class CommandGraph {
 		 * mutates args
 		 */
 		public void toDot(Set<String> vertices, Set<String> edges) {
-			String file;
-			String[] fileSplit = this.command.filename.split("\\.");
-			if (fileSplit.length > 1)
-				file = fileSplit[0] + "_" + fileSplit[1];
-			else
-				file = this.command.filename;
-				                
-			vertices.add("  " + this.toDotName() + "_" + file + ";");
+			String thisFile = this.command.filename.replace('.', '_');
+
+			vertices.add("  " + this.command.getName() + "_" + thisFile + ";");
 			for (CommandNode child : this.children) {
-				edges.add("  " + toDotName() + "_" + file + " -> " + child.toDotName() + "_" + file + ";");
+				String thatFile = child.command.filename.replace('.', '_');
+				edges.add("  " + command.getName() + "_" + thisFile + " -> "
+						+ child.command.getName() + "_" + thatFile + ";");
 				child.toDot(vertices, edges);
 			}
-		}
-
-		private String toDotName() {
-			return command.getName();
-			//+ "_" + hashCode();
 		}
 
 		@Override
@@ -368,6 +363,7 @@ public class CommandGraph {
 			public void execute(TDFSNode node) throws Exception {
 				node.commandGraph.done(new CommandKey("", -1));
 			}
+
 			@Override
 			public CommandKey getKey() {
 				return new CommandKey("", -1);

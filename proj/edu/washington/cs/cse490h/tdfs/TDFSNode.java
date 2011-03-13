@@ -206,10 +206,10 @@ public class TDFSNode extends RIONode {
 	private Set<String> twoPCKnownFiles;
 
 	/**
-     * 2PC
-     */
+	 * 2PC
+	 */
 	private HashSet<String> pendingTries;
-	
+
 	/**
 	 * Application data structures
 	 */
@@ -474,7 +474,7 @@ public class TDFSNode extends RIONode {
 	public CommandNode append(String filename, String contents,
 			List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		listen.addChild(commandGraph.addCommand(new WriteCommand(filename,
+		commandGraph.addCommand(new WriteCommand(filename,
 				contents, this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
@@ -490,13 +490,13 @@ public class TDFSNode extends RIONode {
 			public String getName() {
 				return "Write";
 			}
-		}, false, abortCommands));
+		}, false, abortCommands);
 		return listen;
 	}
 
 	public CommandNode create(String filename, List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		listen.addChild(commandGraph.addCommand(new FileCommand(filename,
+		commandGraph.addCommand(new FileCommand(filename,
 				this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
@@ -511,13 +511,13 @@ public class TDFSNode extends RIONode {
 			public String getName() {
 				return "Create";
 			}
-		}, false, abortCommands));
+		}, false, abortCommands);
 		return listen;
 	}
 
 	public CommandNode delete(String filename, List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		listen.addChild(commandGraph.addCommand(new FileCommand(filename,
+		commandGraph.addCommand(new FileCommand(filename,
 				this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
@@ -532,7 +532,7 @@ public class TDFSNode extends RIONode {
 			public String getName() {
 				return "Delete";
 			}
-		}, false, abortCommands));
+		}, false, abortCommands);
 		return listen;
 	}
 
@@ -548,7 +548,7 @@ public class TDFSNode extends RIONode {
 	public CommandNode put(String filename, String contents,
 			List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		listen.addChild(commandGraph.addCommand(new WriteCommand(filename,
+		commandGraph.addCommand(new WriteCommand(filename,
 				contents, this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
@@ -564,7 +564,7 @@ public class TDFSNode extends RIONode {
 			public String getName() {
 				return "Put";
 			}
-		}, false, abortCommands));
+		}, false, abortCommands);
 		return listen;
 	}
 
@@ -1119,16 +1119,12 @@ public class TDFSNode extends RIONode {
 				|| p.operation instanceof TXStartLogEntry) {
 			if (commandGraph.done(new CommandKey(p.filename, this.addr))) {
 				printVerbose("finished: " + p.operation.toString());
-			} else if (p.operation instanceof TXAbortLogEntry) {
-				if (((TXAbortLogEntry) p.operation).address == this.addr) {
-					printVerbose("abort injected, cancelling all pending operations");
-					commandGraph = new CommandGraph(this);
-					transactingFiles = null;
-				}
 			}
 		} else {
-			// txTryCommands aren't picked up here because they use a different
-			// subkey
+			/*
+			 * txTryCommands aren't picked up here because they use a different
+			 * subkey, so we pick them up above
+			 */
 			if (commandGraph.done(new CommandKey(p.filename, p.operationNumber,
 					p.proposalNumber))) {
 				printVerbose("finished: " + p.operation.toString());
@@ -1192,18 +1188,19 @@ public class TDFSNode extends RIONode {
 				return;
 
 			pendingTries.add(p.filename);
-			
+
 			boolean allContained = true;
-			
-			for (String file : txCommand.filenames){
+
+			for (String file : txCommand.filenames) {
 				if (!pendingTries.contains(file))
 					allContained = false;
 			}
-			
-			if (allContained){
-				createProposal(new TXCommitLogEntry(txCommand.filenames), txCommand.filenames);
+
+			if (allContained) {
+				createProposal(new TXCommitLogEntry(txCommand.filenames),
+						txCommand.filenames);
 				fileTransactionMap.put(p.filename, null);
-				for (String file : txCommand.filenames){
+				for (String file : txCommand.filenames) {
 					pendingTries.remove(file);
 				}
 			}
