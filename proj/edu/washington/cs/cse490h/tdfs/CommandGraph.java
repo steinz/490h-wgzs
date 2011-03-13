@@ -196,12 +196,24 @@ public class CommandGraph {
 		 */
 		public void toDot(Set<String> vertices, Set<String> edges) {
 			String thisFile = this.command.filename.replace('.', '_');
+			String thisName = "";
+			if (checkpoint) {
+				thisName += "_";
+			}
+			thisName += this.command.getName() + "_" + thisFile;
+			thisName += "_" + hashCode();
 
-			vertices.add("  " + this.command.getName() + "_" + thisFile + ";");
+			vertices.add("  " + thisName + ";");
 			for (CommandNode child : this.children) {
 				String thatFile = child.command.filename.replace('.', '_');
-				edges.add("  " + command.getName() + "_" + thisFile + " -> "
-						+ child.command.getName() + "_" + thatFile + ";");
+				String thatName = "";
+				if (child.checkpoint) {
+					thatName += "_";
+				}
+				thatName += child.command.getName() + "_" + thatFile;
+				thatName += "_" + child.hashCode();
+
+				edges.add("  " + thisName + " -> " + thatName + ";");
 				child.toDot(vertices, edges);
 			}
 		}
@@ -287,7 +299,7 @@ public class CommandGraph {
 			for (Entry<CommandKey, CommandNode> entry : tails.entrySet()) {
 				addDependency(entry.getValue(), n);
 			}
-			if (checkpointTail != null) {
+			if (checkpointTail != null && tails.size() == 0) {
 				addDependency(checkpointTail, n);
 			}
 			tails.clear();
