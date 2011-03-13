@@ -191,7 +191,7 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * f2 -> f1, f2
 	 */
-	private Map<String, String[]> fileTransactionMap;
+	private Map<String, Map<Integer,String[]>> fileTransactionMap;
 
 	/**
 	 * 2PC coordinator: A map from filenames in a transaction to the client
@@ -243,7 +243,7 @@ public class TDFSNode extends RIONode {
 		this.highestProposalReceived = new HashMap<Tuple<String, Integer>, Proposal>();
 
 		// 2PC
-		fileTransactionMap = new HashMap<String, String[]>();
+		fileTransactionMap = new HashMap<String, Map<Integer,String[]>>();
 		transactionAddressMap = new HashMap<String, Integer>();
 		if (addr == twoPCCoordinatorAddress) {
 			for (int i = 0; i < coordinatorCount; i++) {
@@ -1087,7 +1087,7 @@ public class TDFSNode extends RIONode {
 		if (addr == twoPCCoordinatorAddress) {
 			Integer client = logFS.checkLocked(filename);
 			if (client != null) {
-				abortClientTx(filename, client);
+				blindAbortClientTx(filename, client);
 			}
 		}
 	}
@@ -1182,12 +1182,15 @@ public class TDFSNode extends RIONode {
 	 */
 	public void learn(int from, byte[] msg) {
 		Proposal p = new Proposal(msg);
+		String[] txFiles = null;
 		if (!logFS.isListening(p.filename)) {
 			logFS.createGroup(p.filename);
 		}
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
-		String[] txFiles = fileTransactionMap.get(p.filename);
-
+		if (fileTransactionMap.containsKey(p.filename)){
+			txFiles = fileTransactionMap.get(p.filename).get(p.operationNumber);
+		}
+		
 		// check for transactions
 
 		if (p.operation instanceof TXStartLogEntry) {
@@ -1198,13 +1201,19 @@ public class TDFSNode extends RIONode {
 				return;
 
 			// start callback
-			addTxTimeout(p.filename, txCommand.address);
+			addTxTimeout(p.filename, txCommand.address, p.operationNumber);
 
 			// add files
 			String[] files = txCommand.filenames;
 
 			for (String file : files) {
-				fileTransactionMap.put(file, files);
+				if (fileTransactionMap.containsKey(file)){
+					fileTransactionMap.get(file).put(p.operationNumber, files);
+				} else{
+					HashMap<Integer, String[]> newMap = new HashMap<Integer, String[]>();
+					newMap.put(p.operationNumber, files);
+					fileTransactionMap.put(file, newMap);
+				}
 				transactionAddressMap.put(file, txCommand.address);
 			}
 		}
@@ -1240,7 +1249,10 @@ public class TDFSNode extends RIONode {
 		else if (p.operation instanceof TXTryAbortLogEntry) {
 			String[] files = ((TXTryAbortLogEntry) p.operation).filenames;
 			Integer client = transactionAddressMap.get(files[0]);
-			abortClientTx(p.filename, client);
+			// God forgive me for my transgression here, but this should work since we don't support multiple tx at a time
+			Set<Integer> keySet = fileTransactionMap.get(p.filename).keySet();
+			Integer originalOperationNumber = (Integer) keySet.toArray()[0];
+			abortClientTx(p.filename, client, originalOperationNumber);
 		}
 	}
 
@@ -1252,8 +1264,12 @@ public class TDFSNode extends RIONode {
 	 * @param filename
 	 *            The filename key to abort
 	 */
-	public void abortClientTx(String filename, Integer address) {
-		String[] files = fileTransactionMap.get(filename);
+	public void abortClientTx(String filename, Integer address, Integer originalOperationNumber) {
+		
+		String[] files = null;
+		if (fileTransactionMap.containsKey(filename)){
+			files = fileTransactionMap.get(filename).get(originalOperationNumber);
+		}
 		if (files == null)
 			return; // Assume the client must have already aborted or committed
 		// this tx
@@ -1263,6 +1279,18 @@ public class TDFSNode extends RIONode {
 			fileTransactionMap.put(file, null);
 		}
 	}
+	
+	/**
+	 * Blindly aborts all tx for this client, assuming that state was lost somewhere and so it is
+	 * necessary to abort all transactions this client is currently undertaking
+	 * @param filename The filename to abort
+	 * @param address The address to abort
+	 */
+	public void blindAbortClientTx(String filename, Integer address){
+		Set<Integer> keySet = fileTransactionMap.get(filename).keySet();
+		Integer originalOperationNumber = (Integer) keySet.toArray()[0];
+		abortClientTx(filename, address, originalOperationNumber);
+	}
 
 	/**
 	 * Adds a transaction timeout for the given client. If the client hasn't
@@ -1270,17 +1298,17 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * @param client
 	 */
-	public void addTxTimeout(String filename, Integer address) {
+	public void addTxTimeout(String filename, Integer address, Integer operationNo) {
 		Method cbMethod = null;
 		try {
-			String[] params = { "java.lang.String", "java.lang.Integer" };
+			String[] params = { "java.lang.String", "java.lang.Integer", "java.lang.Integer" };
 			cbMethod = Callback.getMethod("abortClientTx", this, params);
 			cbMethod.setAccessible(true); // HACK
 		} catch (Exception e) {
 			printError(e);
 			e.printStackTrace();
 		}
-		Object[] args = { filename, address };
+		Object[] args = { filename, address, operationNo };
 		Callback cb = new Callback(cbMethod, this, args);
 		addTimeout(cb, TDFSNode.txTimeout);
 	}
