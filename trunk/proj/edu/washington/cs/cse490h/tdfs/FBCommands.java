@@ -73,7 +73,7 @@ public class FBCommands {
 
 		String filename = getPasswordFilename(username);
 		CommandNode root = node.get(filename, null);
-		CommandNode loaded = node.commandGraph.addCommand(new Command(filename,
+		node.commandGraph.addCommand(new Command(filename,
 				node.addr) {
 			@Override
 			public CommandKey getKey() {
@@ -87,10 +87,11 @@ public class FBCommands {
 			}
 		}, true, null);
 
-		loaded.addChild(node.listen(getFriendsFilename(currentUsername)));
-		loaded.addChild(node.listen(getRequestsFilename(currentUsername)));
-		loaded.addChild(node.listen(getMessagesFilename(currentUsername)));
-
+		node.listen(getFriendsFilename(currentUsername));
+		node.listen(getRequestsFilename(currentUsername));
+		node.listen(getMessagesFilename(currentUsername));
+		node.commandGraph.addCommand(node.commandGraph.noop());
+		
 		return root;
 	}
 
@@ -141,8 +142,9 @@ public class FBCommands {
 		final String finalFriendName = friendName;
 
 		String filename = getRequestsFilename(currentUsername);
+		// TODO: HIGH: Verify CG state here
 		CommandNode root = node.get(filename, null);
-		root.addChild(node.commandGraph.addCommand(new FileCommand(filename,
+		node.commandGraph.addCommand(new FileCommand(filename,
 				node.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
@@ -161,7 +163,7 @@ public class FBCommands {
 				createProposal(node, filename, new WriteLogEntry(removed
 						.toString().trim(), false));
 			}
-		}, false, null));
+		}, false, null);
 		return root;
 	}
 
