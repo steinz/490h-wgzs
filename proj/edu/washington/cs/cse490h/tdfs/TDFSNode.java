@@ -144,7 +144,15 @@ public class TDFSNode extends RIONode {
 	 * Used by the client right now, but wouldn't be visible in a real
 	 * implementation.
 	 */
-	private String[] transactingFiles;
+	String[] transactingFiles;
+
+	/**
+	 * Used by the node to keep track of which files in a transaction have been
+	 * committed/aborted
+	 */
+	private Set<String> resolvedTransactionFiles;
+
+	private String resolvedTransactionKey;
 
 	/**
 	 * Learner only: Number of acceptors that have contacted the learner about
@@ -215,6 +223,8 @@ public class TDFSNode extends RIONode {
 	 */
 	private FBCommands fbCommands;
 
+	private HTML html;
+
 	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
 	 */
@@ -251,8 +261,11 @@ public class TDFSNode extends RIONode {
 		}
 		twoPCKnownFiles = new HashSet<String>();
 		pendingTries = new HashSet<String>();
+		resolvedTransactionFiles = new HashSet<String>();
+
 		// Application
 		fbCommands = new FBCommands(this);
+		html = new HTML(null);
 
 	}
 
@@ -439,9 +452,6 @@ public class TDFSNode extends RIONode {
 		put(filename, contents, buildAbortCommands()).execute();
 	}
 
-	public void txabortParser(Tokenizer t) throws TransactionException {
-		txabort().execute();
-	}
 
 	public void txcommitParser(Tokenizer t) throws TransactionException {
 		txcommit().execute();
@@ -474,30 +484,29 @@ public class TDFSNode extends RIONode {
 	public CommandNode append(String filename, String contents,
 			List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		commandGraph.addCommand(new WriteCommand(filename,
-				contents, this.addr) {
-			@Override
-			public void execute(TDFSNode node) throws Exception {
-				if (node.logFS.fileExists(filename)) {
-					createProposal(node, filename, new WriteLogEntry(contents,
-							true));
-				} else {
-					throw new FileDoesNotExistException(filename);
-				}
-			}
+		commandGraph.addCommand(
+				new WriteCommand(filename, contents, this.addr) {
+					@Override
+					public void execute(TDFSNode node) throws Exception {
+						if (node.logFS.fileExists(filename)) {
+							createProposal(node, filename, new WriteLogEntry(
+									contents, true));
+						} else {
+							throw new FileDoesNotExistException(filename);
+						}
+					}
 
-			@Override
-			public String getName() {
-				return "Write";
-			}
-		}, false, abortCommands);
+					@Override
+					public String getName() {
+						return "Write";
+					}
+				}, false, abortCommands);
 		return listen;
 	}
 
 	public CommandNode create(String filename, List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		commandGraph.addCommand(new FileCommand(filename,
-				this.addr) {
+		commandGraph.addCommand(new FileCommand(filename, this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
 				if (!node.logFS.fileExists(filename)) {
@@ -517,8 +526,7 @@ public class TDFSNode extends RIONode {
 
 	public CommandNode delete(String filename, List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		commandGraph.addCommand(new FileCommand(filename,
-				this.addr) {
+		commandGraph.addCommand(new FileCommand(filename, this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
 				if (node.logFS.fileExists(filename)) {
@@ -548,46 +556,26 @@ public class TDFSNode extends RIONode {
 	public CommandNode put(String filename, String contents,
 			List<Command> abortCommands) {
 		CommandNode listen = listen(filename);
-		commandGraph.addCommand(new WriteCommand(filename,
-				contents, this.addr) {
-			@Override
-			public void execute(TDFSNode node) throws Exception {
-				if (node.logFS.fileExists(filename)) {
-					createProposal(node, filename, new WriteLogEntry(contents,
-							false));
-				} else {
-					throw new FileDoesNotExistException(filename);
-				}
-			}
+		commandGraph.addCommand(
+				new WriteCommand(filename, contents, this.addr) {
+					@Override
+					public void execute(TDFSNode node) throws Exception {
+						if (node.logFS.fileExists(filename)) {
+							createProposal(node, filename, new WriteLogEntry(
+									contents, false));
+						} else {
+							throw new FileDoesNotExistException(filename);
+						}
+					}
 
-			@Override
-			public String getName() {
-				return "Put";
-			}
-		}, false, abortCommands);
+					@Override
+					public String getName() {
+						return "Put";
+					}
+				}, false, abortCommands);
 		return listen;
 	}
 
-	/**
-	 * Assumes transactingFiles is not [].
-	 */
-	public CommandNode txabort() throws TransactionException {
-		if (transactingFiles != null) {
-			CommandNode root = null;
-			for (String filename : transactingFiles) {
-				CommandNode listen = listen(filename);
-				if (root == null) {
-					root = listen;
-				}
-				commandGraph.addCommand(new AbortCommand(transactingFiles,
-						filename, this.addr), true, null);
-			}
-			transactingFiles = null;
-			return root;
-		} else {
-			throw new TransactionException("not in a transaction");
-		}
-	}
 
 	/**
 	 * Assumes transactingFiles is not [].
@@ -597,34 +585,46 @@ public class TDFSNode extends RIONode {
 	 */
 	public CommandNode txcommit() throws TransactionException {
 		if (transactingFiles != null) {
-			CommandNode root = null;
-			for (String filename : transactingFiles) {
-				CommandNode listen = listen(filename);
-				if (root == null) {
-					root = listen;
-				}
+			for (String file : transactingFiles) {
+				resolvedTransactionFiles.add(file);
+			}
 
-				commandGraph.addCommand(new TXCommand(transactingFiles,
-						filename, this.addr) {
-					@Override
-					public void execute(TDFSNode node) throws Exception {
+			CommandNode root = null;
+
+			CommandNode listen = listen(transactingFiles[0]);
+			if (root == null) {
+				root = listen;
+			}
+
+			commandGraph.addCommand(new TXCommand(transactingFiles,
+					transactingFiles[0], this.addr) {
+				@Override
+				public void execute(TDFSNode node) throws Exception {
+
+					// Keeps a copy of the first transacting file in order to
+					// use as a key
+					node.resolvedTransactionKey = filename;
+
+					for (String filename : filenames) {
 						Integer locked = node.logFS.checkLocked(filename);
 						if (locked != null && locked == node.addr) {
 							createProposal(node, filename,
 									new TXTryCommitLogEntry(filenames));
-						} else {
-							// 2PC coordinator committed me
-							throw new TransactionException("lock not owned on "
-									+ filename);
+
 						}
 					}
+					/*
+					 * If I don't have the lock, then the 2PC coordinator
+					 * committed or aborted this file
+					 */
+				}
 
-					@Override
-					public String getName() {
-						return "TXCommit";
-					}
-				}, true, null);
-			}
+				@Override
+				public String getName() {
+					return "TXCommit";
+				}
+			}, true, null);
+
 			transactingFiles = null;
 			return root;
 		} else {
@@ -1114,11 +1114,19 @@ public class TDFSNode extends RIONode {
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
 
 		// tell the commandGraph to finish commands it might be executing
-		if (p.operation instanceof TXAbortLogEntry
-				|| p.operation instanceof TXCommitLogEntry
-				|| p.operation instanceof TXStartLogEntry) {
+		if (p.operation instanceof TXStartLogEntry) {
 			if (commandGraph.done(new CommandKey(p.filename, this.addr))) {
 				printVerbose("finished: " + p.operation.toString());
+			}
+		} else if (p.operation instanceof TXAbortLogEntry
+				|| p.operation instanceof TXCommitLogEntry) {
+			resolvedTransactionFiles.remove(p.filename);
+			if (resolvedTransactionFiles.size() == 0 && resolvedTransactionKey != null) {
+				if (commandGraph.done(new CommandKey(resolvedTransactionKey,
+						this.addr))) {
+					this.resolvedTransactionKey = null;
+					printVerbose("finished: " + p.operation.toString());
+				}
 			}
 		} else {
 			/*
@@ -1130,10 +1138,31 @@ public class TDFSNode extends RIONode {
 				printVerbose("finished: " + p.operation.toString());
 			}
 		}
+
 		if (filestateCache.containsKey(p.filename)) {
 			String content = logFS.getFile(p.filename);
 			filestateCache.put(p.filename, content);
 		}
+
+		// Update the HTML page and write it out
+		writeHTML();
+	}
+
+	/**
+	 * Writes the HTML Data and saves it out to disk
+	 */
+	public void writeHTML() {
+		String username = fbCommands.getUserName();
+		String friendsFilename = FBCommands.getFriendsFilename(username);
+		String requestsFilename = FBCommands.getRequestsFilename(username);
+		String messageFilename = FBCommands.getMessagesFilename(username);
+
+		String friendsData = filestateCache.get(friendsFilename);
+		String messageData = filestateCache.get(messageFilename);
+		String requestData = filestateCache.get(requestsFilename);
+
+		html.generateBody(friendsData, requestData, username, messageData);
+		html.write(this, this.addr + ".html");
 	}
 
 	/**
@@ -1186,7 +1215,7 @@ public class TDFSNode extends RIONode {
 			// check for duplicate learns
 			if (txFiles == null)
 				return;
-			
+
 			pendingTries.add(p.filename);
 
 			boolean allContained = true;
@@ -1204,7 +1233,6 @@ public class TDFSNode extends RIONode {
 					fileTransactionMap.put(file, null);
 				}
 			}
-			
 
 		}
 

@@ -32,6 +32,11 @@ public class FBCommands {
 	public static String getRequestsFilename(String username) {
 		return username + ".requests";
 	}
+	
+	public String getUserName(){
+		return this.currentUsername;
+	}
+
 
 	public FBCommands(TDFSNode node) {
 		this.node = node;
@@ -88,9 +93,9 @@ public class FBCommands {
 			}
 		}, true, null);
 
-		node.listen(getFriendsFilename(currentUsername));
-		node.listen(getRequestsFilename(currentUsername));
-		node.listen(getMessagesFilename(currentUsername));
+		node.listen(getFriendsFilename(username));
+		node.listen(getRequestsFilename(username));
+		node.listen(getMessagesFilename(username));
 		node.commandGraph.addCommand(node.commandGraph.noop());
 		
 		return root;
@@ -200,4 +205,6 @@ public class FBCommands {
 
 		return node.get(getMessagesFilename(currentUsername), null);
 	}
+	
+
 }

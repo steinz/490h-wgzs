@@ -82,6 +82,7 @@ public class CommandGraph {
 		 * and then cancels this node and all of it's children.
 		 */
 		public void abort() {
+			node.transactingFiles = null;
 			if (abortCommands != null) {
 				for (Command c : abortCommands) {
 					try {
