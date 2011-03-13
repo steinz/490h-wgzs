@@ -91,7 +91,10 @@ public class LogFileSystem implements LogFS {
 			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
 				LogEntry op = entry.getValue();
 				if (op instanceof TXStartLogEntry) {
-					content.start();
+					TXStartLogEntry start = (TXStartLogEntry) op;
+					if (start.address != node.addr) {
+						content.start();
+					}
 				} else if (op instanceof TXAbortLogEntry) {
 					content.abort();
 				} else if (op instanceof TXCommitLogEntry) {
