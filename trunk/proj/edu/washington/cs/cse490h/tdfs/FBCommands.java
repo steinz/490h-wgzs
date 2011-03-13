@@ -32,8 +32,6 @@ public class FBCommands {
 	public static String getRequestsFilename(String username) {
 		return username + ".requests";
 	}
-	
-
 
 	public FBCommands(TDFSNode node) {
 		this.node = node;
@@ -66,7 +64,7 @@ public class FBCommands {
 		}
 		node.txcommit();
 		return root;
-		
+
 	}
 
 	public CommandNode login(String username) {
@@ -76,8 +74,7 @@ public class FBCommands {
 
 		String filename = getPasswordFilename(username);
 		CommandNode root = node.get(filename, null);
-		node.commandGraph.addCommand(new Command(filename,
-				node.addr) {
+		node.commandGraph.addCommand(new Command(filename, node.addr) {
 			@Override
 			public CommandKey getKey() {
 				return new CommandKey(filename, node.addr);
@@ -94,7 +91,7 @@ public class FBCommands {
 		node.listen(getRequestsFilename(username));
 		node.listen(getMessagesFilename(username));
 		node.commandGraph.addCommand(node.commandGraph.noop());
-		
+
 		return root;
 	}
 
@@ -148,12 +145,11 @@ public class FBCommands {
 		String filename = getRequestsFilename(currentUsername);
 		// TODO: HIGH: Verify CG state here
 		CommandNode root = node.get(filename, null);
-		node.commandGraph.addCommand(new FileCommand(filename,
-				node.addr) {
+		node.commandGraph.addCommand(new FileCommand(filename, node.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
 				// GROSS!!
-				String[] requests = node.filestateCache.get(filename).trim()
+				String[] requests = node.logFS.getFile(filename).trim()
 						.split(fileDelim);
 				List<String> l = new ArrayList<String>();
 				for (String request : requests) {
@@ -173,13 +169,14 @@ public class FBCommands {
 
 	/**
 	 * Doesn't support newlines in messages
-	 * @throws TransactionException 
+	 * 
+	 * @throws TransactionException
 	 */
 	public CommandNode postMessage(String message) throws TransactionException {
 		if (checkNotLoggedIn()) {
 			return node.commandGraph.noop();
 		}
-		String[] friends = node.filestateCache.get(
+		String[] friends = node.logFS.getFile(
 				getFriendsFilename(currentUsername)).split(fileDelim);
 		String[] filenames = new String[friends.length + 1];
 		for (int i = 0; i < friends.length; i++) {
@@ -187,10 +184,11 @@ public class FBCommands {
 		}
 		filenames[friends.length] = getMessagesFilename(currentUsername);
 		List<Command> abortCommands = node.buildAbortCommands();
-		
+
 		CommandNode root = node.txstart(filenames);
 		for (String filename : filenames) {
-			node.append(filename, currentUsername + ": " + message, abortCommands);
+			node.append(filename, currentUsername + ": " + message,
+					abortCommands);
 		}
 		node.txcommit();
 		return root;
@@ -203,6 +201,5 @@ public class FBCommands {
 
 		return node.get(getMessagesFilename(currentUsername), null);
 	}
-	
 
 }

@@ -123,12 +123,6 @@ public class TDFSNode extends RIONode {
 	protected LogFS logFS;
 
 	/**
-	 * Client only: Map from filenames to most recent contents (populated by
-	 * gets)
-	 */
-	protected Map<String, String> filestateCache;
-
-	/**
 	 * Client only: Set of filenames we think we might not be receiving updates
 	 * on anymore, even though we are listening on that file.
 	 * 
@@ -223,7 +217,6 @@ public class TDFSNode extends RIONode {
 	 */
 	private FBCommands fbCommands;
 
-
 	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
 	 */
@@ -235,7 +228,6 @@ public class TDFSNode extends RIONode {
 	public void start() {
 		// Client
 		this.commandGraph = new CommandGraph(this);
-		this.filestateCache = new HashMap<String, String>();
 		this.relisten = new HashSet<String>();
 		this.getCoordinatorOffset = new HashMap<String, Integer>();
 		this.logFS = new LogFileSystem(this);
@@ -586,10 +578,6 @@ public class TDFSNode extends RIONode {
 	 */
 	public CommandNode txcommit() throws TransactionException {
 		if (transactingFiles != null) {
-			for (String file : transactingFiles) {
-				resolvedTransactionFiles.add(file);
-			}
-
 			CommandNode root = null;
 
 			CommandNode listen = listen(transactingFiles[0]);
@@ -604,6 +592,11 @@ public class TDFSNode extends RIONode {
 
 					// Keeps a copy of the first transacting file in order to
 					// use as a key
+					if (node.resolvedTransactionFiles == null) {
+						for (String file : filenames) {
+							resolvedTransactionFiles.add(file);
+						}
+					}
 					node.resolvedTransactionKey = filename;
 
 					for (String filename : filenames) {
@@ -1161,7 +1154,7 @@ public class TDFSNode extends RIONode {
 
 			HTML.write(friendsData, requestData, username, messageData,
 					this.addr + ".html", this);
-		}else {
+		} else {
 			HTML.writeblank(this, this.addr + ".html");
 		}
 	}
