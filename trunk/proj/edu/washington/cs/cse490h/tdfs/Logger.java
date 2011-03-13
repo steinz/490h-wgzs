@@ -35,7 +35,7 @@ class Logger {
 	/**
 	 * Print verbose messages. Feel free to change to false.
 	 */
-	private static final boolean printVerbose = true;
+	private static final boolean printVerbose = false;
 	/**
 	 * Print info messages Recommended to leave as true.
 	 */

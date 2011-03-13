@@ -11,7 +11,7 @@ public class FBCommands {
 	/**
 	 * UserName of currently logged in user or null if not logged in
 	 */
-	private String currentUsername;
+	protected String currentUsername;
 	private TDFSNode node;
 
 	public static String getFriendsFilename(String username) {
@@ -33,9 +33,6 @@ public class FBCommands {
 		return username + ".requests";
 	}
 	
-	public String getUserName(){
-		return this.currentUsername;
-	}
 
 
 	public FBCommands(TDFSNode node) {
@@ -132,6 +129,7 @@ public class FBCommands {
 		CommandNode root = node.txstart(filenames);
 		node.get(getRequestsFilename(currentUsername), abortCommands);
 		// TODO: HIGH: check request exists
+		// TODO: HIGH: remove request from .requests
 		node.append(getFriendsFilename(currentUsername),
 				friendName + fileDelim, abortCommands);
 		node.append(getFriendsFilename(friendName),
