@@ -191,7 +191,7 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * f2 -> f1, f2
 	 */
-	private Map<String, Map<Integer,String[]>> fileTransactionMap;
+	private Map<String, Tuple<Integer, String[]>> fileTransactionMap;
 
 	/**
 	 * 2PC coordinator: A map from filenames in a transaction to the client
@@ -243,7 +243,7 @@ public class TDFSNode extends RIONode {
 		this.highestProposalReceived = new HashMap<Tuple<String, Integer>, Proposal>();
 
 		// 2PC
-		fileTransactionMap = new HashMap<String, Map<Integer,String[]>>();
+		fileTransactionMap = new HashMap<String, Tuple<Integer, String[]>>();
 		transactionAddressMap = new HashMap<String, Integer>();
 		if (addr == twoPCCoordinatorAddress) {
 			for (int i = 0; i < coordinatorCount; i++) {
@@ -1123,13 +1123,13 @@ public class TDFSNode extends RIONode {
 				}
 			}
 		} else if (p.operation instanceof TXAbortLogEntry) {
-			// This is crap. 
+			// This is crap.
 			// TODO: Wayne: Fix plx
 			this.resolvedTransactionFiles.clear();
 			this.resolvedTransactionKey = null;
 			this.commandGraph = new CommandGraph(this);
 		} else {
-		
+
 			/*
 			 * txTryCommands aren't picked up here because they use a different
 			 * subkey, so we pick them up above
@@ -1153,7 +1153,7 @@ public class TDFSNode extends RIONode {
 			String friendsFilename = FBCommands.getFriendsFilename(username);
 			String requestsFilename = FBCommands.getRequestsFilename(username);
 			String messageFilename = FBCommands.getMessagesFilename(username);
-			
+
 			// TODO: HIGH: Check if file exists?
 			String friendsData = logFS.getFile(friendsFilename);
 			String messageData = logFS.getFile(messageFilename);
@@ -1187,10 +1187,11 @@ public class TDFSNode extends RIONode {
 			logFS.createGroup(p.filename);
 		}
 		logFS.writeLogEntry(p.filename, p.operationNumber, p.operation);
-		if (fileTransactionMap.containsKey(p.filename)){
-			txFiles = fileTransactionMap.get(p.filename).get(p.operationNumber);
+		Tuple<Integer, String[]> fileKey = fileTransactionMap.get(p.filename);
+		if (fileKey != null) {
+			txFiles = fileKey.second;
 		}
-		
+
 		// check for transactions
 
 		if (p.operation instanceof TXStartLogEntry) {
@@ -1207,13 +1208,9 @@ public class TDFSNode extends RIONode {
 			String[] files = txCommand.filenames;
 
 			for (String file : files) {
-				if (fileTransactionMap.containsKey(file)){
-					fileTransactionMap.get(file).put(p.operationNumber, files);
-				} else{
-					HashMap<Integer, String[]> newMap = new HashMap<Integer, String[]>();
-					newMap.put(p.operationNumber, files);
-					fileTransactionMap.put(file, newMap);
-				}
+				Tuple<Integer, String[]> key = new Tuple<Integer, String[]>(
+						p.operationNumber, files);
+				fileTransactionMap.put(file, key);
 				transactionAddressMap.put(file, txCommand.address);
 			}
 		}
@@ -1249,10 +1246,10 @@ public class TDFSNode extends RIONode {
 		else if (p.operation instanceof TXTryAbortLogEntry) {
 			String[] files = ((TXTryAbortLogEntry) p.operation).filenames;
 			Integer client = transactionAddressMap.get(files[0]);
-			// God forgive me for my transgression here, but this should work since we don't support multiple tx at a time
-			Set<Integer> keySet = fileTransactionMap.get(p.filename).keySet();
-			Integer originalOperationNumber = (Integer) keySet.toArray()[0];
-			abortClientTx(p.filename, client, originalOperationNumber);
+
+			Tuple<Integer, String[]> key = fileTransactionMap.get(p.filename);
+			abortClientTx(p.filename, client, key.first);
+			key = null;
 		}
 	}
 
@@ -1264,13 +1261,22 @@ public class TDFSNode extends RIONode {
 	 * @param filename
 	 *            The filename key to abort
 	 */
-	public void abortClientTx(String filename, Integer address, Integer originalOperationNumber) {
-		
+	public void abortClientTx(String filename, Integer address,
+			Integer originalOperationNumber) {
+
 		String[] files = null;
-		if (fileTransactionMap.containsKey(filename)){
-			files = fileTransactionMap.get(filename).get(originalOperationNumber);
+		Integer currentOpNumber = null;
+		Tuple<Integer, String[]> key = null;
+		if (fileTransactionMap.containsKey(filename)) {
+			key = fileTransactionMap.get(filename);
+			if (key != null) {
+				currentOpNumber = key.first;
+				files = key.second;
+			}
 		}
-		if (files == null)
+
+		if (key == null || files == null
+				|| currentOpNumber != originalOperationNumber)
 			return; // Assume the client must have already aborted or committed
 		// this tx
 
@@ -1279,17 +1285,26 @@ public class TDFSNode extends RIONode {
 			fileTransactionMap.put(file, null);
 		}
 	}
-	
+
 	/**
-	 * Blindly aborts all tx for this client, assuming that state was lost somewhere and so it is
-	 * necessary to abort all transactions this client is currently undertaking
-	 * @param filename The filename to abort
-	 * @param address The address to abort
+	 * Blindly aborts all tx for this client, assuming that state was lost
+	 * somewhere and so it is necessary to abort all transactions this client is
+	 * currently undertaking
+	 * 
+	 * @param filename
+	 *            The filename to abort
+	 * @param address
+	 *            The address to abort
 	 */
-	public void blindAbortClientTx(String filename, Integer address){
-		Set<Integer> keySet = fileTransactionMap.get(filename).keySet();
-		Integer originalOperationNumber = (Integer) keySet.toArray()[0];
-		abortClientTx(filename, address, originalOperationNumber);
+	public void blindAbortClientTx(String filename, Integer address) {
+		Integer opNumber = null;
+		if (fileTransactionMap.containsKey(filename)) {
+			Tuple<Integer, String[]> key = fileTransactionMap.get(filename);
+			opNumber = key.first;
+		}
+		if (opNumber != null) {
+			abortClientTx(filename, address, opNumber);
+		}
 	}
 
 	/**
@@ -1298,10 +1313,12 @@ public class TDFSNode extends RIONode {
 	 * 
 	 * @param client
 	 */
-	public void addTxTimeout(String filename, Integer address, Integer operationNo) {
+	public void addTxTimeout(String filename, Integer address,
+			Integer operationNo) {
 		Method cbMethod = null;
 		try {
-			String[] params = { "java.lang.String", "java.lang.Integer", "java.lang.Integer" };
+			String[] params = { "java.lang.String", "java.lang.Integer",
+					"java.lang.Integer" };
 			cbMethod = Callback.getMethod("abortClientTx", this, params);
 			cbMethod.setAccessible(true); // HACK
 		} catch (Exception e) {
