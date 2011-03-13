@@ -1112,8 +1112,7 @@ public class TDFSNode extends RIONode {
 			if (commandGraph.done(new CommandKey(p.filename, this.addr))) {
 				printVerbose("finished: " + p.operation.toString());
 			}
-		} else if (p.operation instanceof TXAbortLogEntry
-				|| p.operation instanceof TXCommitLogEntry) {
+		} else if (p.operation instanceof TXCommitLogEntry) {
 			resolvedTransactionFiles.remove(p.filename);
 			if (resolvedTransactionFiles.size() == 0
 					&& resolvedTransactionKey != null) {
@@ -1123,7 +1122,14 @@ public class TDFSNode extends RIONode {
 					printVerbose("finished: " + p.operation.toString());
 				}
 			}
+		} else if (p.operation instanceof TXAbortLogEntry) {
+			// This is crap. 
+			// TODO: Wayne: Fix plx
+			this.resolvedTransactionFiles.clear();
+			this.resolvedTransactionKey = null;
+			this.commandGraph = new CommandGraph(this);
 		} else {
+		
 			/*
 			 * txTryCommands aren't picked up here because they use a different
 			 * subkey, so we pick them up above
@@ -1147,7 +1153,8 @@ public class TDFSNode extends RIONode {
 			String friendsFilename = FBCommands.getFriendsFilename(username);
 			String requestsFilename = FBCommands.getRequestsFilename(username);
 			String messageFilename = FBCommands.getMessagesFilename(username);
-
+			
+			// TODO: HIGH: Check if file exists?
 			String friendsData = logFS.getFile(friendsFilename);
 			String messageData = logFS.getFile(messageFilename);
 			String requestData = logFS.getFile(requestsFilename);
