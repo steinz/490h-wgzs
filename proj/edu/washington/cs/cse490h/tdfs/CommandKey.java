@@ -85,7 +85,11 @@ public class CommandKey extends Tuple<String, SubKey> {
 	 */
 	@Override
 	public int hashCode() {
-		return this.first.hashCode();
+		if (this.first == null) {
+			return 0;
+		} else {
+			return this.first.hashCode();
+		}
 	}
 
 	/**
