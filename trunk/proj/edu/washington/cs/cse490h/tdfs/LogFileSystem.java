@@ -17,7 +17,7 @@ import edu.washington.cs.cse490h.lib.Utility;
 
 public class LogFileSystem implements LogFS {
 
-	private static class FileLog {
+	private class FileLog {
 		// TODO: cache
 
 		public final String filename;
@@ -54,7 +54,10 @@ public class LogFileSystem implements LogFS {
 			for (Entry<Integer, LogEntry> entry : operations.entrySet()) {
 				LogEntry op = entry.getValue();
 				if (op instanceof TXStartLogEntry) {
-					exists.start();
+					TXStartLogEntry start = (TXStartLogEntry) op;
+					if (start.address != node.addr) {
+						exists.start();
+					}
 				} else if (op instanceof TXAbortLogEntry) {
 					exists.abort();
 				} else if (op instanceof TXCommitLogEntry) {
@@ -135,55 +138,58 @@ public class LogFileSystem implements LogFS {
 
 			return byteStream.toByteArray();
 		}
+	}
 
-		public static FileLog unpack(byte[] packedLog) {
-			DataInputStream stream = new DataInputStream(
-					new ByteArrayInputStream(packedLog));
+	public FileLog unpack(byte[] packedLog) {
+		DataInputStream stream = new DataInputStream(new ByteArrayInputStream(
+				packedLog));
 
-			String filename;
-			SortedMap<Integer, LogEntry> operations = new TreeMap<Integer, LogEntry>();
-			int nextOpNumber = 0;
+		String filename;
+		SortedMap<Integer, LogEntry> operations = new TreeMap<Integer, LogEntry>();
+		int nextOpNumber = 0;
 
-			try {
-				int len = stream.readInt();
-				byte[] filenameBytes = new byte[len];
-				if (stream.read(filenameBytes) != len) {
-					throw new EOFException("premature EOF detected in filename");
-				}
-				filename = Utility.byteArrayToString(filenameBytes);
-				nextOpNumber = stream.readInt();
-			} catch (IOException e) {
-				throw new RuntimeException(e);
+		try {
+			int len = stream.readInt();
+			byte[] filenameBytes = new byte[len];
+			if (stream.read(filenameBytes) != len) {
+				throw new EOFException("premature EOF detected in filename");
 			}
-
-			try {
-				while (true) {
-					int opNumber = stream.readInt();
-					int opLength = stream.readInt();
-					byte[] packedOp = new byte[opLength];
-					if (stream.read(packedOp) != opLength) {
-						throw new EOFException("premature EOF detected in LogEntry");
-					}
-					operations.put(opNumber, LogEntry.unpack(packedOp));
-				}
-			} catch (EOFException e) {
-				// done
-			} catch (IOException e) {
-				throw new RuntimeException(e);
-			}
-
-			return new FileLog(filename, operations, nextOpNumber);
+			filename = Utility.byteArrayToString(filenameBytes);
+			nextOpNumber = stream.readInt();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
 		}
+
+		try {
+			while (true) {
+				int opNumber = stream.readInt();
+				int opLength = stream.readInt();
+				byte[] packedOp = new byte[opLength];
+				if (stream.read(packedOp) != opLength) {
+					throw new EOFException("premature EOF detected in LogEntry");
+				}
+				operations.put(opNumber, LogEntry.unpack(packedOp));
+			}
+		} catch (EOFException e) {
+			// done
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+
+		return new FileLog(filename, operations, nextOpNumber);
 	}
 
 	private Map<String, FileLog> logs;
 
 	private Logger logger;
 
-	public LogFileSystem() {
+	private TDFSNode node;
+
+	public LogFileSystem(TDFSNode node) {
 		this.logs = new HashMap<String, FileLog>();
 		this.logger = Logger
 				.getLogger("edu.washington.cs.cse490h.dfs.LogFileSystem");
+		this.node = node;
 	}
 
 	/**
@@ -257,7 +263,7 @@ public class LogFileSystem implements LogFS {
 	}
 
 	public String listen(byte[] packedLog) {
-		FileLog l = FileLog.unpack(packedLog);
+		FileLog l = unpack(packedLog);
 		logs.put(l.filename, l);
 		return l.filename;
 	}
