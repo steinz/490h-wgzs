@@ -14,7 +14,9 @@ public class Transactional<T> {
 	}
 
 	public void commit() {
-		persistent = transactional;
+		if (transacting) {
+			persistent = transactional;
+		}
 		transacting = false;
 	}
 

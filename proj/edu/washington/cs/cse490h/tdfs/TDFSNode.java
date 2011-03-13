@@ -229,7 +229,7 @@ public class TDFSNode extends RIONode {
 		this.filestateCache = new HashMap<String, String>();
 		this.relisten = new HashSet<String>();
 		this.getCoordinatorOffset = new HashMap<String, Integer>();
-		this.logFS = new LogFileSystem();
+		this.logFS = new LogFileSystem(this);
 		this.transactingFiles = null;
 
 		// Paxos
