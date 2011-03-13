@@ -1,0 +1,188 @@
+start 0
+start 1
+start 2
+start 3
+start 4
+start 5
+start 6
+time
+1 createuser steinz
+2 createuser wayneg
+time
+1 login steinz
+time
+1 requestfriend wayneg
+time
+1 logout
+time
+1 login wayneg
+time
+1 acceptfriend steinz
+time
+1 post hello world
+time
+1 logout
+time
+1 login steinz
+2 login wayneg
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+time
+1 graph
+2 graph
+time
+1 packets
+2 packets
+time
