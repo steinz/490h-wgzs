@@ -223,7 +223,6 @@ public class TDFSNode extends RIONode {
 	 */
 	private FBCommands fbCommands;
 
-	private HTML html;
 
 	/**
 	 * Simple hash function from filenames to addresses in [0,coordinatorCount)
@@ -265,7 +264,6 @@ public class TDFSNode extends RIONode {
 
 		// Application
 		fbCommands = new FBCommands(this);
-		html = new HTML(null);
 
 	}
 
@@ -1143,11 +1141,6 @@ public class TDFSNode extends RIONode {
 			}
 		}
 
-		if (filestateCache.containsKey(p.filename)) {
-			String content = logFS.getFile(p.filename);
-			filestateCache.put(p.filename, content);
-		}
-
 		// Update the HTML page and write it out
 		writeHTML();
 	}
@@ -1156,17 +1149,21 @@ public class TDFSNode extends RIONode {
 	 * Writes the HTML Data and saves it out to disk
 	 */
 	public void writeHTML() {
-		String username = fbCommands.getUserName();
-		String friendsFilename = FBCommands.getFriendsFilename(username);
-		String requestsFilename = FBCommands.getRequestsFilename(username);
-		String messageFilename = FBCommands.getMessagesFilename(username);
+		if (fbCommands.currentUsername != null) {
+			String username = fbCommands.currentUsername;
+			String friendsFilename = FBCommands.getFriendsFilename(username);
+			String requestsFilename = FBCommands.getRequestsFilename(username);
+			String messageFilename = FBCommands.getMessagesFilename(username);
 
-		String friendsData = filestateCache.get(friendsFilename);
-		String messageData = filestateCache.get(messageFilename);
-		String requestData = filestateCache.get(requestsFilename);
+			String friendsData = logFS.getFile(friendsFilename);
+			String messageData = logFS.getFile(messageFilename);
+			String requestData = logFS.getFile(requestsFilename);
 
-		html.generateBody(friendsData, requestData, username, messageData);
-		html.write(this, this.addr + ".html");
+			HTML.write(friendsData, requestData, username, messageData,
+					this.addr + ".html", this);
+		}else {
+			HTML.writeblank(this, this.addr + ".html");
+		}
 	}
 
 	/**
