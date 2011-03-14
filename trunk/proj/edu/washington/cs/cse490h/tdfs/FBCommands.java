@@ -87,11 +87,11 @@ public class FBCommands {
 				node.commandGraph.done(new CommandKey(filename, node.addr));
 			}
 		}, true, null);
-
+		
 		node.listen(getFriendsFilename(username));
 		node.listen(getRequestsFilename(username));
 		node.listen(getMessagesFilename(username));
-		
+
 		return root;
 	}
 
@@ -100,6 +100,7 @@ public class FBCommands {
 		}
 
 		String fake = "logout";
+		
 		return node.commandGraph.addCommand(new Command(fake, node.addr) {
 
 			@Override
@@ -115,7 +116,9 @@ public class FBCommands {
 			}
 
 		}, true, null);
+		
 	}
+	
 
 	public CommandNode requestFriend(String friendName) {
 		if (checkNotLoggedIn()) {

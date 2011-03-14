@@ -30,7 +30,6 @@ We presume that users will not need any more state than this. In a real system, 
 
 Using our distributed application from project 4, we decided to keep much of the same semantics. When a user logs in, the client simply requests to listen on the files that belong to that username. Due to the coordinator groups using paxos and paxos having persistent state, the files should exist forever as long as one coordinator comes online at some point.
 
-
 \section{Privacy}
 
 There's very little sense of privacy in our application. Any node can log in as any user and request any file they wish, including usernames that they did not create. This is obviously a privacy concern, and users should not expect any of their data to be private. Even if we did implement a password system, the very nature of our distributed system would mean that at the very least, coordinators would all have copies of files they're coordinating (which would include user information). 
@@ -41,7 +40,7 @@ We could implement both a password system and some method of file encryption, wh
 
 When a user logs in, they request to listen to all files associated with their user name. For example, if a user logged in as ``vincent'', then the node would request to listen to ``vincent.friends'', ``vincent.requests'', and ``vincent.messages''. Upon listening, the user will get the latest version of the log, and so any changes the user made previously should be reflected when they log in. 
 
-When a user logs out, they simply request to stop listening to the files associated with their username. 
+When a user logs out, they simply cease to be ``vincent'' and so they cannot perform any actions as vincent. Technically the user will continue to receive updates on old files, but there is no way for them to take action as that user any longer. This also keeps the user up-to-date in the event that they wish to login again as ``vincent''.
 
 We chose this approach because it meshed well with our previous project, and because it makes sense logically: there should be a separate file for friends, and for messages. The only file that might possibly be redundant is the requests file, which displays pending friend requests. However, doing this allows users to deal with friend requests at a convenient time without worrying about affecting other file states.
 
@@ -69,5 +68,6 @@ We decided to make this interface just to make the information more easily acces
 
 \section{Outstanding Issues}
 
+Persistent storage in Paxos is not working very well. If all nodes in a group fail, and then come back online, it's highly likely that the persistent state of paxos will be lost (and thus all updates made through paxos will be lost). 
 
 \end{document}
