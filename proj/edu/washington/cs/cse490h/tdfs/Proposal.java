@@ -3,6 +3,7 @@ package edu.washington.cs.cse490h.tdfs;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Scanner;
@@ -91,6 +92,8 @@ public class Proposal {
 			}
 
 			this.operation = LogEntry.unpack(operationBuf);
+		} catch (EOFException e1){
+			
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
