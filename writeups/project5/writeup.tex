@@ -25,15 +25,18 @@ Our application is a very simple version of facebook. Clients can create usernam
 
 For our application, we decided to partition files according to user names. Each username has the following three files associated with them:
 
-1. A friendlist, named user.friends
-2. A message file (containing messages for the user), named user.messages
-3. A list of pending friend requests for this user, named user.requests
+\begin{enumerate}
+\item A friendlist, named user.friends
+\item A message file (containing messages for the user), named user.messages
+\item A list of pending friend requests for this user, named user.requests
+\item A file named user, which currently contains nothing but could be used for passwords
+\end{enumerate}
 
 We presume that users will not need any more state than this. In a real system, it might be nice to separate messages based upon who sent them (so each user would have a user.friendname.messages file), and our system could easily support that with a few modifications. However, doing this would also introduce significant delays in both creating users and retrieving messages. In our system, which probably won't have a significant amount of traffic, the delays due to the necessary file creations would impact users to a greater extent than dealing with a single large file for all messages.
 
 \section{File Access}
 
-Using our distributed application from project 4, we decided to keep much of the same semantics. When a user logs in, the client simply requests to listen on the files that belong to that username. Due to the coordinator groups using paxos and paxos having persistent state, the files should exist forever as long as one coordinator comes online at some point.
+Using our distributed application from project 4, we decided to keep much of the same semantics. When a user logs in, the client simply requests to listen on the files that belong to that username. Due to the coordinator groups using paxos and paxos having persistent state, the files should exist forever as long as one of that file's coordinators comes online at some point.
 
 \section{Privacy}
 
@@ -87,14 +90,16 @@ When a user logs in, they request to listen to all files associated with their u
 
 When a user logs out, they simply cease to be ``vincent'' and so they cannot perform any actions as vincent. Technically the user will continue to receive updates on old files, but there is no way for them to take action as that user any longer. This also keeps the user up-to-date in the event that they wish to login again as ``vincent''.
 
-We chose this approach because it meshed well with our previous project, and because it makes sense logically: there should be a separate file for friends, and for messages. The only file that might possibly be redundant is the requests file, which displays pending friend requests. However, doing this allows users to deal with friend requests at a convenient time without worrying about affecting other file states.
+We chose this approach because it meshed well with our previous project, and because it makes sense logically: there should be a separate file for friends, and for messages. 
 
 \section{Application command Semantics}
 
 Users can perform the following commands:
 \begin{verbatim}
 User Administrative commands: createuser <username>, login <username>, logout
-User commands:  requestfriend <friend>, post <message>, read, acceptfriend <friend>, rejectfriend <friend>,
+User commands:  requestfriend <friend>, post <message>, update, 
+                acceptfriend <friend>, rejectfriend <friend>,
+Debug commands: graph, packets, getlocal <file>
 \end{verbatim}
 
 All of the commands users could previously perform exist as well, although for the purposes of this project users should not call them directly. To encourage that, we are not listing those commands explicitly in this writeup.
@@ -107,7 +112,7 @@ In our view, this is expected and correct behavior. If a command fails for some 
 
 \section{HTML interface}
 
-Our HTML "interface" is really just a wrapper around the file logs. The site is forcibly refreshed every few seconds via javascript, and the following information is displayed to the user:
+Our HTML "interface" is really just a wrapper around the file logs. The site is forcibly refreshed every few seconds via an HTML 5 tag, and the following information is displayed to the user if they're currently logged in:
 
 \begin{verbatim}
 -Friend list
