@@ -75,6 +75,11 @@ public class FBCommands {
 
 		String filename = getPasswordFilename(username);
 		CommandNode root = node.get(filename, null);
+
+		node.listen(getFriendsFilename(username));
+		node.listen(getRequestsFilename(username));
+		node.listen(getMessagesFilename(username));
+		
 		node.commandGraph.addCommand(new Command(filename, node.addr) {
 			@Override
 			public CommandKey getKey() {
@@ -88,9 +93,6 @@ public class FBCommands {
 			}
 		}, true, null);
 
-		node.listen(getFriendsFilename(username));
-		node.listen(getRequestsFilename(username));
-		node.listen(getMessagesFilename(username));
 		node.commandGraph.addCommand(node.commandGraph.noop());
 
 		return root;
