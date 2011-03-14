@@ -316,7 +316,7 @@ public class TDFSNode extends RIONode {
 		fbCommands.readMessages().execute();
 	}
 
-	public void rejectParser(Tokenizer t) {
+	public void rejectfriendParser(Tokenizer t) {
 		String friendName = t.next();
 		fbCommands.rejectFriend(friendName).execute();
 	}
@@ -1182,7 +1182,6 @@ public class TDFSNode extends RIONode {
 			String requestsFilename = FBCommands.getRequestsFilename(username);
 			String messageFilename = FBCommands.getMessagesFilename(username);
 
-			// TODO: HIGH: Check if file exists?
 			if (logFS.isListening(friendsFilename) && logFS.isListening(messageFilename) && logFS.isListening(requestsFilename)){
 				friendsData = logFS.getFile(friendsFilename);
 				messageData = logFS.getFile(messageFilename);
