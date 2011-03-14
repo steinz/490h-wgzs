@@ -339,8 +339,10 @@ public class CommandGraph {
 			if (checkpointTail == checkpointHead) {
 				checkpointTail = null;
 			}
-			checkpointHead.done();
+			// eww.
+			CommandNode oldHead = checkpointHead;
 			checkpointHead = null;
+			oldHead.done();
 			return true;
 		} else {
 			CommandNode n = heads.get(key);

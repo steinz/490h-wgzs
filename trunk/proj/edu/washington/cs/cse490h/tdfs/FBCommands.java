@@ -6,7 +6,7 @@ import java.util.List;
 import edu.washington.cs.cse490h.tdfs.CommandGraph.CommandNode;
 
 public class FBCommands {
-	private static String fileDelim = "\n";
+	static String fileDelim = "\n";
 
 	/**
 	 * UserName of currently logged in user or null if not logged in
@@ -76,9 +76,6 @@ public class FBCommands {
 		String filename = getPasswordFilename(username);
 		CommandNode root = node.get(filename, null);
 
-		node.listen(getFriendsFilename(username));
-		node.listen(getRequestsFilename(username));
-		node.listen(getMessagesFilename(username));
 		
 		node.commandGraph.addCommand(new Command(filename, node.addr) {
 			@Override
@@ -93,6 +90,10 @@ public class FBCommands {
 			}
 		}, true, null);
 
+		node.listen(getFriendsFilename(username));
+		node.listen(getRequestsFilename(username));
+		node.listen(getMessagesFilename(username));
+		
 		node.commandGraph.addCommand(node.commandGraph.noop());
 
 		return root;
@@ -201,7 +202,7 @@ public class FBCommands {
 		List<Command> abortCommands = node.buildAbortCommands();
 
 		for (String filename : filenames) {
-			node.append(filename, currentUsername + ": " + message,
+			node.append(filename, currentUsername + ": " + message + fileDelim,
 					abortCommands);
 		}
 		node.txcommit();
