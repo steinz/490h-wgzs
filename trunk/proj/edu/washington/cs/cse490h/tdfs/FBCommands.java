@@ -106,6 +106,7 @@ public class FBCommands {
 			public void execute(TDFSNode node) throws Exception {
 				currentUsername = null;
 				node.commandGraph.done(new CommandKey(filename, node.addr));
+				node.writeHTML();
 			}
 
 			@Override
