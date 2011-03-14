@@ -16,6 +16,11 @@
 March 14, 2011
 \end{center}
 
+\section{Project Description}
+
+Our application is a very simple version of facebook. Clients can create usernames, login and logout of existing usernames, manage their friendlist to a limited extent (users cannot remove friends currently), and can post messages to all of their friends (and read messages).
+
+
 \section{File setup}
 
 For our application, we decided to partition files according to user names. Each username has the following three files associated with them:
@@ -59,6 +64,12 @@ User commands:  requestfriend <friend>, post <message>, read, acceptfriend <frie
 
 All of the commands users could previously perform exist as well, although for the purposes of this project users should not call them directly. To encourage that, we are not listing those commands explicitly in this writeup.
 
+\section{Command Graph Semantics}
+
+The command graph currently aborts all queued commands if a command fails.  This means that if there are several queued commands, even outside of a transaction, a single failure can cause all pending commands to be aborted. 
+
+In our view, this is expected and correct behavior. If a command fails for some reason, this means that the client does not have a current view of the file state, or the client erroneously entered a command. Rather than allow the client to continue on and possibly producing an unintended result, we believe that clients should just retry their commands and ensure that the result produced is the intended one.
+
 \section{HTML interface}
 
 Our HTML "interface" is really just a wrapper around the file logs. The site is forcibly refreshed every few seconds via javascript, and the following information is displayed to the user:
@@ -71,21 +82,8 @@ Our HTML "interface" is really just a wrapper around the file logs. The site is 
 
 We decided to make this interface just to make the information more easily accessible. Rather than forcing the user to scroll up to discover their friend list, it is much easier to just view all the information in one page. The page refreshes every second in order to provide up-to-date information.
 
-\section{Outstanding Issues}
+\section{Project 6}
 
-There is a bug in the way our persistent storage in paxos works. Commands are keyed based on the proposal number, operation number (the line in the log), and the filename. When a new operation is learned, the command graph checks to see if the learned operation is something the command graph was waiting on to finish. This can result in the node erroneously assuming it finished a command when in fact it only learned about an old command.
-
-For example, consider the following operations:
-\begin{verbatim}
-1. 1 create f1 (Proposal number = 1, operation number = 0)
-2. 1 put f1 hello (Proposal number = 5, operation number = 1)
-----Node 1 crashes----
-3. 1 create f1 (Proposal number = 1, operation number = 0)
-4. 1 put f1 world (Proposal number = 5, operation number = 1)
-\end{verbatim}
-
-What we would like to occur is for node 1 to learn about the first two operations (which it does), and then to do operation 4 as operation 5 with a new proposal number and operation number 2. However, when the node learns about operation number 2, it assumes that operation number 4 succeeded because the key values for the two operations are the same. 
-
-One way around this would be to simply key the commands based upon the operation as well. However, in practice this exact situation is so unlikely that the additional overhead may not be worth losing a single operation. 
+We are not describing our project 6 assignment here, because we have described it previously in our project 4 writeup. Our project 6 assignment, the distributed hash table, was closely interlinked with our project 4 assignment (because we use Paxos for every file operation in our distributed hash table file system). Because of that, we are not generating a separate writeup for project 6.
 
 \end{document}
