@@ -134,18 +134,19 @@ public class FBCommands {
 
 		// TODO: HIGH: check request exists
 		// TODO: HIGH: remove request from .requests
-//		node.commandGraph.addCommand(new FileCommand(filename, node.addr) {
-//			@Override
-//			public void execute(TDFSNode node) throws Exception {
-//				String requests = node.logFS.getFile(filename);
-//				if (requests.indexOf(finalFriendName) != -1) {
-//					
-//				} else {
-//					throw new Exception("no request found from "
-//							+ finalFriendName);
-//				}
-//			}
-//		}, false, abortCommands);
+		node.commandGraph.addCommand(new FileCommand(filename, node.addr) {
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				String requests = node.logFS.getFile(filename);
+				if (requests.indexOf(finalFriendName) != -1) {
+					String content = requests.replace(finalFriendName + fileDelim, "");
+					createProposal(node, filename, new WriteLogEntry(content, false));
+				} else {
+					throw new Exception("no request found from "
+							+ finalFriendName);
+				}
+			}
+		}, true, abortCommands);
 
 		node.append(getFriendsFilename(currentUsername),
 				friendName + fileDelim, abortCommands);
