@@ -249,6 +249,7 @@ public class TDFSNode extends RIONode {
 			for (int i = 0; i < coordinatorCount; i++) {
 				RIOSend(i, MessageType.RequestAllFilenames);
 			}
+			addRequestFileTimeout();
 		}
 		twoPCKnownFiles = new HashSet<String>();
 		pendingTries = new HashSet<String>();
@@ -1376,6 +1377,31 @@ public class TDFSNode extends RIONode {
 		Object[] args = { filename, address, operationNo };
 		Callback cb = new Callback(cbMethod, this, args);
 		addTimeout(cb, TDFSNode.txTimeout);
+	}
+	
+	public void addRequestFileTimeout()
+	{
+		Method cbMethod = null;
+		try {
+			String[] params = { };
+			cbMethod = Callback.getMethod("requestTimeout", this, params);
+			cbMethod.setAccessible(true); // HACK
+		} catch (Exception e) {
+			printError(e);
+			e.printStackTrace();
+		}
+		Object[] args = { };
+		Callback cb = new Callback(cbMethod, this, args);
+		addTimeout(cb, 10);
+	}
+	
+	public void requestTimeout()
+	{
+		if (addr == twoPCCoordinatorAddress) {
+			for (int i = 0; i < coordinatorCount; i++) {
+				RIOSend(i, MessageType.RequestAllFilenames);
+			}
+		}
 	}
 
 	/**
