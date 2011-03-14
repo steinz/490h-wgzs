@@ -36,6 +36,11 @@ There's very little sense of privacy in our application. Any node can log in as 
 
 We could implement both a password system and some method of file encryption, where only the user would have the appropriate key to decrypt the file contents. However, since privacy is not the focus of this assignment we decided that privacy was not a feature worth implementing. 
 
+\section{Command Graph}
+
+NOTE: Zach should talk about this here
+
+
 \section{Logging in/out}
 
 When a user logs in, they request to listen to all files associated with their user name. For example, if a user logged in as ``vincent'', then the node would request to listen to ``vincent.friends'', ``vincent.requests'', and ``vincent.messages''. Upon listening, the user will get the latest version of the log, and so any changes the user made previously should be reflected when they log in. 
@@ -48,8 +53,8 @@ We chose this approach because it meshed well with our previous project, and bec
 
 Users can perform the following commands:
 \begin{verbatim}
-User Administrative commands: create <username>, login <username>, logout
-User commands:  addfriend <friend>, post <message>, read, acceptfriend <friend>, rejectfriend <friend>,
+User Administrative commands: createuser <username>, login <username>, logout
+User commands:  requestfriend <friend>, post <message>, read, acceptfriend <friend>, rejectfriend <friend>,
 \end{verbatim}
 
 All of the commands users could previously perform exist as well, although for the purposes of this project users should not call them directly. To encourage that, we are not listing those commands explicitly in this writeup.
@@ -64,10 +69,23 @@ Our HTML "interface" is really just a wrapper around the file logs. The site is 
 -Messages
 \end{verbatim}
 
-We decided to make this interface just to make the information more easily accessible. Rather than forcing the user to scroll up to discover their friend list, it is much easier to just view all the information in one page. 
+We decided to make this interface just to make the information more easily accessible. Rather than forcing the user to scroll up to discover their friend list, it is much easier to just view all the information in one page. The page refreshes every second in order to provide up-to-date information.
 
 \section{Outstanding Issues}
 
-Persistent storage in Paxos is not working very well. If all nodes in a group fail, and then come back online, it's highly likely that the persistent state of paxos will be lost (and thus all updates made through paxos will be lost). 
+There is a bug in the way our persistent storage in paxos works. Commands are keyed based on the proposal number, operation number (the line in the log), and the filename. When a new operation is learned, the command graph checks to see if the learned operation is something the command graph was waiting on to finish. This can result in the node erroneously assuming it finished a command when in fact it only learned about an old command.
+
+For example, consider the following operations:
+\begin{verbatim}
+1. 1 create f1 (Proposal number = 1, operation number = 0)
+2. 1 put f1 hello (Proposal number = 5, operation number = 1)
+----Node 1 crashes----
+3. 1 create f1 (Proposal number = 1, operation number = 0)
+4. 1 put f1 world (Proposal number = 5, operation number = 1)
+\end{verbatim}
+
+What we would like to occur is for node 1 to learn about the first two operations (which it does), and then to do operation 4 as operation 5 with a new proposal number and operation number 2. However, when the node learns about operation number 2, it assumes that operation number 4 succeeded because the key values for the two operations are the same. 
+
+One way around this would be to simply key the commands based upon the operation as well. However, in practice this exact situation is so unlikely that the additional overhead may not be worth losing a single operation. 
 
 \end{document}
