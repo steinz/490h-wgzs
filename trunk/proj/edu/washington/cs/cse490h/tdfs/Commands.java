@@ -54,14 +54,14 @@ abstract class Command {
 	public String getName() {
 		return "AnonymousCommand";
 	}
-	
+
 	/**
 	 * Convenience for subclass toStrings
 	 */
 	protected String toStringBase() {
-		return this.getName() + " [filename=" + filename
-				+ ", nodeAddr=" + nodeAddr + ", opNum=" + operationNumber
-				+ ", propNum=" + proposalNumber;
+		return this.getName() + " [filename=" + filename + ", nodeAddr="
+				+ nodeAddr + ", opNum=" + operationNumber + ", propNum="
+				+ proposalNumber;
 	}
 
 	@Override
@@ -99,7 +99,7 @@ abstract class TXCommand extends Command {
 	public CommandKey getKey() {
 		return new CommandKey(this.filename, this.nodeAddr);
 	}
-	
+
 	@Override
 	public String getName() {
 		return "AnonymousTXCommand";
@@ -163,33 +163,9 @@ class ListenCommand extends FileCommand {
 	public CommandKey getKey() {
 		return new CommandKey(filename, nodeAddr);
 	}
-	
+
 	@Override
 	public String getName() {
 		return "Listen";
-	}
-}
-
-class AbortCommand extends TXCommand {
-	public AbortCommand(String[] filenames, String coordinatorFilename,
-			int nodeAddr) {
-		super(filenames, coordinatorFilename, nodeAddr);
-	}
-
-	@Override
-	public void execute(TDFSNode node) throws Exception {
-		if (node.logFS.checkLocked(filename) == node.addr) {
-			createProposal(node, filename,
-					new TXTryAbortLogEntry(filenames));
-		} else {
-			// can happen if 2pc coordinator aborts you
-			throw new TransactionException("lock not owned on "
-					+ filename);
-		}
-	}
-	
-	@Override
-	public String getName() {
-		return "TXAbort";
 	}
 }
