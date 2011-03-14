@@ -931,20 +931,21 @@ public class TDFSNode extends RIONode {
 		}
 
 		/**
-		 * Wayne: Before, not checking persistent storage whether something had been accepted for this operation number.
+		 * Before, not checking persistent storage whether something had been accepted for this operation number.
 		 * If it is accepted, send them the old proposal so that they can re-propose it, assuming that this operation
 		 * was lost somehow.
 		 */
 		// check persistent storage
 		Proposal oldProposal = paxosState.highestAccepted(p.filename, p.operationNumber);
-		if (oldProposal != null){
-			// Send this proposal out to everyone
-			for (Integer i : getCoordinators(p.filename)){
-				RIOSend(i, MessageType.Learned, oldProposal.pack());
+		if (oldProposal != null){ // Promise the old proposal
+			while (oldProposal.proposalNumber <= largestProposalNumberPromised){
+				oldProposal.proposalNumber += maxTotalNodeCount;
 			}
-			RIOSend(from, MessageType.Learned, oldProposal.pack());
+			oldProposal.originalProposal = oldProposal.proposalNumber;
+			RIOSend(from, MessageType.Promise, oldProposal.pack());
 			return;
 		}
+		
 		// check local storage
 		if (logFS.nextLogNumber(p.filename) > p.operationNumber) {
 			LogEntry entry = logFS.getLogEntry(p.filename, p.operationNumber);
