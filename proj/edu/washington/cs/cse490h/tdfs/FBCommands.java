@@ -57,8 +57,9 @@ public class FBCommands {
 				getFriendsFilename(username), getRequestsFilename(username),
 				getMessagesFilename(username) };
 
-		List<Command> abortCommands = node.buildAbortCommands();
 		CommandNode root = node.txstart(filenames);
+		List<Command> abortCommands = node.buildAbortCommands();
+
 		for (String filename : filenames) {
 			node.create(filename, abortCommands);
 		}
@@ -121,12 +122,29 @@ public class FBCommands {
 
 		String[] filenames = { getFriendsFilename(currentUsername),
 				getFriendsFilename(friendName) };
-		List<Command> abortCommands = node.buildAbortCommands();
+		final String finalFriendName = friendName;
 
 		CommandNode root = node.txstart(filenames);
-		node.get(getRequestsFilename(currentUsername), abortCommands);
+		List<Command> abortCommands = node.buildAbortCommands();
+
+		String filename = getRequestsFilename(currentUsername);
+		node.get(filename, abortCommands);
+
 		// TODO: HIGH: check request exists
 		// TODO: HIGH: remove request from .requests
+//		node.commandGraph.addCommand(new FileCommand(filename, node.addr) {
+//			@Override
+//			public void execute(TDFSNode node) throws Exception {
+//				String requests = node.logFS.getFile(filename);
+//				if (requests.indexOf(finalFriendName) != -1) {
+//					
+//				} else {
+//					throw new Exception("no request found from "
+//							+ finalFriendName);
+//				}
+//			}
+//		}, false, abortCommands);
+
 		node.append(getFriendsFilename(currentUsername),
 				friendName + fileDelim, abortCommands);
 		node.append(getFriendsFilename(friendName),
@@ -143,25 +161,17 @@ public class FBCommands {
 		final String finalFriendName = friendName;
 
 		String filename = getRequestsFilename(currentUsername);
-		// TODO: HIGH: Verify CG state here
+		// TODO: HIGH: Verify CG state here (???)
 		CommandNode root = node.get(filename, null);
 		node.commandGraph.addCommand(new FileCommand(filename, node.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
-				// GROSS!!
-				String[] requests = node.logFS.getFile(filename).trim()
-						.split(fileDelim);
-				List<String> l = new ArrayList<String>();
-				for (String request : requests) {
-					l.add(request);
-				}
-				l.remove(finalFriendName);
-				StringBuilder removed = new StringBuilder();
-				for (String s : l) {
-					removed.append(s + fileDelim);
-				}
-				createProposal(node, filename, new WriteLogEntry(removed
-						.toString().trim(), false));
+				String original = node.logFS.getFile(filename);
+				String removed = original.replace(finalFriendName + fileDelim,
+						"");
+				// TODO: OPT: done if noop
+				createProposal(node, filename,
+						new WriteLogEntry(removed, false));
 			}
 		}, false, null);
 		return root;
@@ -183,9 +193,10 @@ public class FBCommands {
 			filenames[i] = getMessagesFilename(friends[i]);
 		}
 		filenames[friends.length] = getMessagesFilename(currentUsername);
-		List<Command> abortCommands = node.buildAbortCommands();
 
 		CommandNode root = node.txstart(filenames);
+		List<Command> abortCommands = node.buildAbortCommands();
+
 		for (String filename : filenames) {
 			node.append(filename, currentUsername + ": " + message,
 					abortCommands);

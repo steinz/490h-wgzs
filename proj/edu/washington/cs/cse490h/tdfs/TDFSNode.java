@@ -468,8 +468,22 @@ public class TDFSNode extends RIONode {
 			}
 			abortCommands = new ArrayList<Command>(transactingFiles.length);
 			for (String tf : transactingFiles) {
-				abortCommands.add(new AbortCommand(transactingFiles, tf,
-						this.addr));
+				abortCommands
+						.add(new TXCommand(transactingFiles, tf, this.addr) {
+							@Override
+							public void execute(TDFSNode node) throws Exception {
+								if (node.logFS.checkLocked(filename) == node.addr) {
+									createProposal(node, filename,
+											new TXTryAbortLogEntry(filenames));
+								}
+								// else 2pc coordinator aborted me, do nothing
+							}
+
+							@Override
+							public String getName() {
+								return "TXAbort";
+							}
+						});
 			}
 		}
 		return abortCommands;
@@ -482,11 +496,14 @@ public class TDFSNode extends RIONode {
 				new WriteCommand(filename, contents, this.addr) {
 					@Override
 					public void execute(TDFSNode node) throws Exception {
-						if (node.logFS.fileExists(filename)) {
-							createProposal(node, filename, new WriteLogEntry(
-									contents, true));
-						} else {
-							throw new FileDoesNotExistException(filename);
+						Integer lock = node.logFS.checkLocked(filename);
+						if (lock == null || lock == nodeAddr) {
+							if (node.logFS.fileExists(filename)) {
+								createProposal(node, filename,
+										new WriteLogEntry(contents, true));
+							} else {
+								throw new FileDoesNotExistException(filename);
+							}
 						}
 					}
 
@@ -503,10 +520,13 @@ public class TDFSNode extends RIONode {
 		commandGraph.addCommand(new FileCommand(filename, this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
-				if (!node.logFS.fileExists(filename)) {
-					createProposal(node, filename, new CreateLogEntry());
-				} else {
-					throw new FileAlreadyExistsException(filename);
+				Integer lock = node.logFS.checkLocked(filename);
+				if (lock == null || lock == nodeAddr) {
+					if (!node.logFS.fileExists(filename)) {
+						createProposal(node, filename, new CreateLogEntry());
+					} else {
+						throw new FileAlreadyExistsException(filename);
+					}
 				}
 			}
 
@@ -523,10 +543,13 @@ public class TDFSNode extends RIONode {
 		commandGraph.addCommand(new FileCommand(filename, this.addr) {
 			@Override
 			public void execute(TDFSNode node) throws Exception {
-				if (node.logFS.fileExists(filename)) {
-					createProposal(node, filename, new DeleteLogEntry());
-				} else {
-					throw new FileDoesNotExistException(filename);
+				Integer lock = node.logFS.checkLocked(filename);
+				if (lock == null || lock == nodeAddr) {
+					if (node.logFS.fileExists(filename)) {
+						createProposal(node, filename, new DeleteLogEntry());
+					} else {
+						throw new FileDoesNotExistException(filename);
+					}
 				}
 			}
 
@@ -554,11 +577,14 @@ public class TDFSNode extends RIONode {
 				new WriteCommand(filename, contents, this.addr) {
 					@Override
 					public void execute(TDFSNode node) throws Exception {
-						if (node.logFS.fileExists(filename)) {
-							createProposal(node, filename, new WriteLogEntry(
-									contents, false));
-						} else {
-							throw new FileDoesNotExistException(filename);
+						Integer lock = node.logFS.checkLocked(filename);
+						if (lock == null || lock == nodeAddr) {
+							if (node.logFS.fileExists(filename)) {
+								createProposal(node, filename,
+										new WriteLogEntry(contents, false));
+							} else {
+								throw new FileDoesNotExistException(filename);
+							}
 						}
 					}
 
@@ -642,7 +668,6 @@ public class TDFSNode extends RIONode {
 			Collections.sort(sorted);
 			transactingFiles = sorted.toArray(transactingFiles);
 
-			List<Command> abortCommands = buildAbortCommands();
 			CommandNode root = null;
 			for (String filename : transactingFiles) {
 				CommandNode listen = listen(filename);
@@ -663,7 +688,7 @@ public class TDFSNode extends RIONode {
 					public String getName() {
 						return "TXStart";
 					}
-				}, true, abortCommands);
+				}, true, null);
 			}
 			return root;
 		} else {

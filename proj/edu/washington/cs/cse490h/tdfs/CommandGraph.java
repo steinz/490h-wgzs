@@ -106,13 +106,6 @@ public class CommandGraph {
 		}
 
 		/**
-		 * Add a dependency from parent to this node if parent isn't done.
-		 */
-		private void addParent(CommandNode parent) {
-			parent.addChild(this);
-		}
-
-		/**
 		 * Sets this node's done flag and recursively calls cancel on all of
 		 * it's children. Call abort if you want this client's abortCommands
 		 * list to be executed first.
