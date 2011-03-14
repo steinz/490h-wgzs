@@ -76,7 +76,10 @@ public class FBCommands {
 		String filename = getPasswordFilename(username);
 		CommandNode root = node.get(filename, null);
 
-		
+		node.listen(getFriendsFilename(username));
+		node.listen(getRequestsFilename(username));
+		node.listen(getMessagesFilename(username));
+
 		node.commandGraph.addCommand(new Command(filename, node.addr) {
 			@Override
 			public CommandKey getKey() {
@@ -90,12 +93,6 @@ public class FBCommands {
 			}
 		}, true, null);
 
-		node.listen(getFriendsFilename(username));
-		node.listen(getRequestsFilename(username));
-		node.listen(getMessagesFilename(username));
-		
-		node.commandGraph.addCommand(node.commandGraph.noop());
-
 		return root;
 	}
 
@@ -103,9 +100,21 @@ public class FBCommands {
 		if (checkNotLoggedIn()) {
 		}
 
-		this.currentUsername = null;
-		// TODO: High: Stop listening to all files associated with username
-		return node.commandGraph.noop();
+		String fake = "logout";
+		return node.commandGraph.addCommand(new Command(fake, node.addr) {
+
+			@Override
+			public void execute(TDFSNode node) throws Exception {
+				currentUsername = null;
+				node.commandGraph.done(new CommandKey(filename, node.addr));
+			}
+
+			@Override
+			public CommandKey getKey() {
+				return new CommandKey(filename, node.addr);
+			}
+
+		}, true, null);
 	}
 
 	public CommandNode requestFriend(String friendName) {
@@ -140,8 +149,10 @@ public class FBCommands {
 			public void execute(TDFSNode node) throws Exception {
 				String requests = node.logFS.getFile(filename);
 				if (requests.indexOf(finalFriendName) != -1) {
-					String content = requests.replace(finalFriendName + fileDelim, "");
-					createProposal(node, filename, new WriteLogEntry(content, false));
+					String content = requests.replace(finalFriendName
+							+ fileDelim, "");
+					createProposal(node, filename, new WriteLogEntry(content,
+							false));
 				} else {
 					throw new Exception("no request found from "
 							+ finalFriendName);
