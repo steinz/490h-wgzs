@@ -932,21 +932,23 @@ public class TDFSNode extends RIONode {
 		}
 
 		/**
-		 * Before, not checking persistent storage whether something had been accepted for this operation number.
-		 * If it is accepted, send them the old proposal so that they can re-propose it, assuming that this operation
-		 * was lost somehow.
+		 * Before, not checking persistent storage whether something had been
+		 * accepted for this operation number. If it is accepted, send them the
+		 * old proposal so that they can re-propose it, assuming that this
+		 * operation was lost somehow.
 		 */
 		// check persistent storage
-		Proposal oldProposal = paxosState.highestAccepted(p.filename, p.operationNumber);
-		if (oldProposal != null){ // Promise the old proposal
-			while (oldProposal.proposalNumber <= largestProposalNumberPromised){
+		Proposal oldProposal = paxosState.highestAccepted(p.filename,
+				p.operationNumber);
+		if (oldProposal != null) { // Promise the old proposal
+			while (oldProposal.proposalNumber <= largestProposalNumberPromised) {
 				oldProposal.proposalNumber += maxTotalNodeCount;
 			}
 			oldProposal.originalProposal = oldProposal.proposalNumber;
 			RIOSend(from, MessageType.Promise, oldProposal.pack());
 			return;
 		}
-		
+
 		// check local storage
 		if (logFS.nextLogNumber(p.filename) > p.operationNumber) {
 			LogEntry entry = logFS.getLogEntry(p.filename, p.operationNumber);
@@ -1127,12 +1129,18 @@ public class TDFSNode extends RIONode {
 		commandGraph.done(new CommandKey(filename, this.addr));
 		relisten.remove(filename);
 
-		if (addr == twoPCCoordinatorAddress) {
+		if (addr == twoPCCoordinatorAddress && logFS.isListening(filename)) {
 			Integer client = logFS.checkLocked(filename);
-			if (client != null) {
-				blindAbortClientTx(filename, client);
+			Integer latestOpNumber = logFS.nextLogNumber(filename) - 1;
+			LogEntry txTest = logFS.getLogEntry(filename, latestOpNumber);
+			if (txTest instanceof TXTryCommitLogEntry
+					|| txTest instanceof TXTryAbortLogEntry) {
+				if (client != null) {
+					blindAbortClientTx(filename, client);
+				}
 			}
 		}
+
 	}
 
 	/**
@@ -1200,7 +1208,9 @@ public class TDFSNode extends RIONode {
 			String requestsFilename = FBCommands.getRequestsFilename(username);
 			String messageFilename = FBCommands.getMessagesFilename(username);
 
-			if (logFS.isListening(friendsFilename) && logFS.isListening(messageFilename) && logFS.isListening(requestsFilename)){
+			if (logFS.isListening(friendsFilename)
+					&& logFS.isListening(messageFilename)
+					&& logFS.isListening(requestsFilename)) {
 				friendsData = logFS.getFile(friendsFilename);
 				messageData = logFS.getFile(messageFilename);
 				requestData = logFS.getFile(requestsFilename);
@@ -1295,7 +1305,7 @@ public class TDFSNode extends RIONode {
 			Integer client = transactionAddressMap.get(files[0]);
 
 			Tuple<Integer, String[]> key = fileTransactionMap.get(p.filename);
-			if (key != null){
+			if (key != null) {
 				abortClientTx(p.filename, client, key.first);
 			}
 			key = null;
@@ -1329,9 +1339,11 @@ public class TDFSNode extends RIONode {
 			return; // Assume the client must have already aborted or committed
 		// this tx
 
-		createProposal(new TXAbortLogEntry(files, address), files);
-		for (String file : files) {
-			fileTransactionMap.put(file, null);
+		if (logFS.isListening(filename)) {
+			createProposal(new TXAbortLogEntry(files, address), files);
+			for (String file : files) {
+				fileTransactionMap.put(file, null);
+			}
 		}
 	}
 
@@ -1378,25 +1390,23 @@ public class TDFSNode extends RIONode {
 		Callback cb = new Callback(cbMethod, this, args);
 		addTimeout(cb, TDFSNode.txTimeout);
 	}
-	
-	public void addRequestFileTimeout()
-	{
+
+	public void addRequestFileTimeout() {
 		Method cbMethod = null;
 		try {
-			String[] params = { };
+			String[] params = {};
 			cbMethod = Callback.getMethod("requestTimeout", this, params);
 			cbMethod.setAccessible(true); // HACK
 		} catch (Exception e) {
 			printError(e);
 			e.printStackTrace();
 		}
-		Object[] args = { };
+		Object[] args = {};
 		Callback cb = new Callback(cbMethod, this, args);
 		addTimeout(cb, 10);
 	}
-	
-	public void requestTimeout()
-	{
+
+	public void requestTimeout() {
 		if (addr == twoPCCoordinatorAddress) {
 			for (int i = 0; i < coordinatorCount; i++) {
 				RIOSend(i, MessageType.RequestAllFilenames);
