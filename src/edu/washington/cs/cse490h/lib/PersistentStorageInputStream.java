@@ -14,8 +14,8 @@ public class PersistentStorageInputStream extends FileInputStream {
 
 	public PersistentStorageInputStream(Node n, String filename)
 			throws FileNotFoundException {
-		//super(Utility.realFilename(n.addr, filename));
-		super(filename);
+		super(Utility.realFilename(n.addr, filename));
+		//super(filename);
 		this.n = n;
 	}
 
