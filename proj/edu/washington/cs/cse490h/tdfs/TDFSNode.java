@@ -1175,14 +1175,19 @@ public class TDFSNode extends RIONode {
 	public void writeHTML() {
 		if (fbCommands.currentUsername != null) {
 			String username = fbCommands.currentUsername;
+			String friendsData = "";
+			String messageData = "";
+			String requestData = "";
 			String friendsFilename = FBCommands.getFriendsFilename(username);
 			String requestsFilename = FBCommands.getRequestsFilename(username);
 			String messageFilename = FBCommands.getMessagesFilename(username);
 
 			// TODO: HIGH: Check if file exists?
-			String friendsData = logFS.getFile(friendsFilename);
-			String messageData = logFS.getFile(messageFilename);
-			String requestData = logFS.getFile(requestsFilename);
+			if (logFS.isListening(friendsFilename) && logFS.isListening(messageFilename) && logFS.isListening(requestsFilename)){
+				friendsData = logFS.getFile(friendsFilename);
+				messageData = logFS.getFile(messageFilename);
+				requestData = logFS.getFile(requestsFilename);
+			}
 
 			HTML.write(friendsData, requestData, username, messageData,
 					this.addr + ".html", this);
