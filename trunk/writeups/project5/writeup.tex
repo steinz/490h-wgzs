@@ -46,29 +46,30 @@ We could implement both a password system and some method of file encryption, wh
 
 \section{Command Graph}
 
-We queue asynchronously input client commands via a mechanism we call the CommandGraph.
-The CommandGraph is a DAG of CommandNodes, where edges indicate command dependencies.
-CommandNodes contain instances of the abstract Command class implementing an execute method.
-CommandNodes execute when done has been called on all of their parents or when they are explicitly told to execute.
-CommandNodes have CommandKey objects used to look up CommandNodes in order to tell them that they have finished executing.
+We queue input client commands asynchronously  via a mechanism we call the CommandGraph. The CommandGraph was born out of a need to add some level of sequential operation on top of RIO. Though RIO can be used to a limited extent to do sequential operation (i.e. packets arrive in the order they are sent), another layer of abstraction was needed to make commands perform sequentially. For that reason, we created the CommandGraph.
 
-It is currently the user's responsibility to ensure that the CommandGraph is remains a DAG and that CommandNodes created without dependencies are
-explicitly told to execute. This allows user's to write code they want to execute in sequential order, wrapped in CommandNodes, without having to
+The CommandGraph is a DAG of CommandNodes, where edges indicate dependencies between commands.
+CommandNodes contain instances of the abstract Command class implementing an execute() method.
+CommandNodes execute when done() has been called on all of their parent nodes or when they are explicitly told to execute programatically.
+CommandNodes have CommandKey objects which are used to index CommandNodes.
+
+It is currently the user's responsibility to ensure that the CommandGraph remains a DAG and that CommandNodes created without dependencies are
+explicitly told to execute. This allows users to write code they want to execute in sequential order, wrapped in CommandNodes, without having to
 worry about when the Commands are actually executed - they are automatically queued until all commands they depend on finish executing.
 It is also the programmer's responsibility to tell CommandNodes when their Command's execute method has finished. In our application,
-most CommandNodes are told they are done when we learn that something that their Command's execute method proposes is accepted through Paxos.
+most CommandNodes are told they are done when we learn that something that their Command's execute method proposes is accepted through Paxos (since nearly every command uses Paxos to ensure consistency).
 
 The command \verb=<addr> graph= can be executed by the user to dump the current CommandGraph in .dot and .png formats to storage
 (the .png is created using graphviz, so this command will fail if a call to dot is not supported in the user's environment).
 
-CommandNodes will try to re-execute their Command's execute method every so often if they aren't told they are done.
+CommandNodes will try to re-execute their Command's execute method every so often if they aren't told they are done. This ensures that commands will eventually execute, even in the face of failures.
 
 CommandNodes can either be keyed on a filename, or be declared as barriers. This is used to implement transactions.
 For example, a createuser command creates four TXStarts as barriers (so locks are attained on filenames in order), proposes creates on those four
 files in parallel (not barriers), and then executes TXCommits in parallel (as a single barrier command, so commands input after the createuser will
-wait to execute until the createuser finishes).
+wait to execute until the createuser finishes). This imposes a limited form of sequential execution, to ensure that transactions aren't interleaved or that locks are not released early.
 
-CommandNodes also have a list of AbortCommands that they execute in case if their Command's execute method fails by throwing an exception.
+CommandNodes also have a list of AbortCommands that they execute in case their Command's execute method fails by throwing an exception.
 The AbortCommands are executed just once (we only use this mechanism to abort transactions - if they fail to execute, the 2PC coordinator
 will cleanup the files' state by aborting them sooner or later). The CommandNode then cancels itself and all of it's children recursively -
 it is not safe to run these commands because they could assume the success of their parents.
@@ -76,9 +77,9 @@ it is not safe to run these commands because they could assume the success of th
 The CommandGraph implementation is currently not as clean as it ideally could be. Nodes can be created but never told to execute
 (possibly hanging executing), or the programmer can create cycles in the graph (which will also hang execution).
 
-However, the CommandGraph allows application programmer's to explicitly state which commands depend on each other, write code sequentially,
+However, the CommandGraph allows application programmers to explicitly state which commands depend on each other, write code sequentially,
 and benefit from parallel code execution. With some refinement, the CommandGraph has the potential to be usable by application programmers who
-aren't familiar with it's internals.
+aren't familiar with its internals.
 
 We spent a little bit of time trying to implement "returns" from CommandNode's to their children as a cleaner way to pass along state,
 but ran out of time trying to define the right interfaces to the application programmer and trying to implement semi-type-safe passing
